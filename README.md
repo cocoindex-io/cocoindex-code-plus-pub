@@ -12,6 +12,12 @@ CLI and an MCP endpoint.
 - **[docs/cli.md](docs/cli.md)** — install and use the `ccx` CLI (and the MCP
   integration) to query an indexed codebase. For engineers and coding agents.
 
+## Agent skill
+
+- **[skills/ccx/SKILL.md](skills/ccx/SKILL.md)** — a Claude Code / Agent skill that
+  teaches an agent to drive the `ccx` CLI (semantic search, AST `grep`, file
+  access), with a full [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
+
 ## About
 
 CocoIndex Code Plus is built on [CocoIndex](https://cocoindex.io), the real-time
