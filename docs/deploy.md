@@ -36,6 +36,7 @@ Put your secrets in a gitignored `values-secret.yaml`:
 
 ```yaml
 # values-secret.yaml — do not commit
+imagePullSecrets: [{ name: ghcr-pull }]  # references the pull secret created below
 embedding:
   model: text-embedding-3-small        # any LiteLLM model
   secretEnv: { OPENAI_API_KEY: sk-… }  # or COHERE_API_KEY / GEMINI_API_KEY / …
@@ -51,11 +52,25 @@ indexer:
   config: { repoOwner: your-org, repoName: index-configs, gitRef: main, dir: configs }
 ```
 
+The chart and images live in our **private GHCR** — authenticate with the pull
+token we issue (it pulls the chart, and the cluster uses it to pull the images):
+
+```bash
+# Log in so helm can pull the chart:
+helm registry login ghcr.io -u <user> -p <pull-token>
+
+# Namespace + a docker-registry secret so the cluster can pull the images
+# (referenced by imagePullSecrets in values-secret.yaml above):
+kubectl create namespace ccx
+kubectl -n ccx create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io --docker-username=<user> --docker-password=<pull-token>
+```
+
 Install and verify:
 
 ```bash
 helm install ccx oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
-  --version <X.Y.Z> -n ccx --create-namespace -f values-secret.yaml
+  --version <X.Y.Z> -n ccx -f values-secret.yaml
 
 helm test ccx -n ccx                                   # GET /health
 kubectl -n ccx port-forward deploy/ccx-cocoindex-code-plus-query-server 8080:8080
