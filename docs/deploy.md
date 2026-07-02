@@ -24,13 +24,27 @@ deploying the service; engineers who only *query* an existing deployment want
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
-- **Source access** to the repos you index — a **GitHub App** (App ID + PEM key)
-  and/or a **GitLab token** — plus a **config repo** holding the per-repo index
-  config JSON ([format](#index-config-repo)).
+- **Source access** to the repos you index — a **GitHub App** and/or a **GitLab
+  token** — plus a **config repo** holding the per-repo index config JSON
+  ([format](#index-config-repo)). The **GitHub App** needs **Repository → Contents:
+  Read-only** (Metadata: Read is automatic), must be **installed on the config repo
+  and every repo you index**, and you supply its **App ID** (`indexer.github.appId`)
+  + **PEM private key** (`secrets.githubApp.privateKey`). A **GitLab token** needs
+  **read access** (`read_api` / `read_repository`) to the same repos.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
+**Getting access.** The GHCR **pull token** and **CocoIndex Plus license key** are
+issued by your CocoIndex representative — contact them to get set up. Released
+chart/image versions (`<X.Y.Z>`, used throughout this guide) are listed on the
+chart's **GHCR package page** (`github.com/orgs/cocoindex-io/packages`) once you've
+authenticated with the pull token; your rep can confirm the current one.
+
 ## Quickstart (bundled Postgres, API-key auth)
+
+**First, create your [index config repo](#index-config-repo)** and point
+`indexer.config.*` at it (below) — the indexer polls it on startup and indexes
+nothing until it lists repos.
 
 Put your secrets in a gitignored `values-secret.yaml`:
 
@@ -39,7 +53,7 @@ Put your secrets in a gitignored `values-secret.yaml`:
 imagePullSecrets: [{ name: ghcr-pull }]  # references the pull secret created below
 embedding:
   model: text-embedding-3-small        # any LiteLLM model
-  secretEnv: { OPENAI_API_KEY: sk-… }  # or COHERE_API_KEY / GEMINI_API_KEY / …
+  secretEnv: { OPENAI_API_KEY: sk-REPLACE_ME }  # or COHERE_API_KEY / GEMINI_API_KEY / …
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
   apiTokens:     { tokens: "<a-strong-token>" }   # the CLI sends one of these
@@ -73,7 +87,7 @@ helm install ccx oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
   --version <X.Y.Z> -n ccx -f values-secret.yaml
 
 helm test ccx -n ccx                                   # GET /health
-kubectl -n ccx port-forward deploy/ccx-cocoindex-code-plus-query-server 8080:8080
+kubectl -n ccx port-forward svc/ccx-cocoindex-code-plus-query-server 8080:8080
 # then, from a workstation (see cli.md):
 CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<a-strong-token> ccx search "rate limiter"
 ```
@@ -164,7 +178,11 @@ External Secrets/CSI) instead of an inline value. Prefer that in production.
 
 ### Production Postgres (Cloud SQL / external)
 
-Disable the bundled DB and point at your own (with `pgvector` enabled):
+Disable the bundled DB and point at your own (with `pgvector` enabled). There are
+two logical DBs: **target** holds the vector index; **internal** holds CocoIndex's
+own bookkeeping state. They can share one Postgres instance via separate schemas
+(`ccx` / `ccx_internal`) — but the single `ccx-db` secret must then hold **both**
+keys (`CCX_TARGET_DB_URL` **and** `CCX_INTERNAL_DB_URL`):
 
 ```yaml
 database:
@@ -188,12 +206,19 @@ queryServer:
   ingress: { enabled: true, className: gce, host: ccx.example.com, tls: true, tlsSecretName: ccx-tls }
 ```
 
-Until then, `kubectl port-forward` is the simplest path.
+The query server serves **plain HTTP** — TLS is terminated at the Ingress.
+`tlsSecretName` must name a TLS secret **you pre-create** (the chart references but
+doesn't create it); on GKE you can instead attach a managed certificate via the
+Ingress annotations. Until then, `kubectl port-forward` is the simplest path.
 
 ### GKE notes
 
 - **Autopilot** requires CPU/memory **requests** on every container — set
   `queryServer.resources`, `indexer.resources`, `database.bundled.resources`.
+  Starter values (see `values-gcp.yaml`): query server `requests {cpu: 250m,
+  memory: 512Mi}` / `limits {cpu: 1, memory: 1Gi}`; indexer `requests {cpu: 250m,
+  memory: 512Mi}` / `limits {cpu: 1, memory: 2Gi}` (embedding + chunking is the
+  heavier path). Size Postgres to your corpus.
 - If an **org policy forbids external node IPs** (`compute.vmExternalIpAccess`),
   create the cluster with **private nodes** + a **Cloud NAT** for egress, and grant
   the node service account `roles/artifactregistry.reader` if pulling from
@@ -215,6 +240,11 @@ helm install ccx ./cocoindex-code-plus-<X.Y.Z>.tgz -n ccx --create-namespace \
   -f values-secret.yaml
 ```
 
+Run these from a **connected host** — both `skopeo copy` and `helm pull` reach
+GHCR with your pull token. `helm pull` fetches the chart `.tgz`; carry that to the
+disconnected side (or re-host it in your own OCI registry) so the install never
+reaches GHCR.
+
 The **CocoIndex Plus license validates offline** — the license key is
 signed/self-verifiable, so the indexer never calls home. Once the images are
 mirrored and the key is in place, the deployment needs **no egress to us**. The
@@ -231,4 +261,12 @@ helm uninstall ccx -n ccx
 ```
 
 `/code/v0/semantic_search` returns **503** ("index not built yet") until the indexer has populated
-the table, and **401** without a valid API token — both expected.
+the table, and **401** without a valid API token — both expected. The indexer runs
+**continuously** (live mode): there's no "done" log line — it's ready once the
+`503` clears (or `ccx search` returns hits). `helm upgrade` briefly restarts the
+**singleton** indexer (`Recreate` — indexing pauses for the restart while the
+query server keeps serving), so pin `<X.Y.Z>` deliberately.
+
+**Rotating the API token.** `secrets.apiTokens.tokens` accepts multiple tokens
+(whitespace/comma/newline-separated). To rotate without downtime: add the new
+token, `helm upgrade`, migrate clients, then drop the old token and upgrade again.

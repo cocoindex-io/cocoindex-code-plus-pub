@@ -7,8 +7,8 @@ holds no index and needs no license.
 
 ## Install
 
-`ccx` is published to **public PyPI** (license-free client). Install it as an
-isolated tool so it's on your `PATH`:
+`ccx` is published to **public PyPI** (license-free client, **Python 3.11+**).
+Install it as an isolated tool so it's on your `PATH`:
 
 ```bash
 uv tool install cocoindex-code-plus     # recommended
@@ -22,12 +22,13 @@ with the query server you target (the CLI warns on a server version mismatch).
 
 ## Configure
 
-Two environment variables (or a `.env` in the working directory, auto-loaded):
+Two environment variables (or a `.env` found from the working directory upward,
+auto-loaded — already-exported vars take precedence):
 
 | Var | What |
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`) |
-| `CCX_API_TOKEN` | your API token (the server runs `auth.mode: apiKey`); sent as `Authorization: Bearer` |
+| `CCX_API_TOKEN` | your API token — your platform team issues it (one of the server's configured tokens); sent as `Authorization: Bearer` |
 
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com
@@ -35,11 +36,15 @@ export CCX_API_TOKEN=<your-token>
 ccx status        # checks the server is reachable + healthy
 ```
 
+`ccx status` checks **reachability only** — the server's `/health` is auth-exempt,
+so it passes even with a missing or wrong token. Your first `ccx search` is what
+confirms auth (a bad token returns `HTTP 401`; see [Troubleshooting](#troubleshooting)).
+
 ## Use
 
 ```bash
 # Semantic search
-ccx search "how are vector embeddings stored"   # auto-scopes to the current repo
+ccx search "how are vector embeddings stored"   # scopes to the current repo (see note below)
 ccx search "rate limiter" --all-repos           # search every indexed repo
 ccx search foo --repo cocoindex-io/cocoindex     # a specific repo
 ccx search foo --repo my/repo --git-ref heads/main   # a specific indexed ref
@@ -52,7 +57,7 @@ ccx grep 'isinstance(\X, \Y)' -l python --git-ref heads/main --path 'src/*.py'
 
 # File access (ref-scoped — needs --git-ref; repo auto-detected like search)
 ccx read-file README.md --git-ref heads/main            # print a file's contents
-ccx read-file src/app.py --git-ref heads/main --offset 40 --limit 20   # a line window
+ccx read-file src/app.py --git-ref heads/main --offset 40 --limit 20   # 20 lines from line 40 (--offset = 1-based line)
 ccx find-files "*.py" --git-ref heads/main              # list files by glob
 ccx find-files --git-ref heads/main                     # list all files
 
@@ -61,12 +66,25 @@ ccx repositories                                # the current repo's indexed ref
 ccx repositories cocoindex-io/cocoindex          # a specific repo
 ```
 
-`ccx search`, `read-file`, and `find-files` filter to the repo of the current git
-checkout (detected from its `origin` GitHub/GitLab remote); `--repo <owner>/<repo>`
-targets another (and `search` also takes `--all-repos`). The file commands are
-**ref-scoped**, so they require `--git-ref` (`heads/<branch>` / `tags/<tag>`).
-Before the indexer has populated the index, commands return a clear "index not
-built yet" message.
+`ccx search`, `read-file`, and `find-files` scope to the current repo **only when
+the working directory is a git checkout with a GitHub/GitLab `origin`** — that
+origin is mapped to the matching indexed repo. Otherwise (no git repo, or a
+non-GitHub/GitLab origin) `search` falls back to **all indexed repos** and prints
+a note to stderr; pass `--repo <owner>/<repo>` to force a scope or `--all-repos`
+to search everything. The file commands are **ref-scoped**, so they require
+`--git-ref` (`heads/<branch>` / `tags/<tag>`).
+
+`--offset` differs by command: for `read-file` it's a **1-based line number**; for
+`grep` and `find-files` it's a **skip count** for paginating results.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` won't catch this (`/health` is auth-exempt). |
+| `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
+| connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. |
+| version-mismatch warning | Align `ccx` with the server: `uv tool install cocoindex-code-plus==X.Y.Z`. |
 
 ## For agents & automation
 
@@ -85,8 +103,10 @@ built yet" message.
 The query server exposes an **MCP** (Model Context Protocol) server over the same
 query service, so a coding agent or MCP-capable IDE calls the tools **natively** —
 no CLI install, no output parsing. This is the recommended path for agents; the
-CLI remains the path for humans and shell scripts. The MCP tools are kept at
-**parity** with the CLI and REST API (same capabilities, same scoping).
+CLI remains the path for humans and shell scripts. The MCP tools track the CLI
+and REST API closely (same capabilities, same scoping) — with one current
+exception: MCP `code_search` accepts `paths` and `offset` that the `ccx search`
+CLI doesn't yet expose.
 
 - **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
