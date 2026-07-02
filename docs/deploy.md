@@ -68,20 +68,22 @@ The install NOTES print the exact service name + port-forward command.
 ## Configuration
 
 Set values inline (above) or via `--set`. The chart's `values.yaml` documents
-every field (`helm show values oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>`);
-the essentials:
+every field (`helm show values oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>`).
+The **Req?** column says what you must supply: **yes** = no workable default,
+provide it; **default** = sensible default, leave alone unless noted; **if prod** /
+**if gitlab** = only for that path.
 
-| Area | Keys | Notes |
-|---|---|---|
-| **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | point at GHCR or your mirror |
-| **Embedding** | `embedding.model`, `embedding.secretEnv` / `existingSecret`, `embedding.env` | any LiteLLM model + its credential env var(s) |
-| **Auth** | `auth.mode` (`apiKey` default / `none` dev) | never expose with `none` |
-| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | what the server accepts / the CLI sends |
-| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | indexer runtime |
-| **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | bundled (test) vs external (prod) — see below |
-| **Indexer source** | `indexer.configProvider`, `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | where configs + repos live |
-| **Query server** | `queryServer.{replicaCount,service,ingress,autoscaling,resources}` | scaling + exposure |
-| **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | poll cadences |
+| Area | Keys | Req? | Notes |
+|---|---|---|---|
+| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
+| **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default |
+| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
+| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live; `configProvider` defaults to `github` |
+| **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
+| **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
+| **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
+| **Query server** | `queryServer.{replicaCount,service,ingress,autoscaling,resources}` | default | scaling + exposure; ingress off by default |
+| **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
