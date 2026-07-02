@@ -26,7 +26,7 @@ deploying the service; engineers who only *query* an existing deployment want
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
 - **Source access** to the repos you index — a **GitHub App** (App ID + PEM key)
   and/or a **GitLab token** — plus a **config repo** holding the per-repo index
-  config JSON.
+  config JSON ([format](#configure-which-repos-to-index)).
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
@@ -80,6 +80,60 @@ CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<a-strong-token> ccx search "
 
 The install NOTES print the exact service name + port-forward command.
 
+## Configure which repos to index
+
+The chart points the indexer at a **config repo** (`indexer.config.repoOwner` /
+`repoName` / `gitRef` / `dir`); a separate git repo you own that lists the repos
+to index. The indexer reads **every `*.json` file** under `dir` (at `gitRef`),
+concatenates them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so you
+add or drop repos by committing to that repo, no redeploy.
+
+Each file is a **JSON array** of repo entries:
+
+```jsonc
+// configs/acme.json — add as many *.json files as you like; they're merged
+[
+  {
+    "repo_owner": "acme",
+    "repo_name": "backend",
+    "branches": "main",                  // regex over branch names (whole-name match)
+    "included_patterns": ["**/*.py", "**/*.md"],
+    "excluded_patterns": ["**/tests/**"]
+  },
+  {
+    "repo_owner": "acme",
+    "repo_name": "frontend",
+    "branches": "main|release/.*",        // main + every release/* branch
+    "tags": "v\\d+\\.\\d+"                 // and every vN.N tag
+  },
+  {
+    "repo_owner": "group/subgroup",       // GitLab subgroup namespace is preserved
+    "repo_name": "service",
+    "provider": "gitlab",
+    "branches": "main"
+  },
+  {
+    "repo_owner": "acme",
+    "repo_name": "legacy",
+    "branches": "main",
+    "to_delete": true                     // drops this repo's rows from the index
+  }
+]
+```
+
+| Field | Req? | Meaning |
+|---|---|---|
+| `repo_owner` | **yes** | org / user (GitLab: full subgroup namespace, `/` kept) |
+| `repo_name` | **yes** | repository name |
+| `branches` / `tags` | **one required** | **regex** ([`re.fullmatch`](https://docs.python.org/3/library/re.html#re.fullmatch)) selecting refs to index — a plain `"main"` matches exactly that ref; the repo is indexed at every matched ref |
+| `provider` | default `github` | `github` \| `gitlab` (must match the source configured in the chart) |
+| `repo_key` | default `{owner}/{name}` | stable identity used in queries; rarely set explicitly |
+| `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
+| `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
+
+A bad regex or an entry missing both `branches` and `tags` fails the config parse
+with a clear error (nothing is indexed) rather than failing mid-index.
+
 ## Configuration
 
 Set values inline (above) or via `--set`. The chart's `values.yaml` documents
@@ -93,7 +147,7 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
-| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live; `configProvider` defaults to `github` |
+| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live ([config format](#configure-which-repos-to-index)); `configProvider` defaults to `github` |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
