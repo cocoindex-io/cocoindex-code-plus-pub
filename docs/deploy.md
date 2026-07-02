@@ -225,17 +225,39 @@ Ingress annotations. Until then, `kubectl port-forward` is the simplest path.
   the node service account `roles/artifactregistry.reader` if pulling from
   Artifact Registry.
 
+### EKS / AWS notes
+
+The friendliest path on EKS pulls images from **your own ECR via IAM** — no
+in-cluster pull secret at all:
+
+1. **Mirror** the two images into ECR (see [Air-gapped / relocate images](#air-gapped--relocate-images))
+   and set `images.{indexer,queryServer}.repository` to the ECR repo URIs.
+2. **Grant the pull role** — attach `AmazonEC2ContainerRegistryReadOnly` to the
+   node group role (or a pod role via **IRSA**), then **omit `imagePullSecrets`**.
+   Add an **ECR VPC endpoint** to keep image pulls in-VPC.
+
+- **Database:** RDS / Aurora **PostgreSQL** with the `pgvector` extension enabled;
+  point `database.target`/`internal` at it via `existingSecret`.
+- **Secrets:** AWS **Secrets Manager** → k8s Secrets (External Secrets Operator or
+  the Secrets Store CSI driver) → the chart's `existingSecret` fields.
+- **Ingress/TLS:** the **AWS Load Balancer Controller** (`queryServer.ingress.className: alb`)
+  with an **ACM** certificate via `queryServer.ingress.annotations`
+  (`alb.ingress.kubernetes.io/certificate-arn`); TLS terminates at the ALB.
+- **Node arch:** the images are **amd64-only** (`cocoindex-plus` ships no arm64
+  wheel) — schedule the indexer/query-server on **x86_64** nodes, **not Graviton**.
+
 ## Air-gapped / relocate images
 
 The chart is registry-relocatable. Mirror the images into your registry and point
 the chart at them:
 
 ```bash
+VERSION=<X.Y.Z>                        # re-run the image copy for each version you adopt
 for img in ccx-indexer ccx-query-server; do
-  skopeo copy --all docker://ghcr.io/cocoindex-io/$img:<X.Y.Z> docker://<your-registry>/ccx/$img:<X.Y.Z>
+  skopeo copy --all docker://ghcr.io/cocoindex-io/$img:$VERSION docker://<your-registry>/ccx/$img:$VERSION
 done
-helm pull oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>
-helm install ccx ./cocoindex-code-plus-<X.Y.Z>.tgz -n ccx --create-namespace \
+helm pull oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version $VERSION
+helm install ccx ./cocoindex-code-plus-$VERSION.tgz -n ccx --create-namespace \
   --set images.indexer.repository=<your-registry>/ccx/ccx-indexer \
   --set images.queryServer.repository=<your-registry>/ccx/ccx-query-server \
   -f values-secret.yaml
@@ -244,7 +266,9 @@ helm install ccx ./cocoindex-code-plus-<X.Y.Z>.tgz -n ccx --create-namespace \
 Run these from a **connected host**. `skopeo copy` needs image pull access (your
 granted account / pull token); the **chart is public**, so `helm pull` needs no
 auth. `helm pull` fetches the chart `.tgz` — carry that to the disconnected side
-(or re-host it in your own OCI registry) so the install never reaches GHCR.
+(or re-host it in your own OCI registry) so the install never reaches GHCR. The
+image copy is **per version**: only versions you actually upgrade to need
+mirroring — re-run the copy (and `helm upgrade`) each time you move to a new one.
 
 The **CocoIndex Plus license validates offline** — the license key is
 signed/self-verifiable, so the indexer never calls home. Once the images are
