@@ -26,7 +26,7 @@ deploying the service; engineers who only *query* an existing deployment want
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
 - **Source access** to the repos you index — a **GitHub App** (App ID + PEM key)
   and/or a **GitLab token** — plus a **config repo** holding the per-repo index
-  config JSON ([format](#configure-which-repos-to-index)).
+  config JSON ([format](#index-config-repo)).
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
@@ -80,10 +80,12 @@ CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<a-strong-token> ccx search "
 
 The install NOTES print the exact service name + port-forward command.
 
-## Configure which repos to index
+## Index config repo
 
-The chart points the indexer at a **config repo** (`indexer.config.repoOwner` /
-`repoName` / `gitRef` / `dir`); a separate git repo you own that lists the repos
+Which repos to index isn't a chart setting — it lives in a separate **config
+repo** you own, and the chart just points the indexer at it
+(`indexer.config.repoOwner` / `repoName` / `gitRef` / `dir`; set in
+[Chart configuration](#chart-configuration)). The config repo lists the repos
 to index. The indexer reads **every `*.json` file** under `dir` (at `gitRef`),
 concatenates them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so you
 add or drop repos by committing to that repo, no redeploy.
@@ -134,10 +136,12 @@ Each file is a **JSON array** of repo entries:
 A bad regex or an entry missing both `branches` and `tags` fails the config parse
 with a clear error (nothing is indexed) rather than failing mid-index.
 
-## Configuration
+## Chart configuration
 
-Set values inline (above) or via `--set`. The chart's `values.yaml` documents
-every field (`helm show values oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>`).
+These are the **Helm chart** values (which repos to index lives separately, in the
+[index config repo](#index-config-repo) above). Set them inline (above) or via
+`--set`; the chart's `values.yaml` documents every field
+(`helm show values oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>`).
 The **Req?** column says what you must supply: **yes** = no workable default,
 provide it; **default** = sensible default, leave alone unless noted; **if prod** /
 **if gitlab** = only for that path.
@@ -147,7 +151,7 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
-| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live ([config format](#configure-which-repos-to-index)); `configProvider` defaults to `github` |
+| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live ([config format](#index-config-repo)); `configProvider` defaults to `github` |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
