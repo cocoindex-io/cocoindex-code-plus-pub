@@ -140,6 +140,13 @@ helm install ccx ./cocoindex-code-plus-<X.Y.Z>.tgz -n ccx --create-namespace \
   -f values-secret.yaml
 ```
 
+The **CocoIndex Plus license validates offline** — the license key is
+signed/self-verifiable, so the indexer never calls home. Once the images are
+mirrored and the key is in place, the deployment needs **no egress to us**. The
+only remaining outbound dependency is your **embedding provider** (the
+`OPENAI_API_KEY` / LiteLLM call); point it at a self-hosted / in-VPC model to run
+fully air-gapped.
+
 ## Operate
 
 ```bash
