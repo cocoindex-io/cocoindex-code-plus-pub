@@ -18,8 +18,10 @@ deploying the service; engineers who only *query* an existing deployment want
 ## Prerequisites
 
 - A Kubernetes cluster + `kubectl` and `helm` (v3.8+ for OCI).
-- **Access to the images** — pull `ghcr.io/cocoindex-io/ccx-{indexer,query-server}`
-  (we issue a pull token), or [relocate them into your own registry](#air-gapped--relocate-images).
+- **Access to the images** — the private images `ghcr.io/cocoindex-io/ccx-{indexer,query-server}`
+  (granted on request — a pull token or read access to your GitHub org/user), or
+  [relocate them into your own registry](#air-gapped--relocate-images). (The Helm
+  chart itself is public.)
 - A **CocoIndex Plus license key** (we issue it; gates the indexer).
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
@@ -34,11 +36,12 @@ deploying the service; engineers who only *query* an existing deployment want
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
-**Getting access.** The GHCR **pull token** and **CocoIndex Plus license key** are
-issued by your CocoIndex representative — contact them to get set up. Released
-chart/image versions (`<X.Y.Z>`, used throughout this guide) are listed on the
-chart's **GHCR package page** (`github.com/orgs/cocoindex-io/packages`) once you've
-authenticated with the pull token; your rep can confirm the current one.
+**Getting access.** Your CocoIndex representative provides the **CocoIndex Plus
+license key** and **image pull access** (a pull token, or read access granted to
+your GitHub org/user) — contact them to get set up. The Helm **chart is public**:
+released `<X.Y.Z>` versions are listed on its **GHCR package page**
+(`github.com/orgs/cocoindex-io/packages`), and `helm show values …` works with no
+login. Only the images are gated.
 
 ## Quickstart (bundled Postgres, API-key auth)
 
@@ -66,13 +69,11 @@ indexer:
   config: { repoOwner: your-org, repoName: index-configs, gitRef: main, dir: configs }
 ```
 
-The chart and images live in our **private GHCR** — authenticate with the pull
-token we issue (it pulls the chart, and the cluster uses it to pull the images):
+The Helm **chart is public** — no login to install it. The **images are private**,
+so the cluster needs a pull secret (your rep grants your GitHub org/user access or
+issues a pull token):
 
 ```bash
-# Log in so helm can pull the chart:
-helm registry login ghcr.io -u <user> -p <pull-token>
-
 # Namespace + a docker-registry secret so the cluster can pull the images
 # (referenced by imagePullSecrets in values-secret.yaml above):
 kubectl create namespace ccx
@@ -240,10 +241,10 @@ helm install ccx ./cocoindex-code-plus-<X.Y.Z>.tgz -n ccx --create-namespace \
   -f values-secret.yaml
 ```
 
-Run these from a **connected host** — both `skopeo copy` and `helm pull` reach
-GHCR with your pull token. `helm pull` fetches the chart `.tgz`; carry that to the
-disconnected side (or re-host it in your own OCI registry) so the install never
-reaches GHCR.
+Run these from a **connected host**. `skopeo copy` needs image pull access (your
+granted account / pull token); the **chart is public**, so `helm pull` needs no
+auth. `helm pull` fetches the chart `.tgz` — carry that to the disconnected side
+(or re-host it in your own OCI registry) so the install never reaches GHCR.
 
 The **CocoIndex Plus license validates offline** — the license key is
 signed/self-verifiable, so the indexer never calls home. Once the images are
