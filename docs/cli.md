@@ -48,7 +48,9 @@ ccx search "how are vector embeddings stored"   # scopes to the current repo + b
 ccx search "rate limiter" --all-repos           # search every indexed repo
 ccx search foo --repo cocoindex-io/cocoindex     # a specific repo
 ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (branch or tag name)
-ccx search foo -k 10                             # more results
+ccx search foo -k 10                             # more results; --offset paginates
+ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
+ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \NAME(\(ARGS*\)):' -l python        # every Python function def
@@ -81,6 +83,11 @@ omit it, the CLI uses **your checked-out branch** if that branch is indexed
 **default branch**; it prints a `Using git ref …` note to stderr so you always
 know which ref answered. `ccx repositories` lists what's indexed.
 
+Similarly, when you run `search` or `grep` from a **subdirectory** of the
+checkout (and gave no `--path`), results are scoped to that subtree — the note
+on stderr names the glob; run from the repo root or pass `--path '*'` to cover
+the whole repo.
+
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
 
@@ -111,16 +118,14 @@ The query server exposes an **MCP** (Model Context Protocol) server over the sam
 query service, so a coding agent or MCP-capable IDE calls the tools **natively** —
 no CLI install, no output parsing. This is the recommended path for agents; the
 CLI remains the path for humans and shell scripts. The MCP tools track the CLI
-and REST API closely (same capabilities, same scoping) — with one current
-exception: MCP `code_search` accepts `paths` and `offset` that the `ccx search`
-CLI doesn't yet expose.
+and REST API closely (same capabilities, same scoping).
 
 - **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
-  - `code_search(query, top_k?, offset?, repo?, git_ref?, paths?)` → ranked code
-    chunks (repo, filename, line range, code, score).
+  - `code_search(query, top_k?, offset?, repo?, git_ref?, paths?, languages?)` →
+    ranked code chunks (repo, filename, line range, code, score).
   - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars).
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
