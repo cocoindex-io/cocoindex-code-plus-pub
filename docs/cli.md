@@ -44,35 +44,42 @@ confirms auth (a bad token returns `HTTP 401`; see [Troubleshooting](#troublesho
 
 ```bash
 # Semantic search
-ccx search "how are vector embeddings stored"   # scopes to the current repo (see note below)
+ccx search "how are vector embeddings stored"   # scopes to the current repo + branch (see note below)
 ccx search "rate limiter" --all-repos           # search every indexed repo
 ccx search foo --repo cocoindex-io/cocoindex     # a specific repo
-ccx search foo --repo my/repo --git-ref heads/main   # a specific indexed ref
+ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (branch or tag name)
 ccx search foo -k 10                             # more results
 
-# AST structural grep (matches the syntax tree, not text; ref-scoped, needs -l/--language)
-ccx grep 'def \NAME(\(ARGS*\)):' -l python --git-ref heads/main   # every Python function def
-ccx grep 'foo(\X)' -l python --git-ref heads/main                 # calls to foo (captures \X)
-ccx grep 'isinstance(\X, \Y)' -l python --git-ref heads/main --path 'src/*.py'
+# AST structural grep (matches the syntax tree, not text; needs -l/--language)
+ccx grep 'def \NAME(\(ARGS*\)):' -l python        # every Python function def
+ccx grep 'foo(\X)' -l python --git-ref v1.2       # calls to foo (captures \X), at tag v1.2
+ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
-# File access (ref-scoped — needs --git-ref; repo auto-detected like search)
-ccx read-file README.md --git-ref heads/main            # print a file's contents
-ccx read-file src/app.py --git-ref heads/main --offset 40 --limit 20   # 20 lines from line 40 (--offset = 1-based line)
-ccx find-files "*.py" --git-ref heads/main              # list files by glob
-ccx find-files --git-ref heads/main                     # list all files
+# File access (ref-scoped; repo + ref auto-detected like search)
+ccx read-file README.md                          # print a file's contents
+ccx read-file src/app.py --offset 40 --limit 20  # 20 lines from line 40 (--offset = 1-based line)
+ccx find-files "*.py"                            # list files by glob
+ccx find-files --git-ref main                    # list all files, on a specific ref
 
 # Repo / ref metadata
 ccx repositories                                # the current repo's indexed refs + commit shas
-ccx repositories cocoindex-io/cocoindex          # a specific repo
+ccx repositories cocoindex-io/cocoindex          # a specific repo ("(default)" marks the default branch)
 ```
 
-`ccx search`, `read-file`, and `find-files` scope to the current repo **only when
-the working directory is a git checkout with a GitHub/GitLab `origin`** — that
-origin is mapped to the matching indexed repo. Otherwise (no git repo, or a
-non-GitHub/GitLab origin) `search` falls back to **all indexed repos** and prints
-a note to stderr; pass `--repo <owner>/<repo>` to force a scope or `--all-repos`
-to search everything. The file commands are **ref-scoped**, so they require
-`--git-ref` (`heads/<branch>` / `tags/<tag>`).
+`ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
+**only when the working directory is a git checkout with a GitHub/GitLab
+`origin`** — that origin is mapped to the matching indexed repo. Otherwise (no
+git repo, or a non-GitHub/GitLab origin) `search` falls back to **all indexed
+repos** and prints a note to stderr; pass `--repo <owner>/<repo>` to force a
+scope or `--all-repos` to search everything.
+
+These commands are also **ref-scoped**: they operate on one git ref of the repo.
+`--git-ref` takes a branch or tag name (`main`, `v1.2`) — or the explicit
+`heads/<branch>` / `tags/<tag>` form if a branch and tag share a name. When you
+omit it, the CLI uses **your checked-out branch** if that branch is indexed
+(including its `origin` upstream when the local name differs), else the repo's
+**default branch**; it prints a `Using git ref …` note to stderr so you always
+know which ref answered. `ccx repositories` lists what's indexed.
 
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
@@ -110,14 +117,16 @@ CLI doesn't yet expose.
 
 - **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
-- **Tools:**
+- **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
+  omitted → the repo's default branch, and responses report the resolved ref):
   - `code_search(query, top_k?, offset?, repo?, git_ref?, paths?)` → ranked code
     chunks (repo, filename, line range, code, score).
-  - `code_grep(pattern, language, repo, git_ref, paths?, limit?, offset?)` → AST
+  - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars).
-  - `read_file(repo, git_ref, path, offset?, limit?)` → a file's line window.
-  - `find_files(repo, git_ref, patterns?, case?, limit?, offset?)` → matching paths.
-  - `repositories(repo)` → the repo's indexed refs + each ref's commit sha.
+  - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
+  - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
+  - `repositories(repo)` → the repo's indexed refs + each ref's commit sha, and
+    the default branch.
 
 Most clients take a remote HTTP MCP server with custom headers, e.g.:
 
