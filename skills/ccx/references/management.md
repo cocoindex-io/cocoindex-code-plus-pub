@@ -25,8 +25,8 @@ uv tool upgrade cocoindex-code-plus      # or: pipx upgrade cocoindex-code-plus
 
 ## Configuration
 
-Two environment variables, or a `.env` in the working directory (auto-loaded,
-non-overriding — values already in the shell win):
+Two environment variables, or a `.env` found from the working directory upward
+(auto-loaded, non-overriding — values already in the shell win):
 
 | Var | What |
 |---|---|
@@ -53,8 +53,10 @@ ccx status        # server status, URL, version, uptime
 ccx version       # just the CLI version
 ```
 
-`ccx status` is the first thing to run in a new environment — it distinguishes
-"server unreachable / wrong URL" from "auth rejected" from "healthy".
+`ccx status` is the first thing to run in a new environment — but it checks
+**reachability only**: the server's health endpoint is auth-exempt, so `status`
+passes even with a missing or wrong token. The first real query (e.g. a `ccx
+search`) is what confirms auth — a bad token returns `HTTP 401`.
 
 ## Troubleshooting
 
@@ -62,7 +64,7 @@ ccx version       # just the CLI version
 |---|---|---|
 | `command not found: ccx` | not installed / not on PATH | install (above); re-open the shell |
 | `Query server unreachable at <url>` | wrong/empty `CCX_SERVER_URL`, server down, network/port-forward dropped | check the URL; re-establish `kubectl port-forward`; confirm with the user |
-| `HTTP 401` | missing/invalid `CCX_API_TOKEN` | set a valid token (the server may accept several for rotation) |
+| `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` does **not** catch this — health is auth-exempt) | set a valid token (the server may accept several for rotation) |
 | `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx repositories`) |
 | `No results.` / `No matches.` | query/pattern found nothing | for `search`, rephrase or raise `-k`/`--offset`; for `grep`, re-check [grep-syntax.md](grep-syntax.md) gotchas |
 | server version mismatch warning | CLI and server versions drifted | upgrade the CLI (or pin to the server's version) |
@@ -76,7 +78,9 @@ refs (and commit SHAs) are currently indexed.
 
 The same query server exposes an **MCP** (Model Context Protocol) endpoint at
 `<CCX_SERVER_URL>/mcp` (Streamable HTTP), with tools kept at **parity** with the CLI
-(`code_search`, `code_grep`, `read_file`, `find_files`, `repositories`). For MCP-capable
+(`code_search`, `code_grep`, `read_file`, `find_files`, `repositories` — `git_ref`
+is optional everywhere and takes bare branch/tag names, resolved to the repo's
+default like the CLI). For MCP-capable
 agents this is the preferred path — native tool calls, no CLI install, no output
 parsing. Auth uses the same bearer token.
 
