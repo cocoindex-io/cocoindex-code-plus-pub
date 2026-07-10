@@ -119,6 +119,11 @@ node. **Include the full qualifier** (`std::make_unique<\X>(\*)`) or capture it
 `for \X in ast.walk(\*)` matches but reports only the header `for node in ast.walk(tree)`.
 To require something in the body, use containment: `for \X in \Y \{{ … \}}`.
 
+Use this deliberately to control how much the output *shows*: extend the pattern to
+cover what you want to read. `def parse_config(\*):` prints only the header;
+`def parse_config(\*): \*` covers — and prints — the whole function including its body
+(often saving a follow-up `read-file`).
+
 ### 4. A literal closer after a metavar must structurally follow it
 `if \C { \X = \Y }` → **0** on `if c { x = 1; }`, because the source has `x = 1` **`;`**
 `}` — the `;` sits between `\Y` and the `}`, and the trailing-delimiter tolerance only
@@ -143,10 +148,15 @@ regex habit makes you reach for `\(`, stop: you're turning your literal code int
 metavar and the pattern will silently match nothing.
 
 ### 8. A string literal is one atomic node — wildcards can't reach inside
-`@\R.\M("/project/file\*")` → **0**: `\*` doesn't glob inside a string, and string
-*contents* are never matched as code. Match a string literal exactly, or use a **regex
-metavar** whose regex covers the quotes: `app.get(\/"\/project.*"/)` matches
-`app.get("/project/files")`. (The node's text includes the quote characters.)
+Matching is at **lexer-token boundaries**: a string literal is one token, so a
+literal string in the pattern matches only the **full** literal, and `\*`/`\_` can't
+reach inside one. Two consequences:
+
+- `open("config")` → **0** on `open("app_config.yaml")` — partial content needs a
+  **regex metavar** whose regex covers the quotes: `open(\/".*config.*"/)`.
+- `@\R.\M("/project/file\*")` → **0** — `\*` doesn't glob inside a string; write
+  `@\R.\M(\/"\/project\/file.*"/)` instead. (The node's text includes the quote
+  characters, so anchor the regex around them.)
 
 ---
 
@@ -178,13 +188,14 @@ all structure).
 |---|---|
 | every function def (incl. `async`, decorated) | `def \_(\*):` |
 | the def of `X`, whatever its signature | `def X(\*):` |
+| the def of `X` *with its body shown* | `def X(\*): \*` |
 | calls of `X` (also matches its def header) | `X(\*)` |
 | every class, with or without a base list | `class \_\?:` |
 | classes deriving from `Base` | `class \_(\*Base\*):` — or just `class \_(\*):` and read |
 | `isinstance` checks | `isinstance(\_, \_)` |
 | a method call on any receiver | `\_.method(\*)` |
 | calls to any `get_*` function | `\/get_.*/(\*)` |
-| a call with a specific string argument | `open(\/"config.*"/)` |
+| a call whose string argument contains `config` | `open(\/".*config.*"/)` |
 
 ## More worked examples
 

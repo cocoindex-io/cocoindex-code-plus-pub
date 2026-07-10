@@ -98,8 +98,11 @@ ccx search error handling retry logic
   repo scope, so not with `--all-repos`).
 - **Filters.** `--lang <language>` restricts by source language and `--path
   '<glob>'` by path — both repeatable.
-- **Results.** `-k` / `--top-k <N>` returns more results (default 5); `--offset`
-  paginates. If every result looks relevant, there are likely more — raise `-k`.
+- **Results.** Ranked by relevance — the most relevant come **first**, so if the
+  top hit already answers the question, stop there; don't fetch more just to be
+  safe. `-k` / `--top-k <N>` returns more (default 5) and `--offset` paginates —
+  raise `-k` only when every result still looks relevant (then there are likely
+  more).
 
 ```bash
 ccx search "rate limiter" --all-repos
@@ -150,10 +153,11 @@ Two mistakes to avoid (observed in real agent usage):
   a shell/sed-style escape. `class Call(\_):` is right; `class Call\(\_\):` is
   wrong — `\(…\)` is the explicit metavariable delimiter, so escaping the parens
   turns them into a metavar and the pattern silently matches nothing.
-- **A string literal is one atomic node.** `\*` and `\NAME` can't reach *inside*
-  it. Match a string exactly (`app.get("/project/files")`), or match variable
-  string content with a regex metavar whose regex covers the quotes:
-  `app.get(\/"\/project.*"/)`.
+- **Matching is at lexer-token boundaries — a string literal is one atomic
+  node.** `\*` and `\NAME` can't reach *inside* it, and a literal string in the
+  pattern matches only the **full** literal: `open("config")` does *not* match
+  `open("app_config.yaml")`. For partial string content use a regex metavar
+  whose regex covers the quotes: `open(\/".*config.*"/)`.
 
 **An empty result is information, not a near-miss.** Structural match is literal
 about structure — a wrong guess returns nothing rather than something fuzzy. So
@@ -170,7 +174,10 @@ when a grep comes back empty, *loosen the structure*, don't abandon it:
 match, and dropping to a bare identifier with no metavariable just floods hits.)
 
 Key model: a pattern matches a **fragment**, child-aligned; incidental trailing
-`;`/`,` are ignored, but closers (`)`, `}`) are significant. **For the full
+`;`/`,` are ignored, but closers (`)`, `}`) are significant. The output shows
+**exactly the span the pattern covers** — extend the pattern to see more:
+`def parse_config(\*):` prints only the header, while `def parse_config(\*): \*`
+prints the whole function including its body. **For the full
 pattern language, verified recipes for common queries, and the gotchas (why
 `try \{{ … \}}` needs the `:`, qualified names, fragment spans), read
 [references/grep-syntax.md](references/grep-syntax.md) before writing non-trivial
