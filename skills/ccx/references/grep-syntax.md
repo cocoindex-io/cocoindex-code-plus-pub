@@ -96,6 +96,15 @@ The default fragment match sits between two tighter/looser scopes:
 
 Order of tightness: `\{ P \}` (is) ⊂ default fragment ⊂ `\{{ P \}}` (has).
 
+**Anchor containment, or it's slow on a big repo.** `\{{ INNER \}}` checks every
+descendant of every candidate node, so it's only cheap when the *outer* pattern has
+a selective literal to prefilter on. `\{{ ".." \}}` or `fn \_(\*) \{{ ".." \}}`
+(no distinctive identifier — the `".."` string isn't a prefilter term) forces a
+full-corpus scan **plus** a deep per-node walk → tens of seconds on a large repo.
+Give it an anchor: a real identifier in the outer pattern (`fn write_ident(\*) \{{
+".." \}}`) or a `--path` to narrow the file set. To find code that merely *mentions*
+a concept, prefer `ccx search`.
+
 ---
 
 ## Gotchas (these tripped up the authors too)
