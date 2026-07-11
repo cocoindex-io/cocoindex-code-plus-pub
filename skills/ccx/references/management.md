@@ -53,10 +53,11 @@ ccx status        # server status, URL, version, uptime
 ccx version       # just the CLI version
 ```
 
-`ccx status` is the first thing to run in a new environment — but it checks
-**reachability only**: the server's health endpoint is auth-exempt, so `status`
-passes even with a missing or wrong token. The first real query (e.g. a `ccx
-search`) is what confirms auth — a bad token returns `HTTP 401`.
+Use `ccx status` when **diagnosing** — a query failed, or you're bringing up a new
+environment. It's not a pre-flight step for normal use (just run your query). It
+checks **reachability only**: the server's health endpoint is auth-exempt, so
+`status` passes even with a missing or wrong token — the first real query (e.g. a
+`ccx search`) is what confirms auth (a bad token returns `HTTP 401`).
 
 ## Troubleshooting
 

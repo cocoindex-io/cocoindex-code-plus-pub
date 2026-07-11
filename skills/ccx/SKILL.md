@@ -10,11 +10,6 @@ description: "This skill should be used when querying a codebase indexed by a re
 AST structural grep, and read-only file access — over HTTP. The CLI holds no
 index and needs no license; it just talks to a server.
 
-This is fundamentally different from the open-source `ccc`: **there is no local
-daemon, no `init`, and no indexing here.** The index is built and kept fresh by a
-server-side indexer you don't control from the CLI. The agent's job is to *query*,
-not to manage the index.
-
 ## When to reach for ccx
 
 Use ccx to get codebase information whenever the everyday local tools (`rg`,
@@ -35,32 +30,6 @@ The one query *not* to route through ccx: a plain literal-identifier lookup in a
 small repo you already have checked out — local `rg` answers that directly, and
 a `ccx grep` with no structure (a bare identifier, no metavariable) just floods
 unstructured hits.
-
-## Setup (the agent owns reaching the server)
-
-`ccx` needs two things, both env-driven (or a `.env` found from the working
-directory upward, auto-loaded — already-exported vars win):
-
-| Var | What |
-|---|---|
-| `CCX_SERVER_URL` | the query server URL (e.g. `https://ccx.example.com`) |
-| `CCX_API_TOKEN` | the API token, sent as `Authorization: Bearer` |
-
-Before running queries, confirm the server is reachable:
-
-```bash
-ccx status        # prints server health, URL, version, uptime
-```
-
-Note `ccx status` checks **reachability only** — the health endpoint is
-auth-exempt, so it passes even with a missing or wrong token. The first real
-query is what confirms auth (a bad token returns `HTTP 401`).
-
-If `ccx` is not installed, or `status` fails with a connection error, or the
-env vars are unset, **do not guess credentials** — see
-[references/management.md](references/management.md) for install + configuration,
-and surface the missing piece to the user (the server URL and token are theirs to
-provide).
 
 ## Repo & ref scoping (applies to every query command)
 
@@ -149,15 +118,18 @@ ccx grep 'DenseMap<\_, \_>' -l c++                 # nested generic; structural,
 
 Two mistakes to avoid (observed in real agent usage):
 
-- **Never escape literal code.** `\` *introduces* pattern constructs; it is not
-  a shell/sed-style escape. `class Call(\_):` is right; `class Call\(\_\):` is
-  wrong — `\(…\)` is the explicit metavariable delimiter, so escaping the parens
-  turns them into a metavar and the pattern silently matches nothing.
+- **Never escape literal code — including inside strings.** `\` *introduces*
+  pattern constructs; it is not a shell/sed/regex escape. `class Call(\_):` is
+  right, `class Call\(\_\):` is wrong (`\(…\)` is the metavariable delimiter, so
+  the escaped parens become a metavar → silently matches nothing). The same trap
+  bites string content: write `".."`, not `"\.\."`.
 - **Matching is at lexer-token boundaries — a string literal is one atomic
   node.** `\*` and `\NAME` can't reach *inside* it, and a literal string in the
   pattern matches only the **full** literal: `open("config")` does *not* match
   `open("app_config.yaml")`. For partial string content use a regex metavar
-  whose regex covers the quotes: `open(\/".*config.*"/)`.
+  whose regex covers the quotes: `open(\/".*config.*"/)`. And to find code that
+  *handles* a concept — not one exact literal — reach for `ccx search`, not a
+  string-literal grep.
 
 **An empty result is information, not a near-miss.** Structural match is literal
 about structure — a wrong guess returns nothing rather than something fuzzy. So
@@ -207,14 +179,9 @@ Note `--offset` is a 1-based *line number* for `read-file`, but a pagination
 
 ## Repo & ref metadata
 
-```bash
-ccx repositories                                 # the current repo's indexed refs + commit shas
-ccx repositories cocoindex-io/cocoindex          # a specific repo ("(default)" marks the default branch)
-```
-
-Use this to see *what is indexed* — which repos/refs exist, at which commits —
-e.g. before targeting a non-default ref. It is **not** a required preamble:
-the ref default (above) already picks the right ref for the common case.
+`ccx repositories [<owner>/<repo>]` lists what's indexed — a repo's refs and their
+commit shas (`(default)` marks the default branch). Reach for it only to target a
+non-default ref; the ref default already handles the common case.
 
 ## When a query returns nothing useful
 
@@ -224,13 +191,14 @@ the ref default (above) already picks the right ref for the common case.
   re-check [references/grep-syntax.md](references/grep-syntax.md) gotchas before
   concluding the code isn't there. Also check stderr: a CWD-subtree note means
   you searched only part of the repo (`--path '*'` widens).
-- **"index not built yet" (HTTP 503)** — the server hasn't populated the index for
-  that repo/ref yet. This is a *server-side* state; the CLI can't fix it. Tell the
-  user and retry later, or pick an already-indexed ref (`ccx repositories`).
-- **HTTP 401** — missing/invalid `CCX_API_TOKEN` (note `ccx status` does not
-  catch this). See [references/management.md](references/management.md).
 - **Unknown/unindexed ref** — the error lists the indexed refs; pick one or drop
   `--git-ref` to use the default.
+
+Server/transport failures — `HTTP 503` "index not built yet", `HTTP 401` auth, a
+connection error, or `ccx` not installed — are the user's environment, not something
+to work around: **never invent a server URL or token**; surface the missing piece to
+the user and see [references/management.md](references/management.md) for setup +
+troubleshooting.
 
 ## For agents & MCP
 
