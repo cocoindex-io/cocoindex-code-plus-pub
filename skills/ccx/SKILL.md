@@ -80,7 +80,8 @@ ccx search parse config --lang python --path 'src/**'
 ```
 
 Each result prints `[score] <repo> <file> (Lstart-Lend)` and the code. To read
-more context around a hit, use `ccx read-file` (below) or your editor's file tools.
+more context around a hit, open the file with your normal file tools (or, for a
+ref you don't have checked out, `ccx read-file` — see remote-access reference).
 
 ## AST structural grep
 
@@ -158,24 +159,13 @@ patterns.**
 - **Pagination.** `-k`/`--limit` (default 100) and `--offset` (a skip count); a
   truncation note on stderr means there are more matches.
 
-## File access (ref-scoped)
+## Reading & listing files at a ref (remote / cross-ref)
 
-Read files and list paths exactly as they exist in an indexed ref. Repo and ref
-are auto-detected like every other command (`--repo` / `--git-ref` to override).
-
-```bash
-ccx read-file README.md                                  # print a file
-ccx read-file src/app.py --offset 40 --limit 20          # a line window (--offset = 1-based line here)
-
-ccx find-files "*.py"                                    # list files matching a glob
-ccx find-files                                           # list all indexed files
-ccx find-files "src/**" --case insensitive               # smart (default) | sensitive | insensitive
-```
-
-Prefer these over a semantic `search` when you already know the path or want exact
-file contents at a ref (e.g. to read more context around a search/grep hit).
-Note `--offset` is a 1-based *line number* for `read-file`, but a pagination
-*skip count* for `grep`/`find-files`.
+`ccx read-file` and `ccx find-files` fetch file contents and paths at an indexed
+ref. They're for code you **don't have on disk** — a repo not checked out locally,
+or a **different ref** than your working tree. **When the repo is checked out at
+the ref you care about, use your normal file tools instead** (faster, same bytes).
+Full usage: [references/remote-access.md](references/remote-access.md).
 
 ## Repo & ref metadata
 
