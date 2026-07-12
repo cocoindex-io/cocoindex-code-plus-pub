@@ -170,6 +170,7 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
+| **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,autoscaling,resources}` | default | scaling + exposure; ingress off by default |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 
@@ -194,6 +195,25 @@ database:
 
 On GKE, reach Cloud SQL via the **Cloud SQL Auth Proxy** sidecar + Workload
 Identity.
+
+### Postgres memory sizing
+
+Semantic search is memory-bound: each indexed repo's vector (HNSW) index must be
+resident in Postgres's buffer cache, or a cold search reads hundreds of MB from
+disk and the first query after a restart or idle period can take tens of
+seconds. Rules of thumb:
+
+- **Bundled Postgres:** set `database.bundled.sharedBuffers` (default `1GB`) to
+  roughly the total size of your vector indexes — budget **~2.5 KB per indexed
+  chunk** (e.g. a 170k-chunk repo ≈ 450 MB), and `effectiveCacheSize` (default
+  `2GB`) to roughly the pod's memory. `sharedBuffers` + `shmSize` count against
+  the pod, so set `database.bundled.resources` accordingly.
+- **External / Cloud SQL:** set the `shared_buffers` / `effective_cache_size`
+  flags on the instance with the same sizing.
+- The query server also **pre-warms** every vector index into the database
+  cache at startup (best-effort; requires the `pg_prewarm` extension to be
+  creatable, which Cloud SQL and stock Postgres allow), so a freshly started
+  server doesn't serve a slow first search.
 
 ### Exposing the query server
 
