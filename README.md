@@ -11,6 +11,10 @@ CLI and an MCP endpoint.
   IT teams.
 - **[docs/cli.md](docs/cli.md)** — install and use the `ccx` CLI (and the MCP
   integration) to query an indexed codebase. For engineers and coding agents.
+- **[docs/security.md](docs/security.md)** — security & deployment guide:
+  architecture and trust model, the complete egress list and air-gap recipe,
+  hardening checklist, audit-log formats, supply-chain verification, AI/ML
+  data handling. For security teams.
 
 ## Agent skill
 
