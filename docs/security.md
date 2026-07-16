@@ -119,5 +119,7 @@ also discoverable via <https://cocoindex.io/.well-known/security.txt>, RFC 9116)
 acknowledgment within 3 business days, coordinated disclosure preferred.
 Critical vulnerabilities in shipped versions: assessed within 24 hours,
 fixed or mitigated within 7 days, with affected customers notified via the
-fix-release advisory. Dependencies are fully pinned and hash-verified; Dependabot and
-secret scanning run on the product repositories.
+fix-release advisory. Dependencies are fully pinned and hash-verified; Dependabot runs on all
+product repositories; GitHub secret scanning with push protection runs on
+the public repositories, complemented by gitleaks pre-commit hooks and
+quarterly full-history scans across all of them.
