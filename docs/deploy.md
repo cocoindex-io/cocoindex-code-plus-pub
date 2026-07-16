@@ -55,7 +55,7 @@ Put your secrets in a gitignored `values-secret.yaml`:
 # values-secret.yaml — do not commit
 imagePullSecrets: [{ name: ghcr-pull }]  # references the pull secret created below
 embedding:
-  model: text-embedding-3-small        # any LiteLLM model
+  model: text-embedding-3-small        # any LiteLLM model — pin one deliberately (see note below)
   secretEnv: { OPENAI_API_KEY: sk-REPLACE_ME }  # or COHERE_API_KEY / GEMINI_API_KEY / …
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
@@ -164,7 +164,7 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | Area | Keys | Req? | Notes |
 |---|---|---|---|
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
-| **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default |
+| **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
 | **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live ([config format](#index-config-repo)); `configProvider` defaults to `github` |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
