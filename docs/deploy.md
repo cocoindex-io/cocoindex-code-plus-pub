@@ -30,7 +30,7 @@ deploying the service; engineers who only *query* an existing deployment want
   token** — plus a **config repo** holding the per-repo index config JSON
   ([format](#index-config-repo)). The **GitHub App** needs **Repository → Contents:
   Read-only** (Metadata: Read is automatic), must be **installed on the config repo
-  and every repo you index**, and you supply its **App ID** (`indexer.github.appId`)
+  and every repo you index**, and you supply its **App ID** (`codeHost.github.appId`)
   + **PEM private key** (`secrets.githubApp.privateKey`). A **GitLab token** needs
   **read access** (`read_api` / `read_repository`) to the same repos.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
@@ -63,10 +63,10 @@ secrets:
   githubApp:     { privateKey: |
       -----BEGIN RSA PRIVATE KEY-----
       … }
+codeHost:
+  github: { appId: "123456" }          # code host is shared by indexer + query server
 indexer:
-  configProvider: github               # or gitlab
-  github: { appId: "123456" }
-  config: { repoOwner: your-org, repoName: index-configs, gitRef: main, dir: configs }
+  config: { provider: github, repoOwner: your-org, repoName: index-configs, gitRef: main, dir: configs }
 ```
 
 The Helm **chart is public** — no login to install it. The **images are private**,
@@ -166,7 +166,8 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
-| **Indexer source** | `indexer.config.*`, `indexer.github.appId` (+ `secrets.githubApp.privateKey`), `indexer.configProvider`, `indexer.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | where configs + repos live ([config format](#index-config-repo)); `configProvider` defaults to `github` |
+| **Code host** | `codeHost.github.appId` (+ `secrets.githubApp.privateKey`), `codeHost.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | how the backend reaches GitHub/GitLab — shared by the indexer (reads repos) and the query server (ACL checks) |
+| **Indexer source** | `indexer.config.*` (`provider`, `repoOwner`, `repoName`, `gitRef`, `dir`) | **yes** | the config repo listing which repos to index ([config format](#index-config-repo)); `provider` defaults to `github` |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
