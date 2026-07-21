@@ -63,7 +63,7 @@ embedding:
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
   apiTokens:     { tokens: "<a-strong-token>" }   # the CLI sends one of these
-  githubApp:                           # block style — a `|` multiline scalar can't go inside { }
+  githubApp:
     privateKey: |
       -----BEGIN RSA PRIVATE KEY-----
       …
