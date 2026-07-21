@@ -62,7 +62,7 @@ embedding:
   secretEnv: { OPENAI_API_KEY: sk-REPLACE_ME }  # or COHERE_API_KEY / GEMINI_API_KEY / …
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
-  apiTokens:     { tokens: "<a-strong-token>" }   # the CLI sends one of these
+  apiTokens:     { tokens: "<a-strong-token>" }   # a string, not a list — may pack several tokens (space/comma/newline-separated); the CLI sends one
   githubApp:
     privateKey: |
       -----BEGIN RSA PRIVATE KEY-----
@@ -318,6 +318,6 @@ the table, and **401** without a valid API token — both expected. The indexer 
 **singleton** indexer (`Recreate` — indexing pauses for the restart while the
 query server keeps serving), so pin `<X.Y.Z>` deliberately.
 
-**Rotating the API token.** `secrets.apiTokens.tokens` accepts multiple tokens
-(whitespace/comma/newline-separated). To rotate without downtime: add the new
+**Rotating the API token.** `secrets.apiTokens.tokens` is a single string (not
+a YAML list) that can hold multiple tokens, whitespace/comma/newline-separated. To rotate without downtime: add the new
 token, `helm upgrade`, migrate clients, then drop the old token and upgrade again.
