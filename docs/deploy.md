@@ -20,8 +20,9 @@ deploying the service; engineers who only *query* an existing deployment want
 - A Kubernetes cluster + `kubectl` and `helm` (v3.8+ for OCI).
 - **Access to the images** — the private images `ghcr.io/cocoindex-io/ccx-{indexer,query-server}`
   (granted on request — a pull token or read access to your GitHub org/user), or
-  [relocate them into your own registry](#air-gapped--relocate-images). (The Helm
-  chart itself is public.)
+  [relocate them into your own registry](#air-gapped--relocate-images). (The
+  [Helm chart itself](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
+  is public.)
 - A **CocoIndex Plus license key** (we issue it; gates the indexer).
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
@@ -42,9 +43,9 @@ deploying the service; engineers who only *query* an existing deployment want
 **Getting access.** Your CocoIndex representative provides the **CocoIndex Plus
 license key** and **image pull access** (a pull token, or read access granted to
 your GitHub org/user) — contact them to get set up. The Helm **chart is public**:
-released `<X.Y.Z>` versions are listed on its **GHCR package page**
-(`github.com/orgs/cocoindex-io/packages`), and `helm show values …` works with no
-login. Only the images are gated.
+released `<X.Y.Z>` versions are listed on its
+[GHCR package page](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus),
+and `helm show values …` works with no login. Only the images are gated.
 
 ## Quickstart (bundled Postgres, API-key auth)
 

@@ -7,8 +7,9 @@ CLI and an MCP endpoint.
 ## Guides
 
 - **[docs/deploy.md](docs/deploy.md)** — deploy the backend (indexer + query
-  server) on Kubernetes with the `cocoindex-code-plus` Helm chart. For platform /
-  IT teams.
+  server) on Kubernetes with the
+  [`cocoindex-code-plus` Helm chart](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
+  (public; released versions listed there). For platform / IT teams.
 - **[docs/cli.md](docs/cli.md)** — install and use the `ccx` CLI (and the MCP
   integration) to query an indexed codebase. For engineers and coding agents.
 - **[docs/security.md](docs/security.md)** — security & deployment guide:
