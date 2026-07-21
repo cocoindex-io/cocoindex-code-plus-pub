@@ -19,7 +19,7 @@ deploying the service; engineers who only *query* an existing deployment want
 
 - A Kubernetes cluster + `kubectl` and `helm` (v3.8+ for OCI).
 - **Access to the images** — the private images `ghcr.io/cocoindex-io/ccx-{indexer,query-server}`
-  (granted on request — a pull token or read access to your GitHub org/user), or
+  (granted on request — typically a **pull token** we issue), or
   [relocate them into your own registry](#air-gapped--relocate-images). (The
   [Helm chart itself](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   is public.)
@@ -41,8 +41,9 @@ deploying the service; engineers who only *query* an existing deployment want
   the `vector` extension).
 
 **Getting access.** Your CocoIndex representative provides the **CocoIndex Plus
-license key** and **image pull access** (a pull token, or read access granted to
-your GitHub org/user) — contact them to get set up. The Helm **chart is public**:
+license key** and **image pull access** — a revocable **pull token** plus the
+username to pair it with (GitHub-account read grants are possible case-by-case) —
+contact them to get set up. The Helm **chart is public**:
 released `<X.Y.Z>` versions are listed on its
 [GHCR package page](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus),
 and `helm show values …` works with no login. Only the images are gated.
@@ -76,15 +77,15 @@ indexer:
 ```
 
 The Helm **chart is public** — no login to install it. The **images are private**,
-so the cluster needs a pull secret (your rep grants your GitHub org/user access or
-issues a pull token):
+so the cluster needs a pull secret built from the pull token (and its paired
+username) your rep issues:
 
 ```bash
 # Namespace + a docker-registry secret so the cluster can pull the images
 # (referenced by imagePullSecrets in values-secret.yaml above):
 kubectl create namespace ccx
 kubectl -n ccx create secret docker-registry ghcr-pull \
-  --docker-server=ghcr.io --docker-username=<user> --docker-password=<pull-token>
+  --docker-server=ghcr.io --docker-username=<username-we-provide> --docker-password=<pull-token>
 ```
 
 Install and verify:
@@ -270,8 +271,10 @@ in-cluster pull secret at all:
 - **Ingress/TLS:** the **AWS Load Balancer Controller** (`queryServer.ingress.className: alb`)
   with an **ACM** certificate via `queryServer.ingress.annotations`
   (`alb.ingress.kubernetes.io/certificate-arn`); TLS terminates at the ALB.
-- **Node arch:** the images are **amd64-only** (`cocoindex-plus` ships no arm64
-  wheel) — schedule the indexer/query-server on **x86_64** nodes, **not Graviton**.
+- **Node arch:** releases **after 0.1.12** are **multi-arch**
+  (`linux/amd64` + `linux/arm64`) — Graviton (or any arm64) nodes work; the
+  kubelet pulls the matching arch automatically. Releases **0.1.12 and earlier**
+  are amd64-only: schedule those on **x86_64** nodes.
 
 ## Air-gapped / relocate images
 
@@ -291,8 +294,11 @@ helm install ccx ./cocoindex-code-plus-$VERSION.tgz -n ccx --create-namespace \
 ```
 
 Run these from a **connected host**. `skopeo copy` needs image pull access (your
-granted account / pull token); the **chart is public**, so `helm pull` needs no
-auth. `helm pull` fetches the chart `.tgz` — carry that to the disconnected side
+pull token); the **chart is public**, so `helm pull` needs no auth. `--all`
+copies every architecture **plus the SBOM/provenance attestation manifests** —
+the `unknown/unknown` entries you'll see next to `linux/amd64` / `linux/arm64`
+on package pages are those attestations (build metadata, never selected by a
+runtime), not broken images. `helm pull` fetches the chart `.tgz` — carry that to the disconnected side
 (or re-host it in your own OCI registry) so the install never reaches GHCR. The
 image copy is **per version**: only versions you actually upgrade to need
 mirroring — re-run the copy (and `helm upgrade`) each time you move to a new one.
