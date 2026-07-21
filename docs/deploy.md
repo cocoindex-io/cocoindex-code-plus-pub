@@ -32,7 +32,10 @@ deploying the service; engineers who only *query* an existing deployment want
   Read-only** (Metadata: Read is automatic), must be **installed on the config repo
   and every repo you index**, and you supply its **App ID** (`codeHost.github.appId`)
   + **PEM private key** (`secrets.githubApp.privateKey`). A **GitLab token** needs
-  **read access** (`read_api` / `read_repository`) to the same repos.
+  **read access** (`read_api` / `read_repository`) to the same repos. Both hosts
+  default to the cloud instance; for a self-managed one set the instance root as
+  `codeHost.github.baseUrl` (GitHub Enterprise Server, e.g.
+  `https://github.example.com`) or `codeHost.gitlab.baseUrl`.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
@@ -60,9 +63,11 @@ embedding:
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
   apiTokens:     { tokens: "<a-strong-token>" }   # the CLI sends one of these
-  githubApp:     { privateKey: |
+  githubApp:                           # block style — a `|` multiline scalar can't go inside { }
+    privateKey: |
       -----BEGIN RSA PRIVATE KEY-----
-      … }
+      …
+      -----END RSA PRIVATE KEY-----
 codeHost:
   github: { appId: "123456" }          # code host is shared by indexer + query server
 indexer:
@@ -166,7 +171,7 @@ provide it; **default** = sensible default, leave alone unless noted; **if prod*
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
-| **Code host** | `codeHost.github.appId` (+ `secrets.githubApp.privateKey`), `codeHost.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | how the backend reaches GitHub/GitLab — shared by the indexer (reads repos) and the query server (ACL checks) |
+| **Code host** | `codeHost.github.{appId,baseUrl}` (+ `secrets.githubApp.privateKey`), `codeHost.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | how the backend reaches GitHub/GitLab — shared by the indexer (reads repos) and the query server (ACL checks). `baseUrl` defaults to the cloud instance (`https://github.com` / `https://gitlab.com`); set the root of your GitHub Enterprise Server / self-managed GitLab instead. It's part of each repo's index identity — changing it later means a full reindex |
 | **Indexer source** | `indexer.config.*` (`provider`, `repoOwner`, `repoName`, `gitRef`, `dir`) | **yes** | the config repo listing which repos to index ([config format](#index-config-repo)); `provider` defaults to `github` |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
