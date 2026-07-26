@@ -190,6 +190,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
+| **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
@@ -256,6 +257,30 @@ deployment's public URL (`https://ccx.example.com` — origin only, no path); a
 web app on another origin that embeds an MCP client needs its origin added to
 `queryServer.mcpExtraAllowedOrigins`. Non-browser clients — the `ccx` CLI and
 coding agents — send no `Origin` header and are unaffected.
+
+### Timeout chain
+
+The server enforces a per-request deadline (`queryServer.requestDeadlineSeconds`,
+default **60 s**): an over-deadline request is cancelled and answered with a
+clear `503` (or, mid-tool on `/mcp`, a `deadline_exceeded` tool error). For that
+answer to reach the caller, each outer layer must time out *later* than the one
+inside it:
+
+**client (90) > ingress (75) > server deadline (60 + a ≤5 s grace)**
+
+- The chart's defaults implement this: `queryServer.ingress.timeoutSeconds: 75`
+  and the CLI's 90 s default. **If you raise `requestDeadlineSeconds`, raise
+  the outer two as well** — nothing auto-derives them.
+- The **ingress budget is controller-specific** and the chart emits the right
+  form for the classes it knows: `gce`/`gce-internal` get a `BackendConfig`
+  with `timeoutSec` attached via the Service (GKE's default backend timeout is
+  30 s — *below* the server deadline, so leaving it unset cuts long requests
+  off first); `nginx` gets the `proxy-read/send-timeout` annotations. Any other
+  controller: set its equivalent yourself via `queryServer.ingress.annotations`.
+- The server also caps concurrency (`queryServer.maxConcurrentRequests`,
+  default **64** per pod): past capacity, requests get an immediate `503`
+  (retryable) while `/health` stays green — scale `replicaCount` if you see
+  sustained capacity 503s.
 
 ### GKE notes
 
