@@ -27,16 +27,18 @@ deploying the service; engineers who only *query* an existing deployment want
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
-- **Source access** to the repos you index — a **GitHub App** and/or a **GitLab
-  token** — plus a **config repo** holding the per-repo index config JSON
-  ([format](#index-config-repo)). The **GitHub App** needs **Repository → Contents:
-  Read-only** (Metadata: Read is automatic), must be **installed on the config repo
-  and every repo you index**, and you supply its **App ID** (`codeHost.github.appId`)
-  + **PEM private key** (`secrets.githubApp.privateKey`). A **GitLab token** needs
-  **read access** (`read_api` / `read_repository`) to the same repos. Both hosts
-  default to the cloud instance; for a self-managed one set the instance root as
-  `codeHost.github.baseUrl` (GitHub Enterprise Server, e.g.
-  `https://github.example.com`) or `codeHost.gitlab.baseUrl`.
+- **Source access** to the repos you index. Every code-host **instance** you
+  index from — github.com, a GitHub Enterprise Server, gitlab.com, a
+  self-managed GitLab — is one entry in the chart's **`codeHosts`** map,
+  carrying the instance's `baseUrl`, its indexer credential as a **reference
+  to a Secret you create**, and that instance's **config repo**
+  ([format](#index-config-repo)) listing the repos to index there. A GitHub
+  instance authenticates with a **GitHub App** — needs **Repository →
+  Contents: Read-only** (Metadata: Read is automatic), must be **installed on
+  the config repo and every repo you index** — via its **App ID** + a Secret
+  holding the **PEM private key**. A GitLab instance authenticates with a
+  **token** (**read access**: `read_api` / `read_repository` on the same
+  repos) held in a Secret. One deployment can span several instances at once.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
@@ -50,11 +52,11 @@ and `helm show values …` works with no login. Only the images are gated.
 
 ## Quickstart (bundled Postgres, API-key auth)
 
-**First, create your [index config repo](#index-config-repo)** and point
-`indexer.config.*` at it (below) — the indexer polls it on startup and indexes
-nothing until it lists repos.
+**First, create your [index config repo](#index-config-repo)** and point your
+`codeHosts` entry's `configRepo` at it (below) — the indexer polls it on
+startup and indexes nothing until it lists repos.
 
-Put your secrets in a gitignored `values-secret.yaml`:
+Put your values in a gitignored `values-secret.yaml`:
 
 ```yaml
 # values-secret.yaml — do not commit
@@ -65,20 +67,22 @@ embedding:
 secrets:
   cocoindexPlus: { licenseKey: "<your-license-key>" }
   apiTokens:     { tokens: "<a-strong-token>" }   # a string, not a list — may pack several tokens (space/comma/newline-separated); the CLI sends one
-  githubApp:
-    privateKey: |
-      -----BEGIN RSA PRIVATE KEY-----
-      …
-      -----END RSA PRIVATE KEY-----
-codeHost:
-  github: { appId: "123456" }          # code host is shared by indexer + query server
-indexer:
-  config: { provider: github, repoOwner: your-org, repoName: index-configs, gitRef: main, dir: configs }
+codeHosts:
+  github.com:                          # one entry per code-host instance; the map key is the instance's identity
+    provider: github
+    baseUrl: https://github.com        # for GHES / self-managed GitLab: the instance root, e.g. https://github.example.com
+    indexer:
+      appId: "123456"
+      privateKeySecret: { name: ccx-github-app }   # Secret created below; key defaults to private-key.pem
+    configRepo: { owner: your-org, name: index-configs, gitRef: main, dir: configs }
 ```
 
-The Helm **chart is public** — no login to install it. The **images are private**,
-so the cluster needs a pull secret built from the pull token (and its paired
-username) your rep issues:
+Code-host credentials are **never inlined in values** — each `codeHosts` entry
+*references* a Secret you create (a GitLab entry uses
+`indexer: { tokenSecret: { name: … } }` instead of an App; a private-CA
+instance adds `caBundleSecret`). The Helm **chart is public** — no login to
+install it. The **images are private**, so the cluster needs a pull secret
+built from the pull token (and its paired username) your rep issues:
 
 ```bash
 # Namespace + a docker-registry secret so the cluster can pull the images
@@ -86,6 +90,9 @@ username) your rep issues:
 kubectl create namespace ccx
 kubectl -n ccx create secret docker-registry ghcr-pull \
   --docker-server=ghcr.io --docker-username=<username-we-provide> --docker-password=<pull-token>
+# The GitHub App's private key, referenced by codeHosts.github.com above:
+kubectl -n ccx create secret generic ccx-github-app \
+  --from-file=private-key.pem=/path/to/github-app.private-key.pem
 ```
 
 Install and verify:
@@ -104,13 +111,15 @@ The install NOTES print the exact service name + port-forward command.
 
 ## Index config repo
 
-Which repos to index isn't a chart setting — it lives in a separate **config
-repo** you own, and the chart just points the indexer at it
-(`indexer.config.repoOwner` / `repoName` / `gitRef` / `dir`; set in
-[Chart configuration](#chart-configuration)). The config repo lists the repos
-to index. The indexer reads **every `*.json` file** under `dir` (at `gitRef`),
-concatenates them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so you
-add or drop repos by committing to that repo, no redeploy.
+Which repos to index isn't a chart setting — it lives in **config repos** you
+own, one per code-host instance: each `codeHosts` entry names its own
+(`configRepo: { owner, name, gitRef, dir }`; set in
+[Chart configuration](#chart-configuration)), and that repo lists the repos to
+index **from that instance** — so the people who govern an instance's config
+repo control exactly what gets indexed from it. The indexer reads **every
+`*.json` file** under `dir` (at `gitRef`) of each config repo, concatenates
+them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so you add or
+drop repos by committing to the config repo, no redeploy.
 
 Each file is a **JSON array** of repo entries:
 
@@ -132,8 +141,7 @@ Each file is a **JSON array** of repo entries:
   },
   {
     "repo_owner": "group/subgroup",       // GitLab subgroup namespace is preserved
-    "repo_name": "service",
-    "provider": "gitlab",
+    "repo_name": "service",               // (in a GitLab instance's config repo)
     "branches": "main"
   },
   {
@@ -150,13 +158,14 @@ Each file is a **JSON array** of repo entries:
 | `repo_owner` | **yes** | org / user (GitLab: full subgroup namespace, `/` kept) |
 | `repo_name` | **yes** | repository name |
 | `branches` / `tags` | **one required** | **regex** ([`re.fullmatch`](https://docs.python.org/3/library/re.html#re.fullmatch)) selecting refs to index — a plain `"main"` matches exactly that ref; the repo is indexed at every matched ref |
-| `provider` | default `github` | `github` \| `gitlab` (must match the source configured in the chart) |
-| `repo_key` | default `{owner}/{name}` | stable identity used in queries; rarely set explicitly |
 | `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
 | `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
 
-A bad regex or an entry missing both `branches` and `tags` fails the config parse
-with a clear error (nothing is indexed) rather than failing mid-index.
+An entry's **provider and instance come from the config repo that declares
+it** — the `codeHosts` entry the repo belongs to — so entries carry neither
+(an entry setting `provider` or `instance` is rejected). A bad regex or an
+entry missing both `branches` and `tags` fails the config parse with a clear
+error (nothing is indexed) rather than failing mid-index.
 
 ## Chart configuration
 
@@ -165,21 +174,21 @@ These are the **Helm chart** values (which repos to index lives separately, in t
 `--set`; the chart's `values.yaml` documents every field
 (`helm show values oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus --version <X.Y.Z>`).
 The **Req?** column says what you must supply: **yes** = no workable default,
-provide it; **default** = sensible default, leave alone unless noted; **if prod** /
-**if gitlab** = only for that path.
+provide it; **default** = sensible default, leave alone unless noted;
+**if prod** / **optional** = only for that path.
 
 | Area | Keys | Req? | Notes |
 |---|---|---|---|
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
-| **Code host** | `codeHost.github.{appId,baseUrl}` (+ `secrets.githubApp.privateKey`), `codeHost.gitlab.baseUrl` (+ `secrets.gitlab.token`) | **yes** | how the backend reaches GitHub/GitLab — shared by the indexer (reads repos) and the query server (ACL checks). `baseUrl` defaults to the cloud instance (`https://github.com` / `https://gitlab.com`); set the root of your GitHub Enterprise Server / self-managed GitLab instead. It's part of each repo's index identity — changing it later means a full reindex |
-| **Indexer source** | `indexer.config.*` (`provider`, `repoOwner`, `repoName`, `gitRef`, `dir`) | **yes** | the config repo listing which repos to index ([config format](#index-config-repo)); `provider` defaults to `github` |
+| **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
+| **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
-| **Query server** | `queryServer.{replicaCount,service,ingress,autoscaling,resources}` | default | scaling + exposure; ingress off by default |
+| **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
@@ -239,6 +248,14 @@ The query server serves **plain HTTP** — TLS is terminated at the Ingress.
 `tlsSecretName` must name a TLS secret **you pre-create** (the chart references but
 doesn't create it); on GKE you can instead attach a managed certificate via the
 Ingress annotations. Until then, `kubectl port-forward` is the simplest path.
+
+**Browser-based MCP clients.** `/mcp` validates the `Origin` header (required
+by the MCP transport spec): a request carrying an `Origin` that isn't
+allowlisted is refused with `403`. Set `queryServer.publicUrl` to the
+deployment's public URL (`https://ccx.example.com` — origin only, no path); a
+web app on another origin that embeds an MCP client needs its origin added to
+`queryServer.mcpExtraAllowedOrigins`. Non-browser clients — the `ccx` CLI and
+coding agents — send no `Origin` header and are unaffected.
 
 ### GKE notes
 
