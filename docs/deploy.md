@@ -179,7 +179,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 
 | Area | Keys | Req? | Notes |
 |---|---|---|---|
-| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | indexer runtime gate |
+| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license for the indexer **and** the query server (its structural `grep` needs it; other query surfaces run license-free) |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
@@ -211,6 +211,22 @@ database:
   internal: { existingSecret: ccx-db }   # key CCX_INTERNAL_DB_URL
 ```
 
+**Give the query server a read-only role** (recommended for production): the
+indexer needs the writer credential, but the query server only reads. Create a
+role such as
+
+```sql
+CREATE ROLE ccx_query LOGIN PASSWORD '…';
+GRANT pg_read_all_data TO ccx_query;   -- covers current and future tables
+```
+
+and point `database.target.queryUrl` (or `queryExistingSecret`, key
+`CCX_TARGET_DB_URL`) at its DSN. The **bundled** Postgres sets this split up
+automatically on first init. Left unconfigured on an external DB, the query
+server falls back to the writer credential. Also run
+`CREATE EXTENSION pg_prewarm;` at provisioning (see
+[Postgres memory sizing](#postgres-memory-sizing)).
+
 On GKE, reach Cloud SQL via the **Cloud SQL Auth Proxy** sidecar + Workload
 Identity.
 
@@ -229,9 +245,12 @@ seconds. Rules of thumb:
 - **External / Cloud SQL:** set the `shared_buffers` / `effective_cache_size`
   flags on the instance with the same sizing.
 - The query server also **pre-warms** every vector index into the database
-  cache at startup (best-effort; requires the `pg_prewarm` extension to be
-  creatable, which Cloud SQL and stock Postgres allow), so a freshly started
-  server doesn't serve a slow first search.
+  cache at startup (best-effort), so a freshly started server doesn't serve a
+  slow first search. It needs the **`pg_prewarm` extension provisioned at DB
+  setup** — the bundled Postgres does this on first init; on an external
+  database run `CREATE EXTENSION pg_prewarm;` once as the provisioning user
+  (the query server itself never runs DDL, and just skips prewarm with a log
+  hint when the extension is absent).
 
 ### Exposing the query server
 
