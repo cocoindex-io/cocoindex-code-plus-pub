@@ -43,11 +43,14 @@ confirms auth (a bad token returns `HTTP 401`; see [Troubleshooting](#troublesho
 ## Use
 
 ```bash
-# Semantic search
+# Discover what you can search
+ccx repos                                        # list indexed repos: alias, stable uid, default branch
+
+# Semantic search (targets explicitly-named repos; no global "search everything")
 ccx search "how are vector embeddings stored"   # scopes to the current repo + branch (see note below)
-ccx search "rate limiter" --all-repos           # search every indexed repo
 ccx search foo --repo cocoindex-io/cocoindex     # a specific repo
-ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (branch or tag name)
+ccx search foo --repo acme/a --repo acme/b       # several repos, one cross-repo-ranked result list
+ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (single repo scope)
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
@@ -71,9 +74,12 @@ ccx repositories cocoindex-io/cocoindex          # a specific repo ("(default)" 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
 `origin`** — that origin is mapped to the matching indexed repo. Otherwise (no
-git repo, or a non-GitHub/GitLab origin) `search` falls back to **all indexed
-repos** and prints a note to stderr; pass `--repo <owner>/<repo>` to force a
-scope or `--all-repos` to search everything.
+git repo, or a non-GitHub/GitLab origin) the command **errors** with guidance:
+pass `--repo` (repeatable for `search`, up to the server's per-search cap) —
+`ccx repos` lists what's indexed. There is no global "search everything" mode.
+With several `--repo`s, each repo is searched at its own server-side default
+ref (a stderr note names each resolved ref); `--git-ref` applies to a single
+repo scope.
 
 These commands are also **ref-scoped**: they operate on one git ref of the repo.
 `--git-ref` takes a branch or tag name (`main`, `v1.2`) — or the explicit
@@ -124,8 +130,13 @@ and REST API closely (same capabilities, same scoping).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
-  - `code_search(query, top_k?, offset?, repo?, git_ref?, paths?, languages?)` →
-    ranked code chunks (repo, filename, line range, code, score).
+  - `list_repos(limit?, cursor?)` → the accessible indexed repos (stable
+    `repo_key` uid + alias + default branch), as a cursor walk — the
+    discovery call before a search.
+  - `code_search(query, repos, top_k?, offset?, paths?, languages?)` → one
+    cross-repo-ranked list of code chunks (repo, filename, line range, code,
+    score). `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
+    at its own ref; `resolved_scopes` reports every scope's resolution.
   - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars).
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
