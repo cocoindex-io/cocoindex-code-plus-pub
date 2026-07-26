@@ -98,6 +98,12 @@ the whole repo.
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
 
+**Server limits.** Requests are bounded server-side with clear `400`s when
+exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤ 8 KB.
+`read-file` returns at most **5 000 lines** (and at most 1 MiB of content) per
+call — for a bigger file, page with `--offset`/`--limit`; the response's line
+numbers show where the window ended.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
