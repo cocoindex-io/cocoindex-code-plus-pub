@@ -66,20 +66,20 @@ checks **reachability only**: the server's health endpoint is auth-exempt, so
 | `command not found: ccx` | not installed / not on PATH | install (above); re-open the shell |
 | `Query server unreachable at <url>` | wrong/empty `CCX_SERVER_URL`, server down, network/port-forward dropped | check the URL; re-establish `kubectl port-forward`; confirm with the user |
 | `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` does **not** catch this — health is auth-exempt) | set a valid token (the server may accept several for rotation) |
-| `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx repositories`) |
+| `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx git-refs`) |
 | `No results.` / `No matches.` | query/pattern found nothing | for `search`, rephrase or raise `-k`/`--offset`; for `grep`, re-check [grep-syntax.md](grep-syntax.md) gotchas |
 | server version mismatch warning | CLI and server versions drifted | upgrade the CLI (or pin to the server's version) |
 
 Remember the division of responsibility: the **indexer is server-side**. The CLI never
 builds or refreshes an index — "stale" or "missing ref" issues are resolved on the
-server, not by re-running a CLI command. Use `ccx repositories` to see exactly which
+server, not by re-running a CLI command. Use `ccx git-refs` to see exactly which
 refs (and commit SHAs) are currently indexed.
 
 ## MCP
 
 The same query server exposes an **MCP** (Model Context Protocol) endpoint at
 `<CCX_SERVER_URL>/mcp` (Streamable HTTP), with tools kept at **parity** with the CLI
-(`code_search`, `code_grep`, `read_file`, `find_files`, `repositories` — `git_ref`
+(`code_search`, `code_grep`, `read_file`, `find_files`, `list_git_refs` — `git_ref`
 is optional everywhere and takes bare branch/tag names, resolved to the repo's
 default like the CLI). For MCP-capable
 agents this is the preferred path — native tool calls, no CLI install, no output

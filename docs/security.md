@@ -78,7 +78,7 @@ audit principal=<s> search query=<q> repo=<r> git_ref=<ref> results=<n>
 audit principal=<s> grep repo=<r> git_ref=<ref> language=<l> pattern=<p> matches=<n>
 audit principal=<s> read_file repo=<r> git_ref=<ref> path=<p> lines=<a>-<b>
 audit principal=<s> find_files repo=<r> git_ref=<ref> patterns=<p> total=<n>
-audit principal=<s> repositories repo=<r> refs=<n>
+audit principal=<s> list_git_refs repo=<r> refs=<n>
 ```
 
 MCP tool calls emit the same lines with an `mcp <tool>` operation token.

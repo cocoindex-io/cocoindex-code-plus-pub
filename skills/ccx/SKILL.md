@@ -42,7 +42,7 @@ unstructured hits.
   **optional everywhere**: when omitted, the server uses your checked-out branch
   if it's indexed, else the repo's default branch — and prints a
   `Using git ref …` note to stderr so you know which ref answered. Trust this
-  default; there is no need to run `ccx repositories` first just to discover a
+  default; there is no need to run `ccx git-refs` first just to discover a
   ref. Pass `--git-ref` only to target a *different* ref — a bare branch/tag
   name works (`main`, `v1.2`); the qualified `heads/<branch>` / `tags/<tag>`
   form is only needed when a branch and tag share a name. An unknown ref errors
@@ -169,9 +169,12 @@ Full usage: [references/remote-access.md](references/remote-access.md).
 
 ## Repo & ref metadata
 
-`ccx repositories [<owner>/<repo>]` lists what's indexed — a repo's refs and their
+`ccx git-refs [<owner>/<repo>]` lists what's indexed — a repo's refs and their
 commit shas (`(default)` marks the default branch). Reach for it only to target a
 non-default ref; the ref default already handles the common case.
+
+Note the two different senses of "ref": `ccx git-refs` lists **git** refs
+(branches and tags), while `ccx refs` finds where a **symbol** is used.
 
 ## When a query returns nothing useful
 

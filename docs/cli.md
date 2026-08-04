@@ -68,9 +68,12 @@ ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list all files, on a specific ref
 
 # Repo / ref metadata
-ccx repositories                                # the current repo's indexed refs + commit shas
-ccx repositories cocoindex-io/cocoindex          # a specific repo ("(default)" marks the default branch)
+ccx git-refs                                     # the current repo's indexed refs + commit shas
+ccx git-refs cocoindex-io/cocoindex              # a specific repo ("(default)" marks the default branch)
 ```
+
+`ccx git-refs` lists **git** refs (branches and tags) — not to be confused with
+`ccx refs`, which finds where a *symbol* is used.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
@@ -88,7 +91,7 @@ These commands are also **ref-scoped**: they operate on one git ref of the repo.
 omit it, the CLI uses **your checked-out branch** if that branch is indexed
 (including its `origin` upstream when the local name differs), else the repo's
 **default branch**; it prints a `Using git ref …` note to stderr so you always
-know which ref answered. `ccx repositories` lists what's indexed.
+know which ref answered. `ccx git-refs` lists what's indexed.
 
 Similarly, when you run `search` or `grep` from a **subdirectory** of the
 checkout (and gave no `--path`), results are scoped to that subtree — the note
@@ -148,7 +151,7 @@ and REST API closely (same capabilities, same scoping).
     structural matches (filename, line range, node kind, code, captured metavars).
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
-  - `repositories(repo)` → the repo's indexed refs + each ref's commit sha, and
+  - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
 
 Most clients take a remote HTTP MCP server with custom headers, e.g.:
