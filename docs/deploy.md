@@ -8,7 +8,9 @@ deploying the service; engineers who only *query* an existing deployment want
 ## What gets deployed
 
 - **Indexer** — a singleton worker that watches your repos and writes a vector
-  index into Postgres. Needs a **CocoIndex Plus license** at runtime.
+  index **and a symbol graph** (symbol definitions/references — see
+  [Symbol index](#symbol-index) below) into Postgres. Needs a **CocoIndex Plus
+  license** at runtime.
 - **Query server** — a stateless FastAPI service (`/health`, `/code/v0/semantic_search`); scales
   horizontally; license-free.
 - **Postgres + pgvector** — the index store. The chart can run a **bundled**
@@ -251,6 +253,35 @@ seconds. Rules of thumb:
   database run `CREATE EXTENSION pg_prewarm;` once as the provisioning user
   (the query server itself never runs DDL, and just skips prewarm with a log
   hint when the extension is absent).
+
+### Symbol index
+
+Alongside the vector index, the indexer builds a **resolved symbol graph** per
+indexed git ref — it backs `ccx defs` / `ccx refs` and the MCP
+`find_definitions` / `find_references` tools ([cli.md](cli.md)). Covered
+languages: Python, TypeScript/JavaScript (incl. TSX), C/C++; other languages
+are still searchable, they just have no symbol graph. Operational notes:
+
+- **On by default; no chart values yet.** The controls are indexer env vars —
+  `CCX_SYMBOL_INDEX_ENABLED` (default on), and two per-ref safety caps:
+  `CCX_SYMBOL_MAX_FILES_PER_GIT_REF` (default 50 000 covered-language files)
+  and `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF` (default 1 GiB of extracted
+  symbol data). The chart currently exposes no values for them, so the
+  defaults apply as deployed.
+- **Oversized refs are skipped loudly, not truncated.** A ref beyond either cap
+  gets **no** symbol graph, and every `defs`/`refs` response for that ref
+  carries a coverage status saying so (as do refs that are still building, or
+  where some files failed to parse) — clients are told absence is not
+  completeness rather than shown silently empty results.
+- **Storage** — four additional tables (`symbol_module_roots`,
+  `symbol_definition`, `symbol_reference`, plus content-addressed
+  `parsed_module` data shared across refs), `repo_key`-partitioned like the
+  rest. Plain B-tree rows; they don't compete with the
+  [vector-index memory budget](#postgres-memory-sizing).
+- **Compute** — symbol resolution is whole-ref: any change on a ref re-resolves
+  that whole ref on the next indexer pass (incremental symbol indexing is
+  planned). On large, busy repos this shows up as indexer CPU, not query-side
+  latency.
 
 ### Exposing the query server
 

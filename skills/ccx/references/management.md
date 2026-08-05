@@ -79,7 +79,8 @@ refs (and commit SHAs) are currently indexed.
 
 The same query server exposes an **MCP** (Model Context Protocol) endpoint at
 `<CCX_SERVER_URL>/mcp` (Streamable HTTP), with tools kept at **parity** with the CLI
-(`code_search`, `code_grep`, `read_file`, `find_files`, `list_git_refs` — `git_ref`
+(`code_search`, `code_grep`, `find_definitions`, `find_references`, `read_file`,
+`find_files`, `list_git_refs`, `list_repos` — `git_ref`
 is optional everywhere and takes bare branch/tag names, resolved to the repo's
 default like the CLI). For MCP-capable
 agents this is the preferred path — native tool calls, no CLI install, no output

@@ -61,6 +61,15 @@ ccx grep 'def \NAME(\(ARGS*\)):' -l python        # every Python function def
 ccx grep 'foo(\X)' -l python --git-ref v1.2       # calls to foo (captures \X), at tag v1.2
 ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
+# Symbol navigation: definitions & references (resolved, not text matches)
+ccx defs QueryService                             # where is this symbol DEFINED?
+ccx defs db.Repo.find --qualified-name            # exact dotted qualified name
+ccx defs Config --kind class --lang python        # filter by kind / language / --path
+ccx refs QueryService                             # where is it USED? (by name, broad)
+ccx refs src/db.py Repo.find                      # exactly this definition — the `target: …`
+                                                  #   pair a `ccx defs` row prints, pasted verbatim
+ccx refs QueryService --role call                 # restrict to a reference role
+
 # File access (ref-scoped; repo + ref auto-detected like search)
 ccx read-file README.md                          # print a file's contents
 ccx read-file src/app.py --offset 40 --limit 20  # 20 lines from line 40 (--offset = 1-based line)
@@ -74,6 +83,30 @@ ccx git-refs cocoindex-io/cocoindex              # a specific repo ("(default)" 
 
 `ccx git-refs` lists **git** refs (branches and tags) — not to be confused with
 `ccx refs`, which finds where a *symbol* is used.
+
+**Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
+and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
+alias- and re-export-aware — not from text matching. It covers **Python,
+TypeScript/JavaScript (incl. TSX), and C/C++**; other languages remain reachable
+via `search` and `grep`. The two verbs chain: each `ccx defs` row ends with a
+paste-ready pair —
+
+```
+src/db.py:42:4 [method] db.Repo.find
+  lang=python  target: src/db.py Repo.find
+```
+
+— and pasting that `target: …` pair after `ccx refs ` pins the query to exactly
+that definition (a bare `ccx refs NAME` instead casts a wide net by name; copy
+the pair rather than composing it — the headline's dotted name is *not* the
+second token). Reference rows are labeled by **role** (`call`, `import`,
+`type_use`, `inherit`, `field_access`, …; filter with `--role`) and by
+**resolution**: `resolved` is definite, `ambiguous` enumerates each surviving
+candidate as its own row, and `name_only` marks a mention whose target couldn't
+be resolved (e.g. an external import). Watch stderr for the **coverage note**:
+it tells you when the symbol index for the ref isn't built yet, skipped the ref
+as too large, parsed only part of it, or lags the ref's head — in all of those,
+a missing symbol may just be unindexed, so absence is not completeness.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
@@ -149,6 +182,16 @@ and REST API closely (same capabilities, same scoping).
     at its own ref; `resolved_scopes` reports every scope's resolution.
   - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars).
+  - `find_definitions(name, repo, qualified?, git_ref?, kinds?, languages?, paths?,
+    limit?, offset?)` → where a symbol is defined (path, span, kind, qualified
+    name, `entity_id`); the response's `coverage` states how complete the symbol
+    index is for the ref.
+  - `find_references(repo, path?+entity_id?|base_name, git_ref?, roles?,
+    include_unresolved?, limit?, offset?)` → where a symbol is used — exact
+    target (`path` + `entity_id` from `find_definitions`) or by `base_name`;
+    rows carry `resolution` (`resolved` / `ambiguous` / `name_only`) and a
+    reference role (`roles` filters on those, a different vocabulary from
+    `find_definitions.kinds`), plus the same `coverage`.
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and

@@ -1,14 +1,14 @@
 ---
 name: ccx
-description: "This skill should be used when querying a codebase indexed by a remote CocoIndex Code Plus query server — semantic search, AST structural grep, or reading files/listing paths at an indexed git ref. Use it to get codebase information whenever everyday local tools fall short: fuzzy/conceptual search with no exact term to grep, structure-oriented code queries (matching syntax, not text lines), or corpora that are large, not checked out locally, at another ref, or spread across repos. Also use it when the user asks about ccx, cocoindex-code-plus, or the query server / MCP endpoint. Trigger phrases include 'search the codebase', 'find code related to', 'grep for the pattern', 'ccx', 'cocoindex-code-plus'."
+description: "This skill should be used when querying a codebase indexed by a remote CocoIndex Code Plus query server — semantic search, AST structural grep, symbol navigation (find a symbol's definitions and references), or reading files/listing paths at an indexed git ref. Use it to get codebase information whenever everyday local tools fall short: fuzzy/conceptual search with no exact term to grep, structure-oriented code queries (matching syntax, not text lines), resolved where-is-this-defined / who-calls-this lookups, or corpora that are large, not checked out locally, at another ref, or spread across repos. Also use it when the user asks about ccx, cocoindex-code-plus, or the query server / MCP endpoint. Trigger phrases include 'search the codebase', 'find code related to', 'grep for the pattern', 'where is X defined', 'find all references/usages/call sites', 'ccx', 'cocoindex-code-plus'."
 ---
 
-# ccx — Query an Indexed Codebase (Semantic Search + AST Grep)
+# ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation)
 
 `ccx` is the client CLI for **CocoIndex Code Plus**. It queries a codebase that a
 **remote query server** has indexed into Postgres + pgvector — semantic search,
-AST structural grep, and read-only file access — over HTTP. The CLI holds no
-index and needs no license; it just talks to a server.
+AST structural grep, symbol definitions/references, and read-only file access —
+over HTTP. The CLI holds no index and needs no license; it just talks to a server.
 
 ## When to reach for ccx
 
@@ -22,22 +22,30 @@ file reads, IDE search) fall short:
   lines: a def vs. a call, a `catch` that re-throws the same variable it caught,
   every `isinstance` on a type, a nested generic that `>>` breaks for regex
   → `ccx grep`.
+- **Symbol navigation** — "where is `X` defined?", "who calls / imports / uses
+  `X`?": a **resolved** cross-file answer (alias- and re-export-aware, not a
+  text match) → `ccx defs` / `ccx refs`. Covers Python, TS/JS (incl. TSX), and
+  C/C++.
 - **Large / remote / multi-repo corpus** — the repo isn't checked out locally,
   you need a branch or tag other than your checkout, or the question spans
-  several indexed repos (`--repo`, `--git-ref`, `--all-repos`).
+  several indexed repos (`--repo`, repeatable for `search`; `--git-ref`).
 
 The one query *not* to route through ccx: a plain literal-identifier lookup in a
 small repo you already have checked out — local `rg` answers that directly, and
 a `ccx grep` with no structure (a bare identifier, no metavariable) just floods
-unstructured hits.
+unstructured hits. (But when the identifier question is really a *symbol*
+question — its definition, or its true use sites rather than every textual
+occurrence — `ccx defs` / `ccx refs` beat both.)
 
 ## Repo & ref scoping (applies to every query command)
 
 - **Repo auto-detection.** Commands auto-scope to the repo of the current git
   checkout, detected from its `origin` GitHub/GitLab remote (resolved to an
-  `<owner>/<repo>` name). Override with `--repo <owner>/<repo>`. Without such an
-  origin, `search` falls back to **all indexed repos** (with a stderr note);
-  `--all-repos` asks for that explicitly.
+  `<owner>/<repo>` name). Override with `--repo <owner>/<repo>` (repeatable for
+  `search`, up to the server's per-search cap). Without such an origin the
+  command **errors** with guidance rather than guessing — pass `--repo`;
+  `ccx repos` lists the indexed repos you can target. There is no global
+  "search everything" mode.
 - **Ref defaulting.** Every query command is ref-scoped, and `--git-ref` is
   **optional everywhere**: when omitted, the server uses your checked-out branch
   if it's indexed, else the repo's default branch — and prints a
@@ -62,9 +70,9 @@ ccx search user authentication flow
 ccx search error handling retry logic
 ```
 
-- **Scope.** `--repo <owner>/<repo>` targets another repo; `--all-repos` searches
-  every indexed repo; `--git-ref <ref>` targets a non-default ref (requires a
-  repo scope, so not with `--all-repos`).
+- **Scope.** `--repo <owner>/<repo>` targets another repo — repeat it to search
+  several at once (one cross-repo-ranked list); `--git-ref <ref>` targets a
+  non-default ref (single-repo scope only).
 - **Filters.** `--lang <language>` restricts by source language and `--path
   '<glob>'` by path — both repeatable.
 - **Results.** Ranked by relevance — the most relevant come **first**, so if the
@@ -74,7 +82,7 @@ ccx search error handling retry logic
   more).
 
 ```bash
-ccx search "rate limiter" --all-repos
+ccx search "rate limiter" --repo acme/api --repo acme/worker
 ccx search foo --repo cocoindex-io/cocoindex --git-ref main -k 10
 ccx search parse config --lang python --path 'src/**'
 ```
@@ -159,6 +167,64 @@ patterns.**
 - **Pagination.** `-k`/`--limit` (default 100) and `--offset` (a skip count); a
   truncation note on stderr means there are more matches.
 
+## Symbol navigation (`ccx defs` / `ccx refs`)
+
+Where is a symbol **defined**, and who **uses** it — answered from a resolved
+symbol graph the indexer builds (cross-file, alias- and re-export-aware), not
+from text matching. Covers **Python, TS/JS incl. TSX, and C/C++**; for other
+languages fall back to `grep`/`search`.
+
+```bash
+ccx defs QueryService                        # definitions of the base name
+ccx defs db.Repo.find --qualified-name       # exact dotted qualified name
+ccx defs Config --kind class --lang python   # filter: --kind / --lang / --path
+ccx refs QueryService                        # uses, by base name (broad recall)
+ccx refs src/db.py Repo.find                 # uses of EXACTLY this definition (see below)
+ccx refs QueryService --role call            # only calls (roles: call, import, type_use, …)
+```
+
+The canonical flow is **defs → refs**, a copy-paste. Each `ccx defs` row ends
+with a `target: …` pair; paste it verbatim after `ccx refs `:
+
+```
+$ ccx defs find
+src/db.py:42:4 [method] db.Repo.find
+  lang=python  target: src/db.py Repo.find
+
+$ ccx refs src/db.py Repo.find --role call
+```
+
+Copy the pair — don't compose the second token yourself: the headline's dotted
+name (`db.Repo.find`, module-qualified) is **not** the target token
+(`Repo.find`, file-relative). A bare `ccx refs NAME` is the broad alternative
+(every definition with that unqualified name, plus unresolved mentions). If a
+single argument looks like half of a forgotten pair (a path, or a dotted /
+`#`-suffixed id), `refs` errors with the fix instead of running a broad query
+you didn't intend; `--base-name` forces name mode when a base name genuinely
+contains such characters.
+
+Reading `refs` output — each row carries:
+
+- a **role** (`call`, `import`, `type_use`, `inherit`, `implement`,
+  `field_access`, `alias`, `decorates`, `use`) — filter with `--role`;
+- a **resolution**: `resolved` is a definite reference; `ambiguous` means
+  several candidates survived and each is its own row (the tool enumerates
+  rather than guessing — so one source position can appear on several rows,
+  and row count ≠ site count); `name_only` is a mention whose target couldn't
+  be resolved (external import, dynamic receiver) — listed with the kinds it
+  could have been (`--no-include-unresolved` drops these);
+- possibly a `via_alias` marker: a supplementary row for the alias/re-export
+  hop the primary reference went through. Resolved rows print their target as
+  the same two-token `PATH ENTITY_ID` form, so any target you see in output
+  pastes straight back into `ccx refs`.
+
+**Check the stderr coverage note before trusting absence.** It reports when the
+symbol index for this ref is *not built*, *skipped* (ref too large to resolve),
+*partial* (some files failed to parse), or *lags the ref head* — in every one of
+those, a missing symbol may simply be unindexed. Absence is not completeness.
+A stale exact target (definition renamed/removed since the `defs` call) errors
+with `target_not_found` — re-run `ccx defs` for a current target.
+
 ## Reading & listing files at a ref (remote / cross-ref)
 
 `ccx read-file` and `ccx find-files` fetch file contents and paths at an indexed
@@ -184,6 +250,13 @@ Note the two different senses of "ref": `ccx git-refs` lists **git** refs
   re-check [references/grep-syntax.md](references/grep-syntax.md) gotchas before
   concluding the code isn't there. Also check stderr: a CWD-subtree note means
   you searched only part of the repo (`--path '*'` widens).
+- **`No definitions.` / `No references.`** — first read the stderr coverage
+  note (index not built / ref skipped / partial parse / snapshot lag →
+  absence proves nothing); then check the language is covered (Python,
+  TS/JS/TSX, C/C++). A `defs` miss on a dotted name usually means
+  `--qualified-name` was needed (or vice versa — drop it to match the base
+  name); a `refs` miss on an exact target may be a stale `entity_id` — re-run
+  `ccx defs`.
 - **Unknown/unindexed ref** — the error lists the indexed refs; pick one or drop
   `--git-ref` to use the default.
 

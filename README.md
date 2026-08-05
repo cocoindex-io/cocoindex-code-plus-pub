@@ -1,8 +1,9 @@
 # CocoIndex Code Plus — Public Docs
 
 Public, user-facing documentation for **CocoIndex Code Plus** — a self-hosted
-semantic + structural code search service (indexer + query server) with a `ccx`
-CLI and an MCP endpoint.
+code search & navigation service (semantic search, AST structural grep, symbol
+definitions/references; indexer + query server) with a `ccx` CLI and an MCP
+endpoint.
 
 ## Guides
 
@@ -20,8 +21,9 @@ CLI and an MCP endpoint.
 ## Agent skill
 
 - **[skills/ccx/SKILL.md](skills/ccx/SKILL.md)** — a Claude Code / Agent skill that
-  teaches an agent to drive the `ccx` CLI (semantic search, AST `grep`, file
-  access), with a full [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
+  teaches an agent to drive the `ccx` CLI (semantic search, AST `grep`, symbol
+  `defs`/`refs` navigation, file access), with a full
+  [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
 
 ## About
 
