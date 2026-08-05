@@ -28,7 +28,7 @@ auto-loaded — already-exported vars take precedence):
 | Var | What |
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`) |
-| `CCX_API_TOKEN` | your API token — your platform team issues it (one of the server's configured tokens); sent as `Authorization: Bearer` |
+| `CCX_API_TOKEN` | your API token — your platform team issues it (one of the server's configured tokens); sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
 | `CCX_CLIENT_TIMEOUT_SECONDS` | optional; per-request client timeout, default **90** — deliberately above the server's own deadline chain so the server's clearer error arrives instead of a client-side cutoff. Keep it above the ingress timeout if your platform team raised the server deadline |
 
 ```bash
@@ -40,6 +40,21 @@ ccx status        # checks the server is reachable + healthy
 `ccx status` checks **reachability only** — the server's `/health` is auth-exempt,
 so it passes even with a missing or wrong token. Your first `ccx search` is what
 confirms auth (a bad token returns `HTTP 401`; see [Troubleshooting](#troubleshooting)).
+
+**SSO deployments (OIDC).** If your platform team enabled company-IdP sign-in,
+skip `CCX_API_TOKEN` and sign in once:
+
+```bash
+ccx login            # opens your IdP in the browser (PKCE, MFA and all)
+ccx login --device   # device-code flow instead (no local browser, e.g. over SSH)
+ccx logout           # drops the cached token
+```
+
+The first login needs the OAuth client id your admin provides (`--client-id`
+or `CCX_OIDC_CLIENT_ID`); it's remembered per server afterwards. The token is
+cached and refreshed automatically. CI jobs and agents keep using
+`CCX_API_TOKEN` — on SSO deployments that's an issued key of the form
+`ccxk_<id>_<secret>`.
 
 ## Use
 
@@ -121,8 +136,8 @@ numbers show where the window ended.
 - **No interactive setup** — everything is env-driven (`CCX_SERVER_URL`,
   `CCX_API_TOKEN`), so a coding agent or CI job can run `ccx` directly. Errors
   exit non-zero; informational notes go to stderr, results to stdout.
-- **Token** — use a dedicated API token for the automation; it stays valid for
-  machines even after interactive SSO login lands for humans.
+- **Token** — use a dedicated API token for the automation; machines keep using
+  tokens even when humans sign in via SSO.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
   possible future add (track via the release docs).
 - **Structured output** — machine-readable (`--json`) output is planned so agents
@@ -176,5 +191,7 @@ claude mcp add --transport http cocoindex-code-plus https://ccx.example.com/mcp 
 ```
 
 (Client config formats vary; the essentials are the `/mcp` URL + the bearer
-header.) Token-based MCP auth is the current model; OAuth/SSO for MCP is on the
-roadmap.
+header.) Token auth works on every deployment. On SSO (OIDC) deployments an
+MCP client that supports OAuth can instead sign in interactively — the server
+advertises standard protected-resource metadata; your IdP admin pre-registers
+each approved MCP client.
