@@ -230,8 +230,13 @@ server falls back to the writer credential. Also run
 `CREATE EXTENSION pg_prewarm;` at provisioning (see
 [Postgres memory sizing](#postgres-memory-sizing)).
 
-On GKE, reach Cloud SQL via the **Cloud SQL Auth Proxy** sidecar + Workload
-Identity.
+On GKE, reach Cloud SQL over **private IP**: enable private services access /
+a VPC-peered instance, set the Cloud SQL instance to
+`sslMode=ENCRYPTED_ONLY`, and put the private address plus `sslmode=require`
+in the target-writer, target-query, and internal DSNs. This encrypts the
+phase-1 direct connection but does not verify server identity. (The Cloud SQL
+Auth Proxy sidecar pattern is not yet supported by the chart — it renders no
+sidecar containers.)
 
 ### Postgres memory sizing
 
