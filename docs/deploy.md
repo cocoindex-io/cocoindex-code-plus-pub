@@ -192,6 +192,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
+| **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
@@ -262,12 +263,26 @@ indexed git ref — it backs `ccx defs` / `ccx refs` and the MCP
 languages: Python, TypeScript/JavaScript (incl. TSX), C/C++; other languages
 are still searchable, they just have no symbol graph. Operational notes:
 
-- **On by default; no chart values yet.** The controls are indexer env vars —
-  `CCX_SYMBOL_INDEX_ENABLED` (default on), and two per-ref safety caps:
-  `CCX_SYMBOL_MAX_FILES_PER_GIT_REF` (default 50 000 covered-language files)
-  and `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF` (default 1 GiB of extracted
-  symbol data). The chart currently exposes no values for them, so the
-  defaults apply as deployed.
+- **On by default, tunable via `indexer.symbolIndex`.** Every key is optional —
+  left unset, the indexer's defaults apply and the chart sets no env var:
+
+  ```yaml
+  indexer:
+    symbolIndex:
+      enabled: true          # false turns symbol indexing off — see the warning below
+      maxFilesPerGitRef: 50000       # default; eligible source files per ref
+      maxIrBytesPerGitRef: 1073741824 # default 1 GiB of extracted symbol data per ref
+  ```
+
+  (They map to `CCX_SYMBOL_INDEX_ENABLED`,
+  `CCX_SYMBOL_MAX_FILES_PER_GIT_REF`, `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF`
+  should you set the env directly.)
+- **Turning it off reclaims storage — it is not a pause.** `enabled: false`
+  changes what the indexer's incremental state is keyed on, so the next pass
+  re-runs without symbols and the symbol rows (plus their shared parsed-module
+  data) are garbage-collected. Re-enabling **re-extracts every indexed ref from
+  scratch**, which costs a full symbol rebuild. Flip it as a deliberate
+  capacity decision, not to ride out an incident.
 - **Oversized refs are skipped loudly, not truncated.** A ref beyond either cap
   gets **no** symbol graph, and every `defs`/`refs` response for that ref
   carries a coverage status saying so (as do refs that are still building, or
