@@ -187,7 +187,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
-| **Auth** | `auth.mode` (`apiKey` / `none` dev) | default (`apiKey`) | never expose with `none` |
+| **Auth** | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers, `apiKeys` = per-caller key records — see [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
@@ -327,6 +327,30 @@ deployment's public URL (`https://ccx.example.com` — origin only, no path); a
 web app on another origin that embeds an MCP client needs its origin added to
 `queryServer.mcpExtraAllowedOrigins`. Non-browser clients — the `ccx` CLI and
 coding agents — send no `Origin` header and are unaffected.
+
+### SSO login (OIDC) + API-key records
+
+The default auth is the shared API token above (`secrets.apiTokens`). To let engineers sign in with your company IdP instead (Okta, Entra ID, Keycloak, …— any OIDC IdP issuing JWT access tokens), switch to `oidc`:
+
+```yaml
+queryServer:
+  publicUrl: https://ccx.example.com   # required for oidc — clients discover the server through it
+auth:
+  mode: oidc
+  oidc:
+    issuer: https://your-idp.example.com
+    audience: api://ccx                # the API/resource registration's identifier
+    cli: { clientId: ccx-cli }         # the public client `ccx login` uses
+  apiKeys:                             # optional: keys for CI/agents, working alongside SSO
+    - { id: ci, secretHash: "sha256:<hex>", label: CI, scope: { mode: indexScope } }
+```
+
+Your IdP admin registers **two things**: an **API/resource registration** (its identifier becomes `audience` — it must be distinct from any login client) and a **public CLI client** (PKCE, loopback redirect — its id goes in `cli.clientId`). Engineers then run `ccx login` (see [cli.md](cli.md)); no per-user setup on the server. For a self-managed IdP with a private CA, add `auth.oidc.caBundleSecret: { name: <secret> }`.
+
+Anything beyond the plain shared token — `oidc`, `apiKeys` records, or the optional `audit:` / `rateLimit:` blocks (`helm show values` documents them) — moves the whole auth configuration into one server-side config file the chart renders. Two consequences:
+
+- **`secrets.apiTokens` must then be empty** (the chart refuses to render otherwise): shared bare tokens are replaced by `auth.apiKeys` **records** — each carries only a `sha256:` hash of its secret (safe to keep in values), and the presented token becomes `ccxk_<id>_<secret>`. Records are attributable and individually revocable; rotation is editing the list + `helm upgrade`.
+- **Rate limiting needs to know your ingress**: the chart derives the client-IP extraction strategy from `queryServer.ingress.className` automatically for `gce` (including the trusted GCLB ranges), and for `gce-internal` / `nginx` requires `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress peer CIDRs). Any other ingress class: set `rateLimit.clientIpStrategy` explicitly or rendering fails.
 
 ### Timeout chain
 
