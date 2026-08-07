@@ -128,57 +128,61 @@ own, one per code-host instance: each `codeHosts` entry names its own
 [Chart configuration](#chart-configuration)), and that repo lists the repos to
 index **from that instance** — so the people who govern an instance's config
 repo control exactly what gets indexed from it. The indexer reads **every
-`*.json` file** under `dir` (at `gitRef`) of each config repo, **recursively**,
-concatenates them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so
-you add or drop repos by committing to the config repo, no redeploy.
+config file** — `*.yaml`, `*.yml`, `*.json` — under `dir` (at `gitRef`) of each
+config repo, **recursively**, concatenates them, and re-polls on
+`indexer.repoRefreshIntervalSeconds` — so you add or drop repos by committing
+to the config repo, no redeploy.
 
 **Where to put the files — `configRepo.dir` is optional and defaults to the
 repo root.** Two supported layouts:
 
-- **A dedicated config repo** — leave `dir` unset and put the `*.json` files
-  at the root.
+- **A dedicated config repo** — leave `dir` unset and put the config files at
+  the root.
 - **A subfolder of a repo that has other content** — set `dir` (e.g.
   `dir: ccx-config`), which scopes the scan to that subtree.
 
-Pick deliberately, because the scan takes **every** `*.json` under `dir`: at
-the root of a repo that also holds tooling files, something like
-`renovate.json` or `package.json` would be parsed as index config. A file that
-doesn't parse makes that instance's config refresh **fail closed** — the
-indexer keeps its last-known-good repo list and logs the error rather than
-indexing a wrong set — so the symptom is "my config edits stopped taking
+Pick deliberately, because the scan takes **every** file with one of those
+extensions under `dir`: at the root of a repo that also holds tooling files,
+something like `.pre-commit-config.yaml`, `docker-compose.yml`,
+`.github/workflows/ci.yml`, or `package.json` would be parsed as index config.
+A file that doesn't parse makes that instance's config refresh **fail closed**
+— the indexer keeps its last-known-good repo list and logs the error rather
+than indexing a wrong set — so the symptom is "my config edits stopped taking
 effect", not an outage. Use `dir` whenever the repo isn't dedicated.
 
-Each file is a **JSON array** of repo entries:
+Each file is a **list** of repo entries, written in YAML:
 
-```jsonc
-// configs/acme.json — add as many *.json files as you like; they're merged
-[
-  {
-    "repo_owner": "acme",
-    "repo_name": "backend",
-    "branches": "main",                  // regex over branch names (whole-name match)
-    "included_patterns": ["**/*.py", "**/*.md"],
-    "excluded_patterns": ["**/tests/**"]
-  },
-  {
-    "repo_owner": "acme",
-    "repo_name": "frontend",
-    "branches": "main|release/.*",        // main + every release/* branch
-    "tags": "v\\d+\\.\\d+"                 // and every vN.N tag
-  },
-  {
-    "repo_owner": "group/subgroup",       // GitLab subgroup namespace is preserved
-    "repo_name": "service",               // (in a GitLab instance's config repo)
-    "branches": "main"
-  },
-  {
-    "repo_owner": "acme",
-    "repo_name": "legacy",
-    "branches": "main",
-    "to_delete": true                     // drops this repo's rows from the index
-  }
-]
+```yaml
+# configs/acme.yaml — add as many config files as you like; they're merged
+- repo_owner: acme
+  repo_name: backend
+  branches: main # regex over branch names (whole-name match)
+  included_patterns: ["**/*.py", "**/*.md"]
+  excluded_patterns: ["**/tests/**"]
+
+- repo_owner: acme
+  repo_name: frontend
+  branches: main|release/.* # main + every release/* branch
+  tags: 'v\d+\.\d+' # and every vN.N tag
+
+# GitLab subgroup namespace is preserved (in a GitLab instance's config repo)
+- repo_owner: group/subgroup
+  repo_name: service
+  branches: main
+
+- repo_owner: acme
+  repo_name: legacy
+  branches: main
+  to_delete: true # drops this repo's rows from the index
 ```
+
+**JSON keeps working.** All three extensions go through the same YAML parser,
+and YAML is a superset of JSON — an existing `.json` config repo needs no
+change, and those files can even take `#` comments and trailing commas without
+being renamed. The one exception: YAML forbids tabs for indentation, so
+**tab-indented** JSON has to be re-indented with spaces. A file that is empty,
+or whose entries are all commented out, declares no repos rather than
+erroring.
 
 | Field | Req? | Meaning |
 |---|---|---|
