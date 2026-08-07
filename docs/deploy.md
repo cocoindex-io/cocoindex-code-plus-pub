@@ -275,6 +275,37 @@ server falls back to the writer credential. Also run
 > FROM pg_roles r WHERE r.rolname = 'ccx_query';   -- expect {pg_read_all_data}
 > ```
 
+### Database TLS and certificate trust — read before choosing a Postgres
+
+**Known limitation.** The indexer's engine cannot be given a custom CA: its
+connection string accepts `sslmode=disable|prefer|require` but **rejects
+`sslmode=verify-ca` / `verify-full` and `sslrootcert`**. When it does negotiate
+TLS it validates the server certificate against the container's system trust
+store, so a database whose certificate is signed by a **private CA** — which is
+the norm for managed Postgres — cannot be verified and the connection fails
+with `error performing TLS handshake`. What this means per deployment:
+
+| Your Postgres | Direct TLS from the indexer | What to do |
+|---|---|---|
+| **Cloud SQL** (per-instance CA) | ✗ fails | **Use the [Auth Proxy](#cloud-sql-on-gke--use-the-auth-proxy)** — the chart renders it; this is the supported path |
+| **Amazon RDS / Aurora** (Amazon RDS root CAs, distributed as a downloadable bundle) | ✗ expected to fail — *same mechanism; we have not reproduced it on RDS ourselves* | Terminate TLS at a proxy whose certificate is publicly trusted (**RDS Proxy** uses ACM certificates), or keep the hop inside the VPC and connect without TLS (below) |
+| **Self-managed / corporate CA** | ✗ fails, and there is **no proxy escape** | Keep the connection inside a trusted network boundary (below) until the engine accepts a CA bundle |
+| **Postgres with a publicly-trusted certificate** (e.g. some serverless providers issue Let's Encrypt certs) | ✓ works with `sslmode=require` | Nothing special |
+| **In-cluster / bundled Postgres** | n/a — no TLS | Nothing special |
+
+**Do not silently fall back to plaintext.** With `sslmode` omitted or set to
+`prefer`, the client may attempt TLS and then **fall back to an unencrypted
+connection**. Against a server that permits unencrypted connections that
+*appears to work* while sending your credentials and index data in the clear.
+If you rely on an unencrypted hop, make it deliberate: set `sslmode=disable`
+explicitly, keep the traffic inside a VPC/private subnet you trust, and
+enforce it server-side (Cloud SQL `ENCRYPTED_ONLY`, RDS `rds.force_ssl=1`)
+for every *other* client so the setting can't rot unnoticed.
+
+Removing this limitation — accepting `sslrootcert` / `verify-ca` so any
+private CA can be trusted directly — is on our roadmap; it is the root cause
+behind the Cloud SQL guidance below.
+
 ### Cloud SQL on GKE — use the Auth Proxy
 
 **Connect through the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy),
@@ -519,7 +550,13 @@ in-cluster pull secret at all:
    Add an **ECR VPC endpoint** to keep image pulls in-VPC.
 
 - **Database:** RDS / Aurora **PostgreSQL** with the `pgvector` extension enabled;
-  point `database.target`/`internal` at it via `existingSecret`.
+  point `database.target`/`internal` at it via `existingSecret`. **Read
+  [Database TLS and certificate trust](#database-tls-and-certificate-trust--read-before-choosing-a-postgres)
+  first** — RDS presents a certificate signed by an Amazon RDS root CA that is
+  not in the container's trust store, and the engine cannot be handed that
+  bundle today, so a direct `sslmode=require` DSN is expected to fail the TLS
+  handshake. Terminate TLS at **RDS Proxy** (its certificates come from ACM and
+  are publicly trusted) or use a deliberate in-VPC unencrypted hop.
 - **Secrets:** AWS **Secrets Manager** → k8s Secrets (External Secrets Operator or
   the Secrets Store CSI driver) → the chart's `existingSecret` fields.
 - **Ingress/TLS:** the **AWS Load Balancer Controller** (`queryServer.ingress.className: alb`)
