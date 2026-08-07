@@ -275,48 +275,67 @@ server falls back to the writer credential. Also run
 > FROM pg_roles r WHERE r.rolname = 'ccx_query';   -- expect {pg_read_all_data}
 > ```
 
-### Database TLS and certificate trust — read before choosing a Postgres
+### Database TLS — the two connections behave differently
 
-**Known limitation.** The indexer's engine cannot be given a custom CA: its
-connection string accepts `sslmode=disable|prefer|require` but **rejects
-`sslmode=verify-ca` / `verify-full` and `sslrootcert`**. When it does negotiate
-TLS it validates the server certificate against the container's system trust
-store, so a database whose certificate is signed by a **private CA** — which is
-the norm for managed Postgres — cannot be verified and the connection fails
-with `error performing TLS handshake`. What this means per deployment:
+The deployment opens **two** logical Postgres connections, and only one of them
+can currently speak TLS:
 
-| Your Postgres | Direct TLS from the indexer | What to do |
+| Connection | Set by | TLS today |
 |---|---|---|
-| **Cloud SQL** (per-instance CA) | ✗ fails | **Use the [Auth Proxy](#cloud-sql-on-gke--use-the-auth-proxy)** — the chart renders it; this is the supported path |
-| **Amazon RDS / Aurora** (Amazon RDS root CAs, distributed as a downloadable bundle) | ✗ expected to fail — *same mechanism; we have not reproduced it on RDS ourselves* | Terminate TLS at a proxy whose certificate is publicly trusted (**RDS Proxy** uses ACM certificates), or keep the hop inside the VPC and connect without TLS (below) |
-| **Self-managed / corporate CA** | ✗ fails, and there is **no proxy escape** | Keep the connection inside a trusted network boundary (below) until the engine accepts a CA bundle |
-| **Postgres with a publicly-trusted certificate** (e.g. some serverless providers issue Let's Encrypt certs) | ✓ works with `sslmode=require` | Nothing special |
-| **In-cluster / bundled Postgres** | n/a — no TLS | Nothing special |
+| **Target / index DB** — the vector index and symbol tables. Used by the query server *and* the indexer. | `database.target.*` | ✅ **Full TLS.** `sslmode=require` works; the client follows the usual libpq conventions |
+| **Internal state DB** — CocoIndex's own bookkeeping. Used by the **indexer only**. | `database.internal.*` | ❌ **No TLS support at all** — see below |
 
-**Do not silently fall back to plaintext.** With `sslmode` omitted or set to
-`prefer`, the client may attempt TLS and then **fall back to an unencrypted
-connection**. Against a server that permits unencrypted connections that
-*appears to work* while sending your credentials and index data in the clear.
-If you rely on an unencrypted hop, make it deliberate: set `sslmode=disable`
-explicitly, keep the traffic inside a VPC/private subnet you trust, and
-enforce it server-side (Cloud SQL `ENCRYPTED_ONLY`, RDS `rds.force_ssl=1`)
-for every *other* client so the setting can't rot unnoticed.
+**Known limitation (internal state DB).** The engine's state store connects
+with TLS disabled at the client level. Consequences, in order of how you'll
+meet them:
 
-Removing this limitation — accepting `sslrootcert` / `verify-ca` so any
-private CA can be trusted directly — is on our roadmap; it is the root cause
-behind the Cloud SQL guidance below.
+- Against a server that **requires** SSL — Cloud SQL `ENCRYPTED_ONLY`, RDS
+  `rds.force_ssl=1` (the default on recent PostgreSQL versions), or
+  `hostssl`-only `pg_hba.conf` — the connection **fails**, typically as
+  `error performing TLS handshake` during indexer startup.
+- The connection string accepts `sslmode=disable|prefer|require` but
+  **rejects `sslmode=verify-ca` / `verify-full` and `sslrootcert`**, so a
+  custom CA cannot be supplied either.
+- With `sslmode` omitted or `prefer`, the client connects in **plaintext**
+  against a permissive server. That *looks* like success while credentials and
+  bookkeeping data cross the network unencrypted.
+
+**So: give the internal state DB a network path that does not require TLS**,
+and keep it inside a boundary you trust:
+
+- **Cloud SQL** — use the [Auth Proxy](#cloud-sql-on-gke--use-the-auth-proxy)
+  (the chart renders it). The proxy encrypts everything leaving the Pod, so
+  the instance can keep `ENCRYPTED_ONLY`; only the in-Pod loopback hop is
+  plaintext. **Only the internal DSN needs to point at the proxy** — the
+  target DSN can keep talking directly to the instance with `sslmode=require`.
+- **Amazon RDS / Aurora** — either put the same kind of proxy in front (RDS
+  Proxy terminates TLS itself), or set `rds.force_ssl=0` and connect with
+  `sslmode=disable` **within a private subnet**. *We have not reproduced this
+  on RDS ourselves; it follows from the client behaviour above.*
+- **Self-managed** — allow a non-TLS path for this one connection from the
+  cluster's subnet (`host` rather than `hostssl` in `pg_hba.conf`).
+
+Whichever you choose, make the plaintext hop deliberate: set
+`sslmode=disable` explicitly rather than relying on fallback, keep it inside
+a VPC or Pod boundary, and keep TLS *enforced server-side for every other
+client* so the setting can't rot unnoticed.
+
+Giving the state store real TLS (including `sslrootcert` / `verify-ca` so
+private CAs work) is on our roadmap and would remove the need for a proxy
+entirely.
 
 ### Cloud SQL on GKE — use the Auth Proxy
 
-**Connect through the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy),
-not directly to the instance IP.** A direct TLS connection to Cloud SQL does
-**not** work: the indexer's engine verifies the server certificate against the
-system trust store, Cloud SQL presents a **per-instance CA** that is in no such
-store, and the DSN cannot carry `sslmode=verify-ca` or `sslrootcert` to supply
-it — so a direct DSN fails with `error performing TLS handshake`, while
-disabling TLS is refused by an `ENCRYPTED_ONLY` instance. The proxy resolves
-this by terminating TLS itself (with IAM authentication) and exposing a local
-plaintext socket inside the Pod.
+**Route the indexer's INTERNAL state connection through the
+[Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy).**
+Per [Database TLS](#database-tls--the-two-connections-behave-differently), the
+state store cannot speak TLS, so a direct DSN fails with `error performing TLS
+handshake` against an `ENCRYPTED_ONLY` instance — while disabling TLS is
+refused by that same setting. The proxy resolves the bind: it terminates TLS
+itself (IAM-authenticated) and exposes a plaintext socket inside the Pod.
+
+The **target/index DSN is not affected** and can point straight at the
+instance with `sslmode=require`.
 
 The chart renders the proxy for you — enable it and supply the instance:
 
@@ -338,14 +357,16 @@ Two things you provide alongside it:
   service account with `roles/iam.workloadIdentityUser`, and named in the
   annotation above. *IAM changes take a few minutes to propagate — if the
   proxy logs a 403 on `iam.serviceAccounts.getAccessToken`, restart the Pod.*
-- **The indexer's DSNs pointed at the proxy** —
+- **The internal DSN pointed at the proxy** —
   `…@127.0.0.1:5432/<db>?sslmode=disable`. `disable` is correct here: the hop
   is in-Pod loopback and the proxy encrypts everything leaving the Pod, so the
   instance can stay `ENCRYPTED_ONLY`.
 
-The **query server** is unaffected — its Postgres client accepts a direct
-`sslmode=require` DSN, so leave `database.target.queryUrl`/`queryExistingSecret`
-pointing at the instance address.
+**Both target DSNs can stay direct** (`sslmode=require` to the instance
+address) — the query server's `database.target.queryUrl`/`queryExistingSecret`
+*and* the indexer's writer `database.target.*`. Routing them through the proxy
+too is harmless and keeps one rule to remember; only the internal one requires
+it.
 
 ### Postgres memory sizing
 
@@ -551,7 +572,7 @@ in-cluster pull secret at all:
 
 - **Database:** RDS / Aurora **PostgreSQL** with the `pgvector` extension enabled;
   point `database.target`/`internal` at it via `existingSecret`. **Read
-  [Database TLS and certificate trust](#database-tls-and-certificate-trust--read-before-choosing-a-postgres)
+  [Database TLS and certificate trust](#database-tls--the-two-connections-behave-differently)
   first** — RDS presents a certificate signed by an Amazon RDS root CA that is
   not in the container's trust store, and the engine cannot be handed that
   bundle today, so a direct `sslmode=require` DSN is expected to fail the TLS
