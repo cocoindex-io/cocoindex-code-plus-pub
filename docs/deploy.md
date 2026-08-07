@@ -38,16 +38,24 @@ deploying the service; engineers who only *query* an existing deployment want
   instance authenticates with a **GitHub App** — needs **Repository →
   Contents: Read-only** (Metadata: Read is automatic), must be **installed on
   the config repo and every repo you index** — via its **App ID** + a Secret
-  holding the **PEM private key**. A GitLab instance authenticates with a
+  holding the **PEM private key**. Two things that regularly trip people up:
+  **creating an App does not install it** — installation is a separate step
+  (App settings → *Install App*), and a created-but-uninstalled App looks
+  complete on its settings page while the indexer gets 404s on every repo;
+  and the install scope matters — **All repositories** means adding a repo
+  later is just a config-repo commit, while **Only select repositories**
+  additionally requires granting each new repo to the installation. A GitLab instance authenticates with a
   **token** (**read access**: `read_api` / `read_repository` on the same
   repos) held in a Secret. One deployment can span several instances at once.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
 **Getting access.** Your CocoIndex representative provides the **CocoIndex Plus
-license key** and **image pull access** — a revocable **pull token** plus the
-username to pair it with (GitHub-account read grants are possible case-by-case) —
-contact them to get set up. The Helm **chart is public**:
+license key** and **image pull access** — a revocable **pull token**
+(GitHub-account read grants are possible case-by-case) — contact them to get
+set up. The pull token is the whole credential: registry auth is HTTP Basic, so
+a username field must be *present*, but GHCR identifies you by the token alone —
+pair it with any non-empty username (convention: `ccx-pull`). The Helm **chart is public**:
 released `<X.Y.Z>` versions are listed on its
 [GHCR package page](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus),
 and `helm show values …` works with no login. Only the images are gated.
@@ -91,7 +99,8 @@ built from the pull token (and its paired username) your rep issues:
 # (referenced by imagePullSecrets in values-secret.yaml above):
 kubectl create namespace ccx
 kubectl -n ccx create secret docker-registry ghcr-pull \
-  --docker-server=ghcr.io --docker-username=<username-we-provide> --docker-password=<pull-token>
+  --docker-server=ghcr.io --docker-username=ccx-pull --docker-password=<pull-token>
+  # any non-empty username works — GHCR identifies you by the token
 # The GitHub App's private key, referenced by codeHosts.github.com above:
 kubectl -n ccx create secret generic ccx-github-app \
   --from-file=private-key.pem=/path/to/github-app.private-key.pem
@@ -386,8 +395,48 @@ queryServer:
 
 The query server serves **plain HTTP** — TLS is terminated at the Ingress.
 `tlsSecretName` must name a TLS secret **you pre-create** (the chart references but
-doesn't create it); on GKE you can instead attach a managed certificate via the
-Ingress annotations. Until then, `kubectl port-forward` is the simplest path.
+doesn't create it). Until then, `kubectl port-forward` is the simplest path.
+
+**On GKE, prefer a Google-managed certificate + a reserved static IP** — the
+recipe below avoids three separate traps we hit deploying this ourselves:
+
+```yaml
+queryServer:
+  ingress:
+    enabled: true
+    className: gce
+    host: ccx.example.com
+    tls: false            # deliberate: GKE managed certs attach via the
+                          # annotation, NOT spec.tls — leave this false
+    annotations:
+      networking.gke.io/managed-certificates: ccx-cert
+      kubernetes.io/ingress.global-static-ip-name: ccx-ip
+  publicUrl: https://ccx.example.com   # must match `host` (origin-only)
+```
+
+1. **Reserve the IP first** (`gcloud compute addresses create ccx-ip --global`)
+   and pin it with the annotation. Without it, GKE allocates an ephemeral
+   address tied to the Ingress's own lifecycle — recreating the Ingress (or the
+   cluster) silently changes the IP, invalidating your DNS record and the
+   certificate with it.
+2. **Create the `ManagedCertificate` object** (its `spec.domains` must equal
+   `host` exactly) and reference it via the annotation:
+
+   ```yaml
+   apiVersion: networking.gke.io/v1
+   kind: ManagedCertificate
+   metadata: { name: ccx-cert }
+   spec: { domains: [ccx.example.com] }
+   ```
+3. **Point DNS at the reserved IP as a plain A record** — if your DNS provider
+   proxies traffic (e.g. Cloudflare's proxied/orange-cloud mode), Google's
+   domain validation sees the proxy's IP instead of the load balancer and the
+   certificate never provisions. Use DNS-only for this name.
+
+Provisioning is asynchronous: the certificate reports `FailedNotVisible` until
+the A record is publicly resolvable, then flips to `Active` — typically 15–60
+minutes after DNS propagates. Check with
+`kubectl describe managedcertificate ccx-cert`.
 
 **Browser-based MCP clients.** `/mcp` validates the `Origin` header (required
 by the MCP transport spec): a request carrying an `Origin` that isn't
@@ -481,6 +530,41 @@ in-cluster pull secret at all:
   kubelet pulls the matching arch automatically. Releases **0.1.12 and earlier**
   are amd64-only: schedule those on **x86_64** nodes.
 
+## Verify the install
+
+The same checks our own release automation runs against every deploy — worth
+running once after any install or upgrade, in this order (each isolates a
+different layer):
+
+```bash
+URL=https://ccx.example.com            # or http://127.0.0.1:8080 via port-forward
+
+# 1. The server is up and running the version you installed:
+curl -fsS $URL/health                  # {"status":"healthy","version":"<X.Y.Z>",...}
+
+# 2. Auth is actually on — an unauthenticated search must be refused:
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/code/v0/semantic_search \
+  -H 'Content-Type: application/json' -d '{"query":"x","limit":1}'   # expect 401
+
+# 3. The index is built and queryable end to end:
+export CCX_SERVER_URL=$URL CCX_API_TOKEN=<token>
+ccx repos                              # lists your indexed repos once built
+ccx search --repo <owner>/<repo> "some phrase from that codebase"
+```
+
+Notes on reading the results:
+
+- `/code/v0/semantic_search` returns **503** until the indexer's first pass
+  finishes — that's "not built yet", not "broken". Watch the indexer logs; it
+  flips to results with no restart needed.
+- **Pass `--repo` when running the CLI outside a git checkout** (CI jobs,
+  containers, scripts): interactively the CLI infers the repo from the checkout
+  you're standing in, and with no checkout it errors with "No repo specified
+  and none detected" — which is easy to misread as the index not being ready.
+- If step 3 works over `port-forward` but not through your ingress URL, the
+  problem is the ingress/TLS layer, not the deployment — recheck
+  [Exposing the query server](#exposing-the-query-server).
+
 ## Air-gapped / relocate images
 
 The chart is registry-relocatable. Mirror the images into your registry and point
@@ -533,3 +617,17 @@ query server keeps serving), so pin `<X.Y.Z>` deliberately.
 **Rotating the API token.** `secrets.apiTokens.tokens` is a single string (not
 a YAML list) that can hold multiple tokens, whitespace/comma/newline-separated. To rotate without downtime: add the new
 token, `helm upgrade`, migrate clients, then drop the old token and upgrade again.
+
+**Rotating `existingSecret`-managed secrets.** Both workloads read credentials
+**at startup only**, and updating a Kubernetes Secret in place changes no pod
+checksum — so a rotation via your secret manager takes effect only after an
+explicit restart:
+
+```bash
+kubectl -n ccx rollout restart deploy -l app.kubernetes.io/name=cocoindex-code-plus
+```
+
+Until you restart, pods keep the old value silently — a rotated-but-not-restarted
+credential is the first thing to check when a rotation "didn't work". (The
+image-pull secret is the exception: it's read at pull time, so it applies on the
+next image pull with no restart.)
