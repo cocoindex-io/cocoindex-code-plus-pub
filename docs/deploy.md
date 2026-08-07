@@ -279,98 +279,68 @@ server falls back to the writer credential. Also run
 > FROM pg_roles r WHERE r.rolname = 'ccx_query';   -- expect {pg_read_all_data}
 > ```
 
-### Database TLS — the two connections behave differently
+### Database TLS
 
-The deployment opens **two** logical Postgres connections, and only one of them
-can currently speak TLS:
+*(Applies to releases from **0.1.20**. Earlier releases could not negotiate
+TLS on the internal state connection at all — if you run one, upgrade, or see
+that release's guide.)*
 
-| Connection | Set by | TLS today |
-|---|---|---|
-| **Target / index DB** — the vector index and symbol tables. Used by the query server *and* the indexer. | `database.target.*` | ✅ **Full TLS.** `sslmode=require` works; the client follows the usual libpq conventions |
-| **Internal state DB** — CocoIndex's own bookkeeping. Used by the **indexer only**. | `database.internal.*` | ❌ **No TLS support at all** — see below |
+Every database connection follows **libpq semantics**, so a DSN written for
+`psql` behaves identically here:
 
-**Known limitation (internal state DB).** The engine's state store connects
-with TLS disabled at the client level. Consequences, in order of how you'll
-meet them:
+| `sslmode` | Encrypted | Chain verified | Hostname verified |
+|---|---|---|---|
+| `disable` | no | — | — |
+| `prefer` (default) | if offered | no | no |
+| `require` | yes | **no** | no |
+| `verify-ca` | yes | yes | **no** |
+| `verify-full` | yes | yes | yes |
 
-- Against a server that **requires** SSL — Cloud SQL `ENCRYPTED_ONLY`, RDS
-  `rds.force_ssl=1` (the default on recent PostgreSQL versions), or
-  `hostssl`-only `pg_hba.conf` — the connection **fails**, typically as
-  `error performing TLS handshake` during indexer startup.
-- The connection string accepts `sslmode=disable|prefer|require` but
-  **rejects `sslmode=verify-ca` / `verify-full` and `sslrootcert`**, so a
-  custom CA cannot be supplied either.
-- With `sslmode` omitted or `prefer`, the client connects in **plaintext**
-  against a permissive server. That *looks* like success while credentials and
-  bookkeeping data cross the network unencrypted.
+Recommendations:
 
-**So: give the internal state DB a network path that does not require TLS**,
-and keep it inside a boundary you trust:
+- **Managed Postgres (Cloud SQL, RDS, …) uses a provider CA that is not in
+  system trust stores** — download it and use
+  `sslmode=verify-ca&sslrootcert=<path>`. `verify-ca` rather than
+  `verify-full` because you typically dial the instance **by IP** while its
+  certificate names the instance. Mount the CA into the indexer Pod via
+  `indexer.extraVolumes`/`extraVolumeMounts` and point `sslrootcert` at the
+  mounted path.
+- **`require` encrypts but does not authenticate the server** (that is
+  libpq's behaviour too). Acceptable inside a private VPC; prefer
+  `verify-ca` when the path matters.
+- **Don't rely on `prefer`**: against a server that permits plaintext it
+  silently falls back to an unencrypted connection that *looks* like
+  success. Enforce TLS server-side (Cloud SQL `ENCRYPTED_ONLY`, RDS
+  `rds.force_ssl=1`) and state your `sslmode` explicitly.
 
-- **Cloud SQL** — use the [Auth Proxy](#cloud-sql-on-gke--use-the-auth-proxy)
-  (the chart renders it). The proxy encrypts everything leaving the Pod, so
-  the instance can keep `ENCRYPTED_ONLY`; only the in-Pod loopback hop is
-  plaintext. **Only the internal DSN needs to point at the proxy** — the
-  target DSN can keep talking directly to the instance with `sslmode=require`.
-- **Amazon RDS / Aurora** — either put the same kind of proxy in front (RDS
-  Proxy terminates TLS itself), or set `rds.force_ssl=0` and connect with
-  `sslmode=disable` **within a private subnet**. *We have not reproduced this
-  on RDS ourselves; it follows from the client behaviour above.*
-- **Self-managed** — allow a non-TLS path for this one connection from the
-  cluster's subnet (`host` rather than `hostssl` in `pg_hba.conf`).
+Two certificate rules inherited from our TLS stack (rustls), which differ
+from `psql`/OpenSSL:
 
-Whichever you choose, make the plaintext hop deliberate: set
-`sslmode=disable` explicitly rather than relying on fallback, keep it inside
-a VPC or Pod boundary, and keep TLS *enforced server-side for every other
-client* so the setting can't rot unnoticed.
+1. **A self-signed server certificate cannot be verified**, even by pointing
+   `sslrootcert` at that same file — the CA must be a *separate* certificate
+   that signed the server's. Managed providers already work this way.
+2. **Certificates must carry a SAN**; there is no fallback to the legacy CN
+   field. A CN-only certificate fails `verify-full` (though `verify-ca`
+   still works).
 
-Giving the state store real TLS (including `sslrootcert` / `verify-ca` so
-private CAs work) is on our roadmap and would remove the need for a proxy
-entirely.
+### Cloud SQL on GKE
 
-### Cloud SQL on GKE — use the Auth Proxy
+Two supported ways to connect, both keeping the instance `ENCRYPTED_ONLY`:
 
-**Route the indexer's INTERNAL state connection through the
-[Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy).**
-Per [Database TLS](#database-tls--the-two-connections-behave-differently), the
-state store cannot speak TLS, so a direct DSN fails with `error performing TLS
-handshake` against an `ENCRYPTED_ONLY` instance — while disabling TLS is
-refused by that same setting. The proxy resolves the bind: it terminates TLS
-itself (IAM-authenticated) and exposes a plaintext socket inside the Pod.
-
-The **target/index DSN is not affected** and can point straight at the
-instance with `sslmode=require`.
-
-The chart renders the proxy for you — enable it and supply the instance:
-
-```yaml
-database:
-  cloudSqlProxy:
-    enabled: true
-    instanceConnectionName: my-project:us-west1:my-instance
-    privateIp: true                     # for a private-IP instance
-serviceAccount:
-  annotations:                          # Workload Identity — see below
-    iam.gke.io/gcp-service-account: sql-client@my-project.iam.gserviceaccount.com
-```
-
-Two things you provide alongside it:
-
-- **Credentials, via Workload Identity** (no key file): a Google service
-  account holding `roles/cloudsql.client`, bound to this chart's Kubernetes
-  service account with `roles/iam.workloadIdentityUser`, and named in the
-  annotation above. *IAM changes take a few minutes to propagate — if the
-  proxy logs a 403 on `iam.serviceAccounts.getAccessToken`, restart the Pod.*
-- **The internal DSN pointed at the proxy** —
-  `…@127.0.0.1:5432/<db>?sslmode=disable`. `disable` is correct here: the hop
-  is in-Pod loopback and the proxy encrypts everything leaving the Pod, so the
-  instance can stay `ENCRYPTED_ONLY`.
-
-**Both target DSNs can stay direct** (`sslmode=require` to the instance
-address) — the query server's `database.target.queryUrl`/`queryExistingSecret`
-*and* the indexer's writer `database.target.*`. Routing them through the proxy
-too is harmless and keeps one rule to remember; only the internal one requires
-it.
+- **Direct with a verified certificate (simplest):** fetch the instance CA
+  (`gcloud sql instances describe <instance>
+  --format='value(serverCaCert.cert)'`), put it in a Secret, mount it via
+  `indexer.extraVolumes`, and use
+  `sslmode=verify-ca&sslrootcert=<mounted path>` in the indexer DSNs (the
+  query-server DSN can do the same or use `require`).
+- **Cloud SQL Auth Proxy sidecar:** set `database.cloudSqlProxy.enabled:
+  true` + `instanceConnectionName`, authenticate via Workload Identity (a
+  GSA with `roles/cloudsql.client` named in `serviceAccount.annotations`),
+  and point the indexer DSNs at `127.0.0.1:5432?sslmode=disable` (in-Pod
+  loopback; the proxy encrypts everything leaving the Pod). Choose this when
+  you prefer IAM-authenticated database access or don't want to manage the
+  CA file. *IAM changes take minutes to propagate — if the proxy logs a 403
+  on `iam.serviceAccounts.getAccessToken`, restart the Pod.*
 
 ### Postgres memory sizing
 
@@ -575,13 +545,14 @@ in-cluster pull secret at all:
    Add an **ECR VPC endpoint** to keep image pulls in-VPC.
 
 - **Database:** RDS / Aurora **PostgreSQL** with the `pgvector` extension enabled;
-  point `database.target`/`internal` at it via `existingSecret`. **Read
-  [Database TLS and certificate trust](#database-tls--the-two-connections-behave-differently)
-  first** — RDS presents a certificate signed by an Amazon RDS root CA that is
-  not in the container's trust store, and the engine cannot be handed that
-  bundle today, so a direct `sslmode=require` DSN is expected to fail the TLS
-  handshake. Terminate TLS at **RDS Proxy** (its certificates come from ACM and
-  are publicly trusted) or use a deliberate in-VPC unencrypted hop.
+  point `database.target`/`internal` at it via `existingSecret`. RDS presents
+  a certificate signed by an **Amazon RDS root CA** that is not in system
+  trust stores — download the
+  [region bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html),
+  mount it via `indexer.extraVolumes`, and use
+  `sslmode=verify-ca&sslrootcert=<mounted path>`
+  (see [Database TLS](#database-tls)). Plain `require` also connects (encrypts
+  without authenticating the server).
 - **Secrets:** AWS **Secrets Manager** → k8s Secrets (External Secrets Operator or
   the Secrets Store CSI driver) → the chart's `existingSecret` fields.
 - **Ingress/TLS:** the **AWS Load Balancer Controller** (`queryServer.ingress.className: alb`)
