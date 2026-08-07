@@ -119,9 +119,25 @@ own, one per code-host instance: each `codeHosts` entry names its own
 [Chart configuration](#chart-configuration)), and that repo lists the repos to
 index **from that instance** — so the people who govern an instance's config
 repo control exactly what gets indexed from it. The indexer reads **every
-`*.json` file** under `dir` (at `gitRef`) of each config repo, concatenates
-them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so you add or
-drop repos by committing to the config repo, no redeploy.
+`*.json` file** under `dir` (at `gitRef`) of each config repo, **recursively**,
+concatenates them, and re-polls on `indexer.repoRefreshIntervalSeconds` — so
+you add or drop repos by committing to the config repo, no redeploy.
+
+**Where to put the files — `configRepo.dir` is optional and defaults to the
+repo root.** Two supported layouts:
+
+- **A dedicated config repo** — leave `dir` unset and put the `*.json` files
+  at the root.
+- **A subfolder of a repo that has other content** — set `dir` (e.g.
+  `dir: ccx-config`), which scopes the scan to that subtree.
+
+Pick deliberately, because the scan takes **every** `*.json` under `dir`: at
+the root of a repo that also holds tooling files, something like
+`renovate.json` or `package.json` would be parsed as index config. A file that
+doesn't parse makes that instance's config refresh **fail closed** — the
+indexer keeps its last-known-good repo list and logs the error rather than
+indexing a wrong set — so the symptom is "my config edits stopped taking
+effect", not an outage. Use `dir` whenever the repo isn't dedicated.
 
 Each file is a **JSON array** of repo entries:
 
@@ -230,13 +246,66 @@ server falls back to the writer credential. Also run
 `CREATE EXTENSION pg_prewarm;` at provisioning (see
 [Postgres memory sizing](#postgres-memory-sizing)).
 
-On GKE, reach Cloud SQL over **private IP**: enable private services access /
-a VPC-peered instance, set the Cloud SQL instance to
-`sslMode=ENCRYPTED_ONLY`, and put the private address plus `sslmode=require`
-in the target-writer, target-query, and internal DSNs. This encrypts the
-phase-1 direct connection but does not verify server identity. (The Cloud SQL
-Auth Proxy sidecar pattern is not yet supported by the chart — it renders no
-sidecar containers.)
+> **Cloud SQL trap — the read-only role is not read-only by default.**
+> A user created with `gcloud sql users create` (or the Cloud SQL console)
+> is automatically granted **`cloudsqlsuperuser`**, which holds CREATE on
+> the `public` schema. The `GRANT pg_read_all_data` above then does *not*
+> make it read-only — the role can still write. After creating it, revoke
+> the inherited role:
+>
+> ```sql
+> REVOKE cloudsqlsuperuser FROM ccx_query;
+> ```
+>
+> Verify with a connection as that role — `CREATE TABLE t(i int);` must fail
+> with *permission denied for schema public*:
+>
+> ```sql
+> SELECT ARRAY(SELECT b.rolname FROM pg_auth_members m
+>   JOIN pg_roles b ON m.roleid = b.oid WHERE m.member = r.oid)
+> FROM pg_roles r WHERE r.rolname = 'ccx_query';   -- expect {pg_read_all_data}
+> ```
+
+### Cloud SQL on GKE — use the Auth Proxy
+
+**Connect through the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/connect-auth-proxy),
+not directly to the instance IP.** A direct TLS connection to Cloud SQL does
+**not** work: the indexer's engine verifies the server certificate against the
+system trust store, Cloud SQL presents a **per-instance CA** that is in no such
+store, and the DSN cannot carry `sslmode=verify-ca` or `sslrootcert` to supply
+it — so a direct DSN fails with `error performing TLS handshake`, while
+disabling TLS is refused by an `ENCRYPTED_ONLY` instance. The proxy resolves
+this by terminating TLS itself (with IAM authentication) and exposing a local
+plaintext socket inside the Pod.
+
+The chart renders the proxy for you — enable it and supply the instance:
+
+```yaml
+database:
+  cloudSqlProxy:
+    enabled: true
+    instanceConnectionName: my-project:us-west1:my-instance
+    privateIp: true                     # for a private-IP instance
+serviceAccount:
+  annotations:                          # Workload Identity — see below
+    iam.gke.io/gcp-service-account: sql-client@my-project.iam.gserviceaccount.com
+```
+
+Two things you provide alongside it:
+
+- **Credentials, via Workload Identity** (no key file): a Google service
+  account holding `roles/cloudsql.client`, bound to this chart's Kubernetes
+  service account with `roles/iam.workloadIdentityUser`, and named in the
+  annotation above. *IAM changes take a few minutes to propagate — if the
+  proxy logs a 403 on `iam.serviceAccounts.getAccessToken`, restart the Pod.*
+- **The indexer's DSNs pointed at the proxy** —
+  `…@127.0.0.1:5432/<db>?sslmode=disable`. `disable` is correct here: the hop
+  is in-Pod loopback and the proxy encrypts everything leaving the Pod, so the
+  instance can stay `ENCRYPTED_ONLY`.
+
+The **query server** is unaffected — its Postgres client accepts a direct
+`sslmode=require` DSN, so leave `database.target.queryUrl`/`queryExistingSecret`
+pointing at the instance address.
 
 ### Postgres memory sizing
 
