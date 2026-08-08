@@ -22,19 +22,23 @@ with the query server you target (the CLI warns on a server version mismatch).
 
 ## Configure
 
-Two environment variables (or a `.env` found from the working directory upward,
-auto-loaded — already-exported vars take precedence):
+Run interactively, `ccx` asks for anything it's missing **once** and saves
+the answer (`~/.config/ccx/`; `%APPDATA%\ccx` on Windows) — so a human's
+setup is just `ccx login` (SSO) or `ccx status` (token deployments). The
+environment variables below always **override** the saved answers and are
+the way to configure scripts, CI, and agents (also loadable from a `.env`
+found upward from the working directory — already-exported vars win):
 
 | Var | What |
 |---|---|
-| `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`) |
+| `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`). Optional interactively: prompted once and saved as your default; a one-off `--server` overrides without changing the default |
 | `CCX_API_TOKEN` | your API token — your platform team issues it (one of the server's configured tokens); sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
 | `CCX_CLIENT_TIMEOUT_SECONDS` | optional; per-request client timeout, default **90** — deliberately above the server's own deadline chain so the server's clearer error arrives instead of a client-side cutoff. Keep it above the ingress timeout if your platform team raised the server deadline |
 
 ```bash
-export CCX_SERVER_URL=https://ccx.example.com
-export CCX_API_TOKEN=<your-token>
-ccx status        # checks the server is reachable + healthy
+export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
+export CCX_API_TOKEN=<your-token>               # token deployments only
+ccx status        # checks the server is reachable + healthy, and names the server it resolved
 ```
 
 `ccx status` checks **reachability only** — the server's `/health` is auth-exempt,
@@ -50,9 +54,11 @@ ccx login --device   # device-code flow instead (no local browser, e.g. over SSH
 ccx logout           # drops the cached token
 ```
 
-The first login needs the OAuth client id your admin provides (`--client-id`
-or `CCX_OIDC_CLIENT_ID`); it's remembered per server afterwards. The token is
-cached and refreshed automatically. CI jobs and agents keep using
+The first login needs the OAuth client id your admin provides — you're
+prompted for it in a terminal (or pass `--client-id` / set
+`CCX_OIDC_CLIENT_ID`); it's remembered per server afterwards, and `ccx login`
+also makes that server your saved default (with a printed notice). The token
+is cached and refreshed automatically. CI jobs and agents keep using
 `CCX_API_TOKEN` — on SSO deployments that's an issued key of the form
 `ccxk_<id>_<secret>`.
 
@@ -166,9 +172,11 @@ numbers show where the window ended.
 
 ## For agents & automation
 
-- **No interactive setup** — everything is env-driven (`CCX_SERVER_URL`,
-  `CCX_API_TOKEN`), so a coding agent or CI job can run `ccx` directly. Errors
-  exit non-zero; informational notes go to stderr, results to stdout.
+- **Nothing requires a terminal** — set `CCX_SERVER_URL` + `CCX_API_TOKEN` and
+  a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
+  TTY (without one, a missing setting is a non-zero exit with the flags to
+  pass). Errors exit non-zero; informational notes and prompts go to stderr,
+  results to stdout.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
