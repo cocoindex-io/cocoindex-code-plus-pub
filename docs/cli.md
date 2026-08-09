@@ -23,11 +23,13 @@ with the query server you target (the CLI warns on a server version mismatch).
 ## Configure
 
 Run interactively, `ccx` asks for anything it's missing **once** and saves
-the answer (`~/.config/ccx/`; `%APPDATA%\ccx` on Windows) — so a human's
-setup is just `ccx login` (SSO) or `ccx status` (token deployments). The
-environment variables below always **override** the saved answers and are
-the way to configure scripts, CI, and agents (also loadable from a `.env`
-found upward from the working directory — already-exported vars win):
+the answer (`~/.config/ccx/config.json`; `%APPDATA%\ccx` on Windows) — so a
+human's setup is just `ccx login` (SSO) or `ccx status` (token deployments).
+`ccx config` shows what is saved and changes it. The environment variables
+below always **override** the saved answers and are the way to configure
+scripts, CI, and agents. They must be **exported**: `ccx` does not read `.env`
+files, so a project `.env` cannot silently re-point the CLI at another
+deployment.
 
 | Var | What |
 |---|---|
@@ -56,11 +58,22 @@ ccx logout           # drops the cached token
 
 The first login needs the OAuth client id your admin provides — you're
 prompted for it in a terminal (or pass `--client-id` / set
-`CCX_OIDC_CLIENT_ID`); it's remembered per server afterwards, and `ccx login`
-also makes that server your saved default (with a printed notice). The token
-is cached and refreshed automatically. CI jobs and agents keep using
-`CCX_API_TOKEN` — on SSO deployments that's an issued key of the form
-`ccxk_<id>_<secret>`.
+`CCX_OIDC_CLIENT_ID`, or run `ccx config set client-id <id>`); it's remembered
+per server afterwards, and `ccx login` also makes that server your saved
+default (with a printed notice). The token is cached and refreshed
+automatically. `ccx logout` drops the **credential** only — your remembered
+client id and default server stay, so signing back in takes no flags. CI jobs
+and agents keep using `CCX_API_TOKEN` — on SSO deployments that's an issued key
+of the form `ccxk_<id>_<secret>`.
+
+**Where your token is stored.** In your OS keyring when one is available,
+otherwise in `~/.config/ccx/tokens.json` (created `0600`). `ccx config` reports
+which is in force. The keyring needs an optional package — install it with
+`pip install 'cocoindex-code-plus[keyring]'` (or
+`uv tool install 'cocoindex-code-plus[keyring]'`) and log in again to move an
+existing token. To choose explicitly, `ccx config set token-cache
+auto|keyring|file`, or `CCX_TOKEN_CACHE=<value>` for one command; `keyring`
+refuses to fall back to a file, which is the point of it.
 
 **Mirrored deployments.** If your platform team enabled code-host-mirrored
 authorization, `ccx repos` and every query show only the repos **your**
@@ -182,16 +195,20 @@ numbers show where the window ended.
 |---|---|
 | `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` won't catch this (`/health` is auth-exempt). |
 | `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
-| connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. |
+| connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. Run `ccx config` to see the server it resolved and where that came from. |
+| talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
+| `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
+| `no usable keyring backend` | Your token cache is set to `keyring` on a host without one. `ccx config set token-cache auto`, or `CCX_TOKEN_CACHE=file` for one command. |
 | version-mismatch warning | Align `ccx` with the server: `uv tool install cocoindex-code-plus==X.Y.Z`. |
 
 ## For agents & automation
 
-- **Nothing requires a terminal** — set `CCX_SERVER_URL` + `CCX_API_TOKEN` and
+- **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
   pass). Errors exit non-zero; informational notes and prompts go to stderr,
-  results to stdout.
+  results to stdout. **Export them** — `ccx` does not read `.env` files, so a
+  job that keeps its token in a repo `.env` gets `401`s.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
