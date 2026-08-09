@@ -62,6 +62,14 @@ is cached and refreshed automatically. CI jobs and agents keep using
 `CCX_API_TOKEN` — on SSO deployments that's an issued key of the form
 `ccxk_<id>_<secret>`.
 
+**Mirrored deployments.** If your platform team enabled code-host-mirrored
+authorization, `ccx repos` and every query show only the repos **your**
+code-host account can read — a repo you lack access to behaves exactly like
+one that doesn't exist. If private repos you expect are missing, you've most
+likely never signed into the code host through your company SSO: do that
+once (e.g. the org's SSO page on GitHub) and retry — results can take up to
+an hour to appear while server-side caches refresh.
+
 ## Use
 
 ```bash

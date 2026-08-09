@@ -496,6 +496,65 @@ Anything beyond the plain shared token — `oidc`, `apiKeys` records, or the opt
 - **`secrets.apiTokens` must then be empty** (the chart refuses to render otherwise): shared bare tokens are replaced by `auth.apiKeys` **records** — each carries only a `sha256:` hash of its secret (safe to keep in values), and the presented token becomes `ccxk_<id>_<secret>`. Records are attributable and individually revocable; rotation is editing the list + `helm upgrade`.
 - **Rate limiting needs to know your ingress**: the chart derives the client-IP extraction strategy from `queryServer.ingress.className` automatically for `gce` (including the trusted GCLB ranges), and for `gce-internal` / `nginx` requires `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress peer CIDRs). Any other ingress class: set `rateLimit.clientIpStrategy` explicitly or rendering fails.
 
+### Code-host-mirrored authorization
+
+By default every authenticated caller can search everything indexed (`authz.mode: indexScope` — the index config repo is the access authority, by governing what gets indexed). With **`codeHostMirrored`**, results instead mirror each signed-in engineer's **real code-host permissions**: public repos serve any authenticated user; a private repo serves only callers whose IdP identity maps to a code-host account with read access — and to everyone else it is **indistinguishable from a repo that doesn't exist** (the same 404, no name, no counts). Requires `auth.mode: oidc`. API-key records are deliberately *not* mirrored — a key has no code-host identity; its own `scope` governs it, so CI and agents keep working.
+
+```yaml
+authz:
+  mode: codeHostMirrored
+  attestations:                          # two explicit operator acknowledgments — below
+    contextControlReviewCompleted: true
+    instanceBindingContractAccepted: true
+  codeHosts:
+    github.com:                          # same key as your codeHosts registry entry
+      identityMapping: codeHostLookup    # join the IdP claim against GitHub's own SSO linkage
+      mappingClaim: email                # the value GitHub's linkage records (usually the SSO email)
+      permissionCredential:
+        appId: "<app id>"                # the indexer App reused (default) — or a dedicated authz App
+        privateKeySecret: { name: ccx-github-app }
+      approvedOrgs:                      # the governance boundary: only these installations are ever consulted
+        - { orgId: <immutable org id>, installationId: <the App's installation id> }
+```
+
+**App permissions.** Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field also requires administration-read; the pre-flight check below catches it. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
+
+**Identity-mapping topologies** — pick the row matching where your SSO linkage lives:
+
+| Linkage | Extra values | Extra credential |
+|---|---|---|
+| GitHub org-level SAML (common case) | — (the block above) | none — the App reads the org's `externalIdentities` itself |
+| GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
+| GitLab | `externProvider: <extern_uid provider, e.g. saml>`; `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
+
+**The two attestations** are deliberate, named acknowledgments — the server refuses to start without them because it cannot verify either fact itself:
+
+- `contextControlReviewCompleted`: you reviewed whether context controls (org/enterprise IP allowlists, IdP conditional access) guard your code host, and either none are in use or you re-imposed the equivalent at this deployment's own front door. No server-side check can see a caller's device or source IP the way your code host does.
+- `instanceBindingContractAccepted`: you accept the **instance-key binding contract** as an organizational rule — a `codeHosts` key is permanently bound to one installation; never re-point its `baseUrl` and never reuse a key (relocation = a new key + a reindex). Mirrored decisions are keyed by `{provider}:{instance}:{repo id}`, so a re-pointed key would evaluate *another installation's* same-numbered repos. Every startup logs an `instance-binding snapshot` line — diff it across rollouts.
+
+**Behavior to expect.** An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso` (mapping and permission answers are cached — roughly an hour and a few minutes respectively — so grants, revocations, and first-time links propagate within those windows plus token lifetime). A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+
+**Pre-flight check** (run before the rollout, with an org-owner token): confirm the linkage exists and records the claim you configured —
+
+```bash
+gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProvider { externalIdentities(first: 3, membersOnly: true) { nodes { samlIdentity { nameId } user { login } } } } } }'
+```
+
+`nameId` must byte-match your `mappingClaim` values (typically the SSO email). A `null` `samlIdentityProvider` means the org has no SAML linkage to mirror against — fix that first.
+
+### Bring your own authorization server (Google Workspace, SAML-only IdPs)
+
+The OIDC integration validates **JWT access tokens minted for a dedicated audience** — an authorization-server capability that Okta, Entra ID, Keycloak, Auth0, and Ping all provide. Some login providers don't: **Google Workspace's** OAuth server issues opaque access tokens and cannot mint tokens for a third-party API (its only JWTs are ID tokens, which this server deliberately rejects as bearer credentials), and SAML-only IdPs speak no OAuth at all. For those estates, front the login provider with an authorization server **you** operate — sign-in stays with your IdP (users still see the Google SSO screen); the AS brokers the login and mints the API tokens. The server and chart notice nothing special: `auth.oidc.issuer` simply points at your AS.
+
+Keycloak is the reference shape; the realm essentials, portable to any AS:
+
+- **Resource registration** `api://ccx` — a client with every login flow disabled; its id is your `audience`. Never use it as a login client.
+- **Audience mapper** on the CLI client adding `api://ccx` to access tokens — single-audience (the server rejects multi-audience tokens unless RFC 9068 `typ` is enforced).
+- **Entitlement** `ccx.search` — either a realm role mapped into a flat array claim (`requiredScopeClaim: roles`, `requiredScopeEncoding: array` — per-user grantable) or a plain OAuth scope (`requiredScopeClaim: scope`, `spaceDelimited`).
+- **CLI client** (`cli.clientId`): public, PKCE S256, loopback redirect URIs (`http://127.0.0.1/*`), device grant optional.
+- **Broker** to your IdP — for Google: an *internal-only* OAuth client, plus the broker's hosted-domain restriction so only your workspace can sign in.
+- Keycloak stamps `typ: JWT` rather than `at+jwt` — leave `requireTypAtJwt: false`.
+
 ### Timeout chain
 
 The server enforces a per-request deadline (`queryServer.requestDeadlineSeconds`,

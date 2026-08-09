@@ -24,6 +24,37 @@ language; line/column positions. **Not extracted:** git author names,
 emails, commit messages — the schema contains no developer-identity fields.
 Retention is entirely yours (your database, your logs).
 
+## Who can read which repos (authorization)
+
+Per deployment, one of two modes:
+
+- **`indexScope`** (default): any authenticated caller searches everything
+  indexed — the PR-reviewed index config repo is the access-control
+  authority, by governing what gets indexed in the first place.
+- **`codeHostMirrored`**: results mirror each caller's live code-host
+  permissions (setup in the [deploy guide](deploy.md#code-host-mirrored-authorization)).
+  The guarantees, stated precisely:
+  - A repo the caller cannot read **never participates** in results,
+    ranking, or counts — and is **indistinguishable from a nonexistent
+    repo** in every response (one uniform 404, no name echo, no candidate
+    lists).
+  - Checks **fail closed**: an identity the deployment cannot map is
+    granted public repos only; a check the server cannot complete (code-host
+    outage, rate limiting, misconfiguration) is a `503` — never a grant,
+    never a silent downgrade.
+  - The server keeps **no authorization state** of its own — only
+    short-TTL caches of code-host answers. Your code host and IdP stay the
+    sources of truth: revocation and offboarding happen entirely in your
+    systems and propagate within cache TTL plus token lifetime.
+  - API-key records are governed by their **own** configured scope
+    (index-wide or an explicit repo list), never mirrored — a key has no
+    code-host identity. Issue them accordingly.
+
+Enabling mirrored mode requires two named operator attestations
+(`authz.attestations.*`) — explicit acknowledgments of facts the server
+cannot verify itself (the context-control review; the instance-key binding
+contract). Both are defined in the deploy guide.
+
 ## Network egress — the complete list
 
 | Destination | When | Content | Your control |
