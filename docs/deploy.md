@@ -223,6 +223,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
@@ -407,6 +408,49 @@ are still searchable, they just have no symbol graph. Operational notes:
   planned). On large, busy repos this shows up as indexer CPU, not query-side
   latency.
 
+### Agentic query
+
+`ccx query "<question>"` (and the MCP `query_codebase` tool) answers a
+natural-language question about your code with a cited prose answer, instead of
+returning raw search hits. A server-side agent runs the investigation: it
+searches, greps, reads files, and follows symbols using **the same authorized
+reads the low-level API exposes**, so it can never see a repository the caller
+could not already search.
+
+**It is off by default, and turning it on is a data-governance decision.**
+Enabling it sends the caller's question and the source snippets the agent
+chooses to read to your configured model provider. Nothing else changes: no new
+network path into the cluster, no new database, no stored transcripts.
+
+```yaml
+agentQuery:
+  enabled: true
+  model: gpt-5.6-terra # any tool-calling LiteLLM completion model
+  reasoningEffort: none # see the warning below
+  contextWindowTokens: 256000 # match your model; chart default is 128000
+```
+
+- **Credentials.** If the completion model uses the same provider as
+  `embedding` (e.g. both OpenAI), there is nothing to add — LiteLLM reads the
+  same key the embedding secret already supplies. For a *different* provider,
+  set `agentQuery.secretEnv` (or `existingSecret`); those credentials are
+  injected into the **query server only**, never the indexer.
+- **`reasoningEffort` is not cosmetic.** Some models refuse function tools
+  entirely unless it is set — `gpt-5.6-terra` rejects the request outright at
+  any other value, so the feature cannot work without `reasoningEffort: none`.
+  Check your model before rolling out.
+- **Raise your ingress timeout.** An agentic query runs far longer than a
+  low-level one (`agentQuery.requestDeadlineSeconds`, default **600 s**), and a
+  single backend timeout covers every route. The chart **refuses to render** if
+  `queryServer.ingress.timeoutSeconds` does not clear it — see
+  [Timeout chain](#timeout-chain).
+- **Cost is bounded per request, not per knob.** One query is capped at 30
+  model turns for the main agent plus at most 8 helper sub-investigations of 15
+  turns each; there is no unbounded loop to configure around.
+- **Capacity.** `agentQuery.maxConcurrentRequests` (default 4 per pod) admits
+  agentic queries; over-capacity callers get an immediate retryable `503` while
+  low-level search is unaffected. Each principal may hold 2 at a time.
+
 ### Exposing the query server
 
 The CLI, agents, and the **MCP** endpoint (`<host>/mcp` — see [cli.md](cli.md))
@@ -568,6 +612,16 @@ inside it:
 - The chart's defaults implement this: `queryServer.ingress.timeoutSeconds: 75`
   and the CLI's 90 s default. **If you raise `requestDeadlineSeconds`, raise
   the outer two as well** — nothing auto-derives them.
+- **[Agentic query](#agentic-query) has its own, much longer deadline**
+  (`agentQuery.requestDeadlineSeconds`, default 600 s) — and one backend
+  timeout covers every route, so the ingress must clear *that* one:
+  **client (660) > ingress (630) > agentic deadline (600 + ≤5 s)**. `ccx query`
+  already uses a 660 s client timeout. Raising the ingress budget does not
+  weaken the low-level routes: their own 60 s server deadline still answers
+  first, and the ingress is only the backstop behind it. The chart enforces
+  this at render time — enabling `agentQuery` while leaving the ingress at 75 s
+  fails `helm upgrade` with the required value, rather than deploying a
+  service whose load balancer cuts off the queries it is waiting on.
 - The **ingress budget is controller-specific** and the chart emits the right
   form for the classes it knows: `gce`/`gce-internal` get a `BackendConfig`
   with `timeoutSec` attached via the Service (GKE's default backend timeout is

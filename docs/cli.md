@@ -35,7 +35,7 @@ deployment.
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`). Optional interactively: prompted once and saved as your default; a one-off `--server` overrides without changing the default |
 | `CCX_API_TOKEN` | your API token — your platform team issues it (one of the server's configured tokens); sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
-| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; per-request client timeout, default **90** — deliberately above the server's own deadline chain so the server's clearer error arrives instead of a client-side cutoff. Keep it above the ingress timeout if your platform team raised the server deadline |
+| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; per-request client timeout, default **90** — deliberately above the server's own deadline chain so the server's clearer error arrives instead of a client-side cutoff. Keep it above the ingress timeout if your platform team raised the server deadline. [`ccx query`](#ccx-query--ask-a-question-get-an-answer) uses a **660 s** floor instead, matching its much longer server deadline; setting this higher raises that too |
 
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
@@ -122,6 +122,11 @@ ccx find-files --git-ref main                    # list all files, on a specific
 # Repo / ref metadata
 ccx git-refs                                     # the current repo's indexed refs + commit shas
 ccx git-refs cocoindex-io/cocoindex              # a specific repo ("(default)" marks the default branch)
+
+# Ask a question and get an answer (if your deployment enables it — see below)
+ccx query "how does the indexer decide what to re-embed?"
+ccx query "compare auth in these two services" --repo acme/a --repo acme/b
+ccx query "what changed in the release flow" --git-ref v1.2 --json
 ```
 
 `ccx git-refs` lists **git** refs (branches and tags) — not to be confused with
@@ -189,6 +194,41 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
+### `ccx query` — ask a question, get an answer
+
+Every command above returns *material* — hits, lines, symbol rows — and leaves
+the reading to you. `ccx query` returns a **written answer with citations**: a
+server-side agent runs the investigation for you, searching, grepping, reading
+files, and following symbols, then writes up what it found. Each claim carries
+a `[repo:path#Lstart-Lend]` citation you can open to check it.
+
+```bash
+ccx query "how does the indexer decide what to re-embed?"
+ccx query "compare how these two services authenticate" --repo acme/a --repo acme/b
+ccx query "walk me through the release flow" --git-ref v1.2
+ccx query "what are the main components?" --json    # exact response model
+```
+
+Scoping works exactly like `ccx search`: the current checkout by default,
+`--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
+answer is Markdown on stdout; some questions also attach longer supporting
+documents, which are printed after the answer.
+
+Two things to expect:
+
+- **It is slower.** The agent runs many reads before answering — seconds to a
+  couple of minutes for a broad question, against a 660 s client timeout.
+  Reach for `ccx search`/`grep` when you know what you're looking for, and
+  `ccx query` when you don't.
+- **It may be turned off.** It is off unless your deployment enables it,
+  because answering requires sending your question and the code the agent
+  reads to a model provider. When it's off the command exits non-zero with
+  `agent_query_unavailable`; ask your platform team.
+
+The agent can only read what **you** can already read — it runs under your
+identity and the same repository permissions as every other command, so it
+never surfaces a repo you couldn't search yourself.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -251,6 +291,16 @@ and REST API closely (same capabilities, same scoping).
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
+  - `query_codebase(question, repos)` → a written, citation-backed answer to a
+    natural-language question — the MCP form of [`ccx query`](#ccx-query--ask-a-question-get-an-answer).
+    A server-side agent investigates with the tools above under the caller's
+    own permissions and returns Markdown plus any supporting documents.
+    The tool is always advertised, but **fails with `agent_query_unavailable`
+    unless the deployment enables the feature** (answering sends the question
+    and the code read to a model provider). It also runs far longer than the
+    other tools — up to the agentic deadline, 600 s by default — so give the
+    client a generous timeout. Prefer it for open-ended "how/why" questions
+    and the typed tools above for targeted lookups.
 
 Most clients take a remote HTTP MCP server with custom headers, e.g.:
 
