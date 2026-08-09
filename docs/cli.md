@@ -92,11 +92,12 @@ ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
 # Symbol navigation: definitions & references (resolved, not text matches)
 ccx defs QueryService                             # where is this symbol DEFINED?
-ccx defs db.Repo.find --qualified-name            # exact dotted qualified name
+ccx defs python:db.Repo.find                      # exact qualified name (the ':' selects the mode)
 ccx defs Config --kind class --lang python        # filter by kind / language / --path
 ccx refs QueryService                             # where is it USED? (by name, broad)
-ccx refs src/db.py Repo.find                      # exactly this definition — the `target: …`
-                                                  #   pair a `ccx defs` row prints, pasted verbatim
+ccx refs python:db.Repo.find                      # every use of this exact qualified name
+ccx refs src/db.py Repo.find                      # exactly this one definition — paste the
+                                                  #   `uses: ccx refs …` command a defs row prints
 ccx refs QueryService --role call                 # restrict to a reference role
 
 # File access (ref-scoped; repo + ref auto-detected like search)
@@ -118,17 +119,23 @@ and "who uses it" from a **resolved symbol graph** the indexer builds — cross-
 alias- and re-export-aware — not from text matching. It covers **Python,
 TypeScript/JavaScript (incl. TSX), and C/C++**; other languages remain reachable
 via `search` and `grep`. The two verbs chain: each `ccx defs` row ends with a
-paste-ready pair —
+paste-ready command —
 
 ```
-src/db.py:42:4 [method] db.Repo.find
-  lang=python  target: src/db.py Repo.find
+src/db.py:42:4 [method] python:db.Repo.find
+  lang=python  uses: ccx refs src/db.py Repo.find
 ```
 
-— and pasting that `target: …` pair after `ccx refs ` pins the query to exactly
-that definition (a bare `ccx refs NAME` instead casts a wide net by name; copy
-the pair rather than composing it — the headline's dotted name is *not* the
-second token). Reference rows are labeled by **role** (`call`, `import`,
+— and running that `uses: …` command returns exactly that definition's uses
+(it carries any `--repo`/`--git-ref`/`--server` flags you passed, so it
+re-queries the same scope). Three precisions of `ccx refs`, broad to exact: a
+bare `ccx refs NAME` casts a wide net by unqualified name; the headline's
+**qualified name** (`python:db.Repo.find` — every qualified name opens with
+its language tag, `python:` / `tsjs:` / `cpp:`, and TS/JS names carry a
+second `:` between the file path and the entity) matches exactly, covering
+every occurrence and overload under it, with no flag needed; the pasted
+`uses:` command pins one definition. Copy rather than compose the exact
+pair — the headline's qualified name is *not* the second token. Reference rows are labeled by **role** (`call`, `import`,
 `type_use`, `inherit`, `field_access`, …; filter with `--role`) and by
 **resolution**: `resolved` is definite, `ambiguous` enumerates each surviving
 candidate as its own row, and `name_only` marks a mention whose target couldn't
