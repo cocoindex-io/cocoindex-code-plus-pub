@@ -425,10 +425,20 @@ network path into the cluster, no new database, no stored transcripts.
 ```yaml
 agentQuery:
   enabled: true
-  model: gpt-5.6-terra # any tool-calling LiteLLM completion model
-  reasoningEffort: none # see the warning below
+  model: openai/gpt-5.6-terra # provider-PREFIXED — see the warning below
+  reasoningEffort: none # also see the warning below
   contextWindowTokens: 256000 # match your model; chart default is 128000
 ```
+
+- **Prefix the model with its provider** (`openai/…`, `anthropic/…`,
+  `gemini/…`). The images deliberately don't phone home for LiteLLM's model
+  registry, so a **bare** name is matched against the registry bundled in the
+  installed LiteLLM — which cannot know models released after it. A bare
+  recent-model name therefore works on a laptop and fails *every* request in
+  the cluster. The server rejects an unresolvable model **at startup** with
+  the corrected name, so this shows up as a failed rollout rather than silent
+  `503`s. (The same applies to `embedding.model`; the long-standing default
+  needs no prefix.)
 
 - **Credentials.** If the completion model uses the same provider as
   `embedding` (e.g. both OpenAI), there is nothing to add — LiteLLM reads the
