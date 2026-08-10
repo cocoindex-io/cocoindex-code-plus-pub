@@ -370,8 +370,9 @@ seconds. Rules of thumb:
 Alongside the vector index, the indexer builds a **resolved symbol graph** per
 indexed git ref — it backs `ccx defs` / `ccx refs` and the MCP
 `find_definitions` / `find_references` tools ([cli.md](cli.md)). Covered
-languages: Python, TypeScript/JavaScript (incl. TSX), C/C++; other languages
-are still searchable, they just have no symbol graph. Operational notes:
+languages: Python, TypeScript/JavaScript (incl. TSX), C/C++, C#, Rust; other
+languages are still searchable, they just have no symbol graph. Operational
+notes:
 
 - **On by default, tunable via `indexer.symbolIndex`.** Every key is optional —
   left unset, the indexer's defaults apply and the chart sets no env var:
@@ -393,6 +394,12 @@ are still searchable, they just have no symbol graph. Operational notes:
   data) are garbage-collected. Re-enabling **re-extracts every indexed ref from
   scratch**, which costs a full symbol rebuild. Flip it as a deliberate
   capacity decision, not to ride out an incident.
+- **An upgrade that widens language coverage re-extracts once.** When a release
+  adds or changes language packs (the way C# and Rust were added), the
+  extraction identity changes and the next indexer pass re-extracts every file
+  — that is exactly what gives already-indexed refs their new-language symbols.
+  Budget one extra full symbol pass after such an upgrade; steady-state cost is
+  unchanged afterwards.
 - **Oversized refs are skipped loudly, not truncated.** A ref beyond either cap
   gets **no** symbol graph, and every `defs`/`refs` response for that ref
   carries a coverage status saying so (as do refs that are still building, or

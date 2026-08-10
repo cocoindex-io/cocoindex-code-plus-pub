@@ -135,9 +135,9 @@ ccx query "what changed in the release flow" --git-ref v1.2 --json
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
 alias- and re-export-aware — not from text matching. It covers **Python,
-TypeScript/JavaScript (incl. TSX), and C/C++**; other languages remain reachable
-via `search` and `grep`. The two verbs chain: each `ccx defs` row ends with a
-paste-ready command —
+TypeScript/JavaScript (incl. TSX), C/C++, C#, and Rust**; other languages
+remain reachable via `search` and `grep`. The two verbs chain: each `ccx defs`
+row ends with a paste-ready command —
 
 ```
 src/db.py:42:4 [method] python:db.Repo.find
@@ -149,8 +149,9 @@ src/db.py:42:4 [method] python:db.Repo.find
 re-queries the same scope). Three precisions of `ccx refs`, broad to exact: a
 bare `ccx refs NAME` casts a wide net by unqualified name; the headline's
 **qualified name** (`python:db.Repo.find` — every qualified name opens with
-its language tag, `python:` / `tsjs:` / `cpp:`, and TS/JS names carry a
-second `:` between the file path and the entity) matches exactly, covering
+its language tag, `python:` / `tsjs:` / `cpp:` / `csharp:` / `rust:`, and
+TS/JS and Rust names carry a second `:` between the file path and the entity)
+matches exactly, covering
 every occurrence and overload under it, with no flag needed; the pasted
 `uses:` command pins one definition. Copy rather than compose the exact
 pair — the headline's qualified name is *not* the second token. Reference rows are labeled by **role** (`call`, `import`,
