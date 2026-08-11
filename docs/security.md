@@ -118,6 +118,45 @@ retention and access controls.
 
 ## Supply-chain verification
 
+### SBOM
+
+A complete SBOM bundle is published for every release at
+[cocoindex-code-plus-pub → Releases](https://github.com/cocoindex-io/cocoindex-code-plus-pub/releases)
+(tag `sbom-vX.Y.Z`). **No credentials needed** — you do not need image pull
+access to review it, so it's available during evaluation.
+
+Each bundle carries, in both **SPDX 2.3** and **CycloneDX**:
+
+- both container images, **per platform** (`linux/amd64`, `linux/arm64`) —
+  covering the Debian packages from the `python:3.11-slim` base and every Python
+  distribution in the runtime environment;
+- the `ccx` CLI as resolved from PyPI;
+- license attribution for the Rust crate tree inside the CocoIndex Plus engine;
+- the optional upstream images the Helm chart can deploy on your behalf.
+
+Verify the bundle (one signature covers every asset):
+
+```bash
+cosign verify-blob SHA256SUMS --signature SHA256SUMS.sig --certificate SHA256SUMS.pem \
+  --certificate-identity-regexp '^https://github\.com/cocoindex-io/cocoindex-code-plus/\.github/workflows/release\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c SHA256SUMS
+```
+
+Once you have image pull access, the same content is also attached to each image
+digest at build time, which is the authoritative per-digest record:
+
+```bash
+docker buildx imagetools inspect ghcr.io/cocoindex-io/ccx-query-server:<tag> --format '{{ json .SBOM }}'
+```
+
+One scope note: the CocoIndex Plus engine ships as a compiled extension module,
+so scanners resolve it to a single `cocoindex-plus` component rather than to the
+Rust crates compiled into it. The attribution file in the bundle is the record
+for that subtree.
+
+### Signatures
+
 - Container images: **cosign-signed (keyless OIDC)** with **SBOM +
   build-provenance attestations**. Working verifier:
 

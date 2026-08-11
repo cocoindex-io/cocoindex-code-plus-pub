@@ -28,3 +28,9 @@ receive them.
 Container images are signed with Sigstore cosign (keyless OIDC) and carry
 SBOM and build-provenance attestations; the Helm chart is cosign-signed; the
 CLI is published to PyPI via Trusted Publishing.
+
+A signed **SBOM bundle** (SPDX + CycloneDX, covering both images per platform
+and the CLI) is published for every release under
+[Releases](https://github.com/cocoindex-io/cocoindex-code-plus-pub/releases)
+and needs no credentials to download — see
+[docs/security.md](docs/security.md#sbom).
