@@ -12,7 +12,7 @@ deploying the service; engineers who only *query* an existing deployment want
   [Symbol index](#symbol-index) below) into Postgres. Needs a **CocoIndex Plus
   license** at runtime.
 - **Query server** — a stateless FastAPI service (`/health`, `/code/v0/semantic_search`); scales
-  horizontally; license-free.
+  horizontally.
 - **Postgres + pgvector** — the index store. The chart can run a **bundled**
   Postgres for a quick test, or point at an **external** one (Cloud SQL, …) for
   production.
@@ -25,10 +25,10 @@ deploying the service; engineers who only *query* an existing deployment want
   [relocate them into your own registry](#air-gapped--relocate-images). (The
   [Helm chart itself](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   is public.)
-- A **CocoIndex Plus license key** (we issue it; gates the indexer). It is a
-  long **signed** string beginning `key/` — if the value you deploy doesn't
-  start with that, it isn't the key. See
-  [License key](#license-key) for how it's checked and what a rejection means.
+- A **CocoIndex Plus license key** (we issue it; gates the indexer). It is a long
+  string beginning `key/`, validated at startup against `api.keygen.sh` — so the
+  cluster needs outbound HTTPS to that host, or an
+  [offline-entitled license](#license-key) if it has no internet access.
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
@@ -217,7 +217,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 
 | Area | Keys | Req? | Notes |
 |---|---|---|---|
-| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license for the indexer **and** the query server (its structural `grep` needs it; other query surfaces run license-free) |
+| **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license, wired to both workloads — see [License key](#license-key) |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
@@ -238,32 +238,20 @@ External Secrets/CSI) instead of an inline value. Prefer that in production.
 
 ### License key
 
-The key your rep issues is a long **signed** string beginning `key/`. The
-indexer verifies that signature **offline**, against a public key built into the
-image — it never contacts a license service, so this works in an air-gapped
-cluster and cannot fail because of network policy. The **query server** needs
-the same key only for structural `grep`; its other surfaces run license-free,
-which is why a bad key shows up as a crash-looping indexer next to a query
-server that looks healthy.
+The key your rep issues is a long string beginning `key/`. Set it as
+`secrets.cocoindexPlus.licenseKey`, or hand the chart a Secret you created with
+`existingSecret` (data key `COCOINDEX_PLUS_LICENSE_KEY`).
 
-Set it as `secrets.cocoindexPlus.licenseKey`, or hand the chart a Secret you
-created with `existingSecret` (data key `COCOINDEX_PLUS_LICENSE_KEY`).
+**The license is validated at startup against `api.keygen.sh`**, so the cluster
+needs outbound HTTPS to that host. Allow it in your egress policy alongside your
+code host and embedding provider. If your deployment cannot reach the internet
+at all, ask us for an **offline-entitled license** — it is a different license
+issued for exactly that case, and it validates without any network access.
 
-**Keep it on one line, however long it gets.** The key is a single unbreakable
-token, so every YAML multi-line form corrupts it — each one has to represent the
-line break as *something*:
-
-| written as | what the container receives |
-|------------|-----------------------------|
-| `licenseKey: "key/…"` | the key ✅ |
-| `licenseKey: \|` | the key **plus a trailing newline** |
-| `licenseKey: \|-` over two lines | a newline **inside** the key |
-| `licenseKey: >-` over two lines | a space **inside** the key |
-
-A long line is the correct representation here. If you would rather not have a
-credential sitting in a values file at all, use `existingSecret` — and create it
-with `--from-literal`, since `kubectl create secret generic --from-file` keeps
-the trailing newline of the file it read.
+**Keep it on one line.** The key is a single unbreakable token, so a YAML form
+that wraps it (`|-`, `>-`) puts a newline or a space *inside* the value and
+breaks it. Whitespace around the key is trimmed, so a trailing newline — from
+`kubectl create secret generic --from-file`, say — is fine.
 
 **If the indexer exits at startup with a license error**, check the value that
 actually reached the container rather than the one in your values file:
@@ -275,20 +263,13 @@ kubectl -n ccx exec deploy/ccx-cocoindex-code-plus-indexer -- \
 
 That reveals only the first four characters and the length — enough to identify
 a bad value without exposing a good one. Expect `[key/]` and a few hundred
-characters. What the other outcomes mean:
+characters; `[<you]` or `[REPL]` means a quickstart placeholder was never
+substituted, and a much shorter length means a truncated copy.
 
-| output | cause |
-|--------|-------|
-| `[key/]`, a few hundred chars | intact — if it is still rejected, send us exactly this line and we will check the issuance |
-| `[<you]`, `[REPL]`, … | the placeholder from the quickstart was never substituted |
-| `[ key]` — note the leading space | whitespace came along with the paste; the brackets are there to make it visible |
-| `[key/]` but far too short | a truncated copy |
-
-An error saying the key does not *exist* means it was never recognized as a
-signed key at all, so it fell back to an online lookup that found nothing — the
-first two rows above. A trailing newline (common when the key is read from a
-file) still starts with `key/` and shows up instead as a signature or decoding
-error, with the length one character longer than expected.
+An error saying the key does not *exist* means the license service did not
+recognize the value sent to it. If the check above looks right, send us exactly
+that line and we will check the issuance. An error about reaching
+`api.keygen.sh` is an egress problem, not a key problem.
 
 ### Production Postgres (Cloud SQL / external)
 
@@ -832,15 +813,13 @@ runtime), not broken images. `helm pull` fetches the chart `.tgz` — carry that
 image copy is **per version**: only versions you actually upgrade to need
 mirroring — re-run the copy (and `helm upgrade`) each time you move to a new one.
 
-The **CocoIndex Plus license validates offline** — the issued key is signed and
-self-verifiable against a public key inside the image, so the indexer never
-calls home ([License key](#license-key); the check is a signature check, and a
-value that is *not* a signed `key/…` string is the one case that would attempt
-a network lookup). Once the images are mirrored and the key is in place, the
-deployment needs **no egress to us**. The
-only remaining outbound dependency is your **embedding provider** (the
-`OPENAI_API_KEY` / LiteLLM call); point it at a self-hosted / in-VPC model to run
-fully air-gapped.
+**Ask us for an offline-entitled license.** A standard license validates against
+`api.keygen.sh` at startup ([License key](#license-key)), which a disconnected
+deployment cannot do; an offline-entitled one is issued for exactly this case
+and needs no network. With the images mirrored and that key in place, the
+deployment needs **no egress to us**. The only remaining outbound dependency is
+your **embedding provider** (the `OPENAI_API_KEY` / LiteLLM call); point it at a
+self-hosted / in-VPC model to run fully air-gapped.
 
 ## Operate
 
