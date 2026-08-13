@@ -792,16 +792,20 @@ ccx search --repo <owner>/<repo> "some phrase from that codebase"
 the running version rather than transcribed here:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $CCX_API_TOKEN" $URL/openapi.json
+curl -fsS $URL/openapi.json
 ```
 
-It is a normal protected route, so it needs the same token as any query (only
-`/health` and the OAuth metadata document are auth-exempt). The interactive
-Swagger/ReDoc pages are deliberately not served: those fetch the schema from
-the browser with no credential attached, so they would render and then fail to
-load. Feed the JSON to your client generator or API browser instead. Note the
+**No token needed** — the description is what a team reads *before* anyone
+issues them one, so it is auth-exempt like `/health`. It describes the
+interface only; every route that returns code or index data still requires a
+credential. Feed the JSON to your client generator or API browser. Note the
 paths are **versioned and namespaced** — `/code/v0/semantic_search`, not
 `/search`.
+
+The interactive Swagger / ReDoc pages are not served: they load their
+JavaScript from a public CDN, which is both a third-party script in your
+operators' browsers and a blank page on a network without egress to it. Point
+your own API browser at the JSON instead.
 
 Notes on reading the results:
 
