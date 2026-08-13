@@ -159,6 +159,7 @@ Each file is a **list** of repo entries, written in YAML:
   branches: main # regex over branch names (whole-name match)
   included_patterns: ["**/*.py", "**/*.md"]
   excluded_patterns: ["**/tests/**"]
+  max_file_size: 262144 # bytes; skip files larger than 256 KiB
 
 - repo_owner: acme
   repo_name: frontend
@@ -190,6 +191,7 @@ erroring.
 | `repo_name` | **yes** | repository name |
 | `branches` / `tags` | **one required** | **regex** ([`re.fullmatch`](https://docs.python.org/3/library/re.html#re.fullmatch)) selecting refs to index — a plain `"main"` matches exactly that ref; the repo is indexed at every matched ref |
 | `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
+| `max_file_size` | default: `indexer.maxFileSizeBytes`, else 1 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 1 MiB** — a larger value is rejected at parse time (see below) |
 | `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
 
 An entry's **provider and instance come from the config repo that declares
@@ -197,6 +199,33 @@ it** — the `codeHosts` entry the repo belongs to — so entries carry neither
 (an entry setting `provider` or `instance` is rejected). A bad regex or an
 entry missing both `branches` and `tags` fails the config parse with a clear
 error (nothing is indexed) rather than failing mid-index.
+
+### File size limits
+
+Every repo has a maximum indexed file size. It defaults to **1 MiB**, which is
+also a hard ceiling: `max_file_size` above it is **rejected** at config-parse
+time rather than quietly clamped, because 1 MiB is the largest response
+`read_file` can return — a bigger file would be indexed but could never be
+read back. Lower it (per repo, or fleet-wide via `indexer.maxFileSizeBytes`)
+when a repo carries minified bundles, vendored dependencies or generated code
+you don't want to spend embedding budget on. On GitHub the oversized file is
+skipped **before it is downloaded**, so the saving covers API quota as well as
+embedding and storage.
+
+Two behaviors worth knowing, shared with `included_patterns` /
+`excluded_patterns` and with binary files:
+
+- **Skipped files still appear in file listings.** The index mirrors each
+  ref's full tree, so `ccx find-files` / the `find_files` tool still show the
+  file — only its *contents* are missing. Reading one reports that the path was
+  not found; if a file you expect to read comes back that way, check it against
+  these limits and your include/exclude patterns first.
+- **Changing the limit takes effect on the next poll.** Lowering it drops the
+  now-oversized files' contents from the index; raising it indexes them. No
+  reindex or restart is needed, but the repo is re-walked, so the next cycle
+  after the change does more work than a steady-state one.
+
+Binary files are never indexed, at any size.
 
 ## Chart configuration
 
@@ -221,6 +250,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
+| **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 | **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
