@@ -25,7 +25,10 @@ deploying the service; engineers who only *query* an existing deployment want
   [relocate them into your own registry](#air-gapped--relocate-images). (The
   [Helm chart itself](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   is public.)
-- A **CocoIndex Plus license key** (we issue it; gates the indexer).
+- A **CocoIndex Plus license key** (we issue it; gates the indexer). It is a
+  long **signed** string beginning `key/` — if the value you deploy doesn't
+  start with that, it isn't the key. See
+  [License key](#license-key) for how it's checked and what a rejection means.
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
@@ -75,6 +78,10 @@ embedding:
   model: text-embedding-3-small        # any LiteLLM model — pin one deliberately (see note below)
   secretEnv: { OPENAI_API_KEY: sk-REPLACE_ME }  # or COHERE_API_KEY / GEMINI_API_KEY / …
 secrets:
+  # Every placeholder in this block MUST be substituted — the embedding key
+  # above included. The chart refuses to render while any of them still looks
+  # like one. The license key is the long `key/…` string your rep issued; the
+  # API token is any strong secret you pick.
   cocoindexPlus: { licenseKey: "<your-license-key>" }
   apiTokens:     { tokens: "<a-strong-token>" }   # a string, not a list — may pack several tokens (space/comma/newline-separated); the CLI sends one
 codeHosts:
@@ -228,6 +235,60 @@ provide it; **default** = sensible default, leave alone unless noted;
 **Secrets: inline or existingSecret.** Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
 External Secrets/CSI) instead of an inline value. Prefer that in production.
+
+### License key
+
+The key your rep issues is a long **signed** string beginning `key/`. The
+indexer verifies that signature **offline**, against a public key built into the
+image — it never contacts a license service, so this works in an air-gapped
+cluster and cannot fail because of network policy. The **query server** needs
+the same key only for structural `grep`; its other surfaces run license-free,
+which is why a bad key shows up as a crash-looping indexer next to a query
+server that looks healthy.
+
+Set it as `secrets.cocoindexPlus.licenseKey`, or hand the chart a Secret you
+created with `existingSecret` (data key `COCOINDEX_PLUS_LICENSE_KEY`).
+
+**Keep it on one line, however long it gets.** The key is a single unbreakable
+token, so every YAML multi-line form corrupts it — each one has to represent the
+line break as *something*:
+
+| written as | what the container receives |
+|------------|-----------------------------|
+| `licenseKey: "key/…"` | the key ✅ |
+| `licenseKey: \|` | the key **plus a trailing newline** |
+| `licenseKey: \|-` over two lines | a newline **inside** the key |
+| `licenseKey: >-` over two lines | a space **inside** the key |
+
+A long line is the correct representation here. If you would rather not have a
+credential sitting in a values file at all, use `existingSecret` — and create it
+with `--from-literal`, since `kubectl create secret generic --from-file` keeps
+the trailing newline of the file it read.
+
+**If the indexer exits at startup with a license error**, check the value that
+actually reached the container rather than the one in your values file:
+
+```bash
+kubectl -n ccx exec deploy/ccx-cocoindex-code-plus-indexer -- \
+  sh -c 'printf "[%s] %s chars\n" "$(printf %.4s "$COCOINDEX_PLUS_LICENSE_KEY")" "${#COCOINDEX_PLUS_LICENSE_KEY}"'
+```
+
+That reveals only the first four characters and the length — enough to identify
+a bad value without exposing a good one. Expect `[key/]` and a few hundred
+characters. What the other outcomes mean:
+
+| output | cause |
+|--------|-------|
+| `[key/]`, a few hundred chars | intact — if it is still rejected, send us exactly this line and we will check the issuance |
+| `[<you]`, `[REPL]`, … | the placeholder from the quickstart was never substituted |
+| `[ key]` — note the leading space | whitespace came along with the paste; the brackets are there to make it visible |
+| `[key/]` but far too short | a truncated copy |
+
+An error saying the key does not *exist* means it was never recognized as a
+signed key at all, so it fell back to an online lookup that found nothing — the
+first two rows above. A trailing newline (common when the key is read from a
+file) still starts with `key/` and shows up instead as a signature or decoding
+error, with the length one character longer than expected.
 
 ### Production Postgres (Cloud SQL / external)
 
@@ -715,6 +776,22 @@ ccx repos                              # lists your indexed repos once built
 ccx search --repo <owner>/<repo> "some phrase from that codebase"
 ```
 
+**Wiring up your own callers?** The server publishes its OpenAPI description at
+`GET /openapi.json` — every route, request and response shape, generated from
+the running version rather than transcribed here:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CCX_API_TOKEN" $URL/openapi.json
+```
+
+It is a normal protected route, so it needs the same token as any query (only
+`/health` and the OAuth metadata document are auth-exempt). The interactive
+Swagger/ReDoc pages are deliberately not served: those fetch the schema from
+the browser with no credential attached, so they would render and then fail to
+load. Feed the JSON to your client generator or API browser instead. Note the
+paths are **versioned and namespaced** — `/code/v0/semantic_search`, not
+`/search`.
+
 Notes on reading the results:
 
 - `/code/v0/semantic_search` returns **503** until the indexer's first pass
@@ -755,9 +832,12 @@ runtime), not broken images. `helm pull` fetches the chart `.tgz` — carry that
 image copy is **per version**: only versions you actually upgrade to need
 mirroring — re-run the copy (and `helm upgrade`) each time you move to a new one.
 
-The **CocoIndex Plus license validates offline** — the license key is
-signed/self-verifiable, so the indexer never calls home. Once the images are
-mirrored and the key is in place, the deployment needs **no egress to us**. The
+The **CocoIndex Plus license validates offline** — the issued key is signed and
+self-verifiable against a public key inside the image, so the indexer never
+calls home ([License key](#license-key); the check is a signature check, and a
+value that is *not* a signed `key/…` string is the one case that would attempt
+a network lookup). Once the images are mirrored and the key is in place, the
+deployment needs **no egress to us**. The
 only remaining outbound dependency is your **embedding provider** (the
 `OPENAI_API_KEY` / LiteLLM call); point it at a self-hosted / in-VPC model to run
 fully air-gapped.
