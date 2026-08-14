@@ -9,13 +9,102 @@ deploying the service; engineers who only *query* an existing deployment want
 
 - **Indexer** — a singleton worker that watches your repos and writes a vector
   index **and a symbol graph** (symbol definitions/references — see
-  [Symbol index](#symbol-index) below) into Postgres. Needs a **CocoIndex Plus
-  license** at runtime.
-- **Query server** — a stateless FastAPI service (`/health`, `/code/v0/semantic_search`); scales
-  horizontally.
+  [Symbol index](#symbol-index) below) into Postgres.
+- **Query server** — a stateless FastAPI service; scales horizontally. It serves
+  semantic search, AST grep, symbol definitions/references, file reads, repo
+  metadata, an optional [agentic query](#agentic-query) endpoint, and an **MCP**
+  endpoint for coding agents (the full surface is in [cli.md](cli.md)).
+
+**Both workloads need a CocoIndex Plus license** at runtime — the query server's
+`grep` needs it too, not just the indexer.
 - **Postgres + pgvector** — the index store. The chart can run a **bundled**
   Postgres for a quick test, or point at an **external** one (Cloud SQL, …) for
   production.
+
+## Access: authentication & authorization
+
+The **query server** is the only surface your engineers, CI jobs, and AI agents
+talk to, and it answers two independent questions on every request:
+
+- **Authentication — who is calling?** Set by `auth.mode`. In either real mode a
+  missing or invalid credential is a `401` on every route returning code or index
+  data, REST and MCP alike; only the dev-only `none` serves anonymous callers.
+- **Authorization — what may they see?** Set by `authz.mode`. The default grants
+  every authenticated caller the whole index; the alternative mirrors each
+  person's real code-host permissions.
+
+Separate knobs, with two couplings worth knowing up front: mirrored
+authorization needs real per-person identities, so it requires `oidc`; and
+setting *any* `authz` value moves the chart onto the file lane described below,
+which changes how you supply caller credentials.
+
+**Authentication — `auth.mode`**
+
+| Mode | What callers present | Good for | Notes |
+|---|---|---|---|
+| `apiKey` **(default)** | a shared bearer token **you invent** (`secrets.apiTokens`), or a key record | getting started, a small team, CI | shared tokens are **not attributable** — every caller logs alike; the server accepts a **set** of them so rotation is add-new → migrate → drop-old ([caveat](#operate) when they come from an `existingSecret`). Key records fix attribution — see below |
+| `oidc` | a JWT from your company IdP, obtained by `ccx login` | company-wide rollout; per-person attribution, and offboarding that happens in your IdP | needs an IdP that mints **JWT access tokens for a dedicated audience** — Okta, Entra ID, Keycloak, Auth0, Ping do. **Google Workspace and SAML-only IdPs do not**, and need [an authorization server in front](#bring-your-own-authorization-server-google-workspace-saml-only-idps). Setup: [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| `none` | nothing | local development only | warns loudly; never expose it |
+
+**Two similarly-named settings — not the same credential:**
+
+- **`secrets.apiTokens`** — the **shared bare token set**. Simple and anonymous:
+  callers present one of the same handful of strings, and the audit log cannot
+  tell them apart. The quickstart default.
+- **`auth.apiKeys`** — **key records**. Each is labelled, individually revocable,
+  and carries its own repo scope; the presented token is `ccxk_<id>_<secret>`,
+  and your values hold only a `sha256:` hash, never the secret itself.
+
+The chart never blends them: bare tokens ride the env lane, records ride the file
+lane, and configuring a record makes a non-empty `secrets.apiTokens` a rendering
+error (see the lanes below).
+
+Records **auto-enable alongside `oidc`**, so CI runners and agents keep a static
+credential while humans sign in through SSO. They do **not** require it, though:
+`auth.mode: apiKey` with records and an empty `secrets.apiTokens` is supported,
+and is how you get attributable, revocable keys without adopting an IdP —
+[minting one](#minting-a-key-record).
+
+**Authorization — `authz.mode`**
+
+| Mode | What a caller sees |
+|---|---|
+| `indexScope` **(default)** | everything indexed. Your [index config repo](#index-config-repo) is the access-control authority — committing a repo to it *is* the access decision, so gate that repo accordingly |
+| `codeHostMirrored` | only the repos that person can read on the code host; anything else is indistinguishable from a repo that does not exist. Requires `auth.mode: oidc` — see [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
+
+API-key records are deliberately never mirrored — a key has no code-host
+identity — so each record's own `scope` governs it, and CI keeps working.
+
+**Where to start**
+
+| You want | Set | Also needed |
+|---|---|---|
+| A quick evaluation, or team access on one shared secret | `secrets.apiTokens` — the defaults (`apiKey` + `indexScope`) do the rest | nothing else; rotate by editing the token set |
+| Attributable, revocable keys, no IdP | `auth.apiKeys` records, `secrets.apiTokens` empty | one `ccxk_…` per caller — [minting](#minting-a-key-record) |
+| Everyone signs in with company SSO | `auth.mode: oidc` | `queryServer.publicUrl`, two IdP registrations (minimum), and `auth.apiKeys` records for CI |
+| SSO **and** per-person repo permissions | `auth.mode: oidc` + `authz.mode: codeHostMirrored` | a code-host credential for permission checks, plus two operator attestations |
+
+**Two config lanes, never blended.** Which one you're on decides how you supply
+caller credentials:
+
+- **The env lane** — `auth.mode` alone (`apiKey` or `none`) plus the bare
+  `secrets.apiTokens`. The default, and what the quickstart below uses.
+- **The file lane** — set anything richer (`mode: oidc`, an `auth.oidc` block,
+  any `auth.apiKeys` record, or any value under the **top-level** `authz:` /
+  `audit:` / `rateLimit:` blocks) and the chart renders the *whole* auth policy
+  into one mounted config file. There, **`secrets.apiTokens` must be empty** —
+  rendering fails otherwise — and `auth.apiKeys` records replace it. (The
+  per-instance `codeHosts.<instance>.rateLimit` is an unrelated setting, a
+  code-host API budget, and does **not** switch lanes.)
+
+The shared API token is therefore the **default, not a requirement**: on the file
+lane it is a rendering error.
+
+**Unauthenticated routes** (`GET`/`HEAD` only, none returning index data), if
+you're writing a WAF rule or an allowlist: `/health`, `/openapi.json` (rationale
+in [Verify the install](#verify-the-install)), and — under `oidc` only —
+`/.well-known/oauth-protected-resource/mcp`, the discovery document an MCP client
+reads *before* it has a credential. Swagger/ReDoc are not served at all.
 
 ## Prerequisites
 
@@ -25,13 +114,20 @@ deploying the service; engineers who only *query* an existing deployment want
   [relocate them into your own registry](#air-gapped--relocate-images). (The
   [Helm chart itself](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   is public.)
-- A **CocoIndex Plus license key** (we issue it; gates the indexer). It is a long
-  string beginning `key/`, validated at startup against `api.keygen.sh` — so the
-  cluster needs outbound HTTPS to that host, or an
+- A **CocoIndex Plus license key** (we issue it; **both** workloads need it — the
+  query server's `grep` does too, though it only checks on the first `grep`
+  call, not at boot). It is a long string beginning `key/`, validated against
+  `api.keygen.sh` — so the cluster needs outbound HTTPS to that host, or an
   [offline-entitled license](#license-key) if it has no internet access.
 - An **embedding-provider API key** — any
   [LiteLLM-supported model](https://docs.litellm.ai/docs/embedding/supported_embedding)
   (`OPENAI_API_KEY` for the default OpenAI model, or another provider's key).
+- **A credential for callers to present to the query server.** In the chart's
+  default `apiKey` mode that is an **API token you invent** — unlike the license
+  and pull token above, we don't issue this one. An SSO deployment drops the
+  shared token and authenticates people through your IdP instead (machines still
+  carry a key record). Which one you want changes what else you need, so decide
+  before writing values: [Access](#access-authentication--authorization).
 - **Source access** to the repos you index. Every code-host **instance** you
   index from — github.com, a GitHub Enterprise Server, gitlab.com, a
   self-managed GitLab — is one entry in the chart's **`codeHosts`** map,
@@ -63,11 +159,55 @@ released `<X.Y.Z>` versions are listed on its
 [GHCR package page](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus),
 and `helm show values …` works with no login. Only the images are gated.
 
+**Credentials at a glance** — every secret this deployment can require, and which
+component holds it. The bottom four apply only if you enable that feature.
+
+| Credential | Comes from | Held by → presented to | Enables |
+|---|---|---|---|
+| **CocoIndex Plus license key** | **we issue it** | indexer + query server → `api.keygen.sh` | running the software |
+| **Image pull token** | **we issue it** | your cluster → GHCR | pulling the private images |
+| **API token** | **you invent it** | CLI / CI / agents → query server | every query — see [Access](#access-authentication--authorization) |
+| **API key record** `ccxk_<id>_<secret>` | you mint it; values keep only the hash | CI / agents → query server | same, but attributable and revocable |
+| **Embedding-provider key** | your model provider | indexer + query server → the provider | computing embeddings |
+| **Code-host credential** — GitHub App id + PEM, or GitLab token | you create it at your code host | indexer → code host | reading the repos you index |
+| **Postgres URLs** (passwords inline) — a writer and an internal DSN, plus an optional read-only one for the query server | you | both workloads → your database | the index store |
+| *(agentic query)* **Completion-model key** | your model provider | **query server only** → the provider | `ccx query` |
+| *(`oidc`)* **IdP registrations** — an API/resource id and a public CLI client id | your IdP admin | `ccx login` → your IdP → query server | engineers signing in |
+| *(`codeHostMirrored`)* **Permission-check credential** | you create it at your code host | **query server** → code host | checking each caller's repo access |
+| *(`codeHostMirrored`, some topologies)* **Identity-mapping credential** — an enterprise PAT, or a GitLab admin token | you create it at your code host | **query server** → code host | joining an IdP identity to a code-host account |
+
+Two that are genuinely easy to conflate:
+
+- The **license key is issued to you** and validated against our service; the
+  **API token is one you make up**, checked only by your own query server. Neither
+  is the **pull token**, which your cluster uses solely to fetch images.
+- The **indexer's** code-host credential reads repo *content*. The **query
+  server's** permission-check credential — mirrored mode only — reads only
+  *permissions*. By default they are the same GitHub App; see
+  [Code-host-mirrored authorization](#code-host-mirrored-authorization) for when
+  to split them.
+
+**How credentials are referenced.** Anything the chart never inlines is named as
+`{ name, key }`, where `key` defaults to `private-key.pem` for App private keys,
+`token` for tokens and PATs, `ca.crt` for CA bundles, and `hmac-key` for the
+audit HMAC key. Every inline secret
+group also accepts an `existingSecret` instead (see
+[Chart configuration](#chart-configuration)); inside those, the data keys are
+`COCOINDEX_PLUS_LICENSE_KEY` for the license and `CCX_API_TOKEN` for the API
+tokens.
+
 ## Quickstart (bundled Postgres, API-key auth)
 
 **First, create your [index config repo](#index-config-repo)** and point your
 `codeHosts` entry's `configRepo` at it (below) — the indexer polls it on
 startup and indexes nothing until it lists repos.
+
+This path takes the chart's default access model, `apiKey` + `indexScope`
+([Access](#access-authentication--authorization)): `secrets.apiTokens` below is a
+shared bearer token **you invent here**, your engineers put it in `CCX_API_TOKEN`
+([cli.md](cli.md)), and anyone holding it can search **everything you index**.
+For company-IdP sign-in instead, read
+[SSO login (OIDC)](#sso-login-oidc--api-key-records) before writing values.
 
 Put your values in a gitignored `values-secret.yaml`:
 
@@ -80,10 +220,14 @@ embedding:
 secrets:
   # Every placeholder in this block MUST be substituted — the embedding key
   # above included. The chart refuses to render while any of them still looks
-  # like one. The license key is the long `key/…` string your rep issued; the
-  # API token is any strong secret you pick.
+  # like one. These two are opposites: the license key is the long `key/…`
+  # string your rep ISSUED you; the API token is a strong secret you MAKE UP.
   cocoindexPlus: { licenseKey: "<your-license-key>" }
-  apiTokens:     { tokens: "<a-strong-token>" }   # a string, not a list — may pack several tokens (space/comma/newline-separated); the CLI sends one
+  # The bearer token every caller sends to the query server. A string, not a
+  # list — it may pack several tokens (space/comma/newline-separated) so you can
+  # rotate; a caller sends one of them. Generate one, don't hand-pick it:
+  #   python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+  apiTokens:     { tokens: "<a-strong-token>" }
 codeHosts:
   github.com:                          # one entry per code-host instance; the map key is the instance's identity
     provider: github
@@ -248,11 +392,12 @@ provide it; **default** = sensible default, leave alone unless noted;
 |---|---|---|---|
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license, wired to both workloads — see [License key](#license-key) |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
-| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **yes** (apiKey mode) | what the server accepts / the CLI sends; empty → rejects all |
+| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **env lane only** | the shared bearer token the server accepts and the CLI sends. Required on the **env lane** (`auth.mode: apiKey` with nothing richer set) — empty there means every request is rejected. **Must be empty on the file lane** (`mode: oidc`, `auth.oidc`, any `auth.apiKeys` record, any top-level `authz`/`audit`/`rateLimit` value), where rendering fails otherwise and `auth.apiKeys` records replace it. See [Access](#access-authentication--authorization) |
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
-| **Auth** | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers, `apiKeys` = per-caller key records — see [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc` plus operator attestations. The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
@@ -272,7 +417,8 @@ The key your rep issues is a long string beginning `key/`. Set it as
 `secrets.cocoindexPlus.licenseKey`, or hand the chart a Secret you created with
 `existingSecret` (data key `COCOINDEX_PLUS_LICENSE_KEY`).
 
-**The license is validated at startup against `api.keygen.sh`**, so the cluster
+**The license is validated against `api.keygen.sh`** — at startup in the
+indexer, and on the first `grep` call in the query server — so the cluster
 needs outbound HTTPS to that host. Allow it in your egress policy alongside your
 code host and embedding provider. If your deployment cannot reach the internet
 at all, ask us for an **offline-entitled license** — it is a different license
@@ -284,7 +430,10 @@ breaks it. Whitespace around the key is trimmed, so a trailing newline — from
 `kubectl create secret generic --from-file`, say — is fine.
 
 **If the indexer exits at startup with a license error**, check the value that
-actually reached the container rather than the one in your values file:
+actually reached the container rather than the one in your values file. A bad
+license fails the two workloads *differently*: the indexer dies at startup, while
+the query server starts fine and fails later, when a `grep` query needs the
+licensed engine — so check it there too (swap `-indexer` for `-query-server`):
 
 ```bash
 kubectl -n ccx exec deploy/ccx-cocoindex-code-plus-indexer -- \
@@ -599,7 +748,9 @@ minutes after DNS propagates. Check with
 
 **Browser-based MCP clients.** `/mcp` validates the `Origin` header (required
 by the MCP transport spec): a request carrying an `Origin` that isn't
-allowlisted is refused with `403`. Set `queryServer.publicUrl` to the
+allowlisted is refused with `403` — and with **no** `publicUrl` and no
+`mcpExtraAllowedOrigins`, the allowlist is empty, so *every* request presenting
+an `Origin` is refused. Set `queryServer.publicUrl` to the
 deployment's public URL (`https://ccx.example.com` — origin only, no path); a
 web app on another origin that embeds an MCP client needs its origin added to
 `queryServer.mcpExtraAllowedOrigins`. Non-browser clients — the `ccx` CLI and
@@ -607,7 +758,7 @@ coding agents — send no `Origin` header and are unaffected.
 
 ### SSO login (OIDC) + API-key records
 
-The default auth is the shared API token above (`secrets.apiTokens`). To let engineers sign in with your company IdP instead (Okta, Entra ID, Keycloak, …— any OIDC IdP issuing JWT access tokens), switch to `oidc`:
+The default auth is the shared API token above (`secrets.apiTokens`); [Access](#access-authentication--authorization) has the whole model in one place. To let engineers sign in with your company IdP instead (Okta, Entra ID, Keycloak, …— any OIDC IdP issuing JWT access tokens), switch to `oidc`:
 
 ```yaml
 queryServer:
@@ -622,12 +773,50 @@ auth:
     - { id: ci, secretHash: "sha256:<hex>", label: CI, scope: { mode: indexScope } }
 ```
 
-Your IdP admin registers **two things**: an **API/resource registration** (its identifier becomes `audience` — it must be distinct from any login client) and a **public CLI client** (PKCE, loopback redirect — its id goes in `cli.clientId`). Engineers then run `ccx login` (see [cli.md](cli.md)); no per-user setup on the server. For a self-managed IdP with a private CA, add `auth.oidc.caBundleSecret: { name: <secret> }`.
+**An entitlement is required by default — plan for it.** The server demands the scope **`ccx.search`** on every OIDC token (`auth.oidc.requiredScope`, read from the `scope` claim by default). A token that validates but lacks it is refused with **`403 insufficient_scope`**, not `401` — so a rollout where nobody mapped that scope fails for *every* user, with an error that looks nothing like "misconfigured entitlement". Choose one before you roll out: grant it as a plain OAuth scope on the API registration (the default `requiredScopeClaim: scope`, `requiredScopeEncoding: spaceDelimited`); grant it as a role and read that instead (`requiredScopeClaim: roles`, `requiredScopeEncoding: array` — per-user grantable, the Entra `roles` shape); or opt out explicitly with `requiredScope: ""`, which lets any validly-audienced token from your tenant through.
 
-Anything beyond the plain shared token — `oidc`, `apiKeys` records, or the optional `audit:` / `rateLimit:` blocks (`helm show values` documents them) — moves the whole auth configuration into one server-side config file the chart renders. Two consequences:
+Your IdP admin registers **two things at minimum**: an **API/resource registration** (its identifier becomes `audience` — it must be distinct from any login client) and a **public CLI client** (PKCE, loopback redirect — its id goes in `cli.clientId`). Engineers then run `ccx login` (see [cli.md](cli.md)); no per-user setup on the server. **Dynamic client registration is deliberately unsupported** (the server rejects it at startup), so any MCP client that signs in *interactively* — rather than presenting a key record's bearer token — needs its own pre-registration as well. For a self-managed IdP with a private CA, add `auth.oidc.caBundleSecret: { name: <secret> }`.
+
+Anything beyond the plain shared token — `oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value (`helm show values` documents them) — moves the whole auth configuration into one server-side config file the chart renders. Note `authz:` is a trigger too, so even `authz: { mode: indexScope }` (the default, set explicitly) flips the lane. Two consequences:
 
 - **`secrets.apiTokens` must then be empty** (the chart refuses to render otherwise): shared bare tokens are replaced by `auth.apiKeys` **records** — each carries only a `sha256:` hash of its secret (safe to keep in values), and the presented token becomes `ccxk_<id>_<secret>`. Records are attributable and individually revocable; rotation is editing the list + `helm upgrade`.
 - **Rate limiting needs to know your ingress**: the chart derives the client-IP extraction strategy from `queryServer.ingress.className` automatically for `gce` (including the trusted GCLB ranges), and for `gce-internal` / `nginx` requires `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress peer CIDRs). Any other ingress class: set `rateLimit.clientIpStrategy` explicitly or rendering fails.
+
+#### Minting a key record
+
+Key records work on any `auth.mode` — with `oidc` for CI alongside SSO, or on
+`auth.mode: apiKey` on their own. A record's secret is **exactly 32 random bytes
+carried as unpadded base64url** (43 characters); the format is pinned, so a
+presented token in any other shape is refused before hashing even reaches the
+comparison. Generate it, never hand-pick it — you keep the secret, your values
+keep only the hash:
+
+```bash
+python3 - <<'EOF'
+import base64, hashlib, secrets
+raw = secrets.token_bytes(32)
+print("secret:    ", base64.urlsafe_b64encode(raw).rstrip(b"=").decode())
+print("secretHash: sha256:" + hashlib.sha256(raw).hexdigest())
+EOF
+```
+
+Put `secretHash` in the record; hand the holder `ccxk_<id>_<secret>` to use as
+`CCX_API_TOKEN`. The secret is never stored server-side and cannot be recovered —
+to reissue, replace the record.
+
+The record **`id` must match `[A-Za-z0-9-]{1,64}`** — hyphens fine, **no
+underscores** (that is what separates `<id>` from `<secret>` in the token), so
+`id: ci-prod` works and `id: ci_prod` is rejected at startup.
+
+A record's `scope` is normally `{ mode: indexScope }` (the whole index). An
+explicit `{ mode: repoAllowlist, repos: [<canonical repo uid>, …] }` also exists
+— `ccx repos` prints each repo's stable uid ([cli.md](cli.md)) — but, like
+`codeHostMirrored`, once the deployment declares any `codeHosts` instance it is
+**refused at startup** unless you accept the instance-key binding contract
+(`authz.attestations.instanceBindingContractAccepted`, described
+[below](#code-host-mirrored-authorization)): repo uids embed the instance key, so
+a re-pointed key would silently re-bind the allowlist to another installation's
+repos.
 
 ### Code-host-mirrored authorization
 
@@ -660,10 +849,12 @@ authz:
 | GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
 | GitLab | `externProvider: <extern_uid provider, e.g. saml>`; `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
 
-**The two attestations** are deliberate, named acknowledgments — the server refuses to start without them because it cannot verify either fact itself:
+**The two attestations** are deliberate, named acknowledgments of facts the server cannot verify itself, so it refuses to start without the one your configuration needs (which is which is spelled out after the two):
 
 - `contextControlReviewCompleted`: you reviewed whether context controls (org/enterprise IP allowlists, IdP conditional access) guard your code host, and either none are in use or you re-imposed the equivalent at this deployment's own front door. No server-side check can see a caller's device or source IP the way your code host does.
 - `instanceBindingContractAccepted`: you accept the **instance-key binding contract** as an organizational rule — a `codeHosts` key is permanently bound to one installation; never re-point its `baseUrl` and never reuse a key (relocation = a new key + a reindex). Mirrored decisions are keyed by `{provider}:{instance}:{repo id}`, so a re-pointed key would evaluate *another installation's* same-numbered repos. Every startup logs an `instance-binding snapshot` line — diff it across rollouts.
+
+The two are required under different conditions. `contextControlReviewCompleted` is required whenever `codeHostMirrored` is on. `instanceBindingContractAccepted` is required only while the deployment declares `codeHosts` instances **and** uses uid-scoped authorization (mirrored mode, or an apiKey `repoAllowlist` scope) — and setting it when nothing needs it is **rejected at startup as dead config**, so it cannot sit in your values as a no-op. It substitutes for mechanical binding guardrails that have not shipped yet, so expect it to become unnecessary in a later release.
 
 **Behavior to expect.** An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso` (mapping and permission answers are cached — roughly an hour and a few minutes respectively — so grants, revocations, and first-time links propagate within those windows plus token lifetime). A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
 
@@ -873,6 +1064,9 @@ query server keeps serving), so pin `<X.Y.Z>` deliberately.
 **Rotating the API token.** `secrets.apiTokens.tokens` is a single string (not
 a YAML list) that can hold multiple tokens, whitespace/comma/newline-separated. To rotate without downtime: add the new
 token, `helm upgrade`, migrate clients, then drop the old token and upgrade again.
+On the file lane there is no such string — rotate an **`auth.apiKeys` record** by
+editing its `secretHash` (or adding a second record and retiring the first) and
+`helm upgrade`; see [Access](#access-authentication--authorization).
 
 **Rotating `existingSecret`-managed secrets.** Both workloads read credentials
 **at startup only**, and updating a Kubernetes Secret in place changes no pod

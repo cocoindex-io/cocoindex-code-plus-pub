@@ -3,8 +3,8 @@
 For customer security and platform teams. Everything here is verifiable in
 the shipped artifacts. *Applies to CocoIndex Code Plus **v0.1.8 and later**
 (earlier releases predate some hardening described here: default audit-log
-emission, MCP audit lines, disabled docs routes, and the litellm egress
-pin).*
+emission, MCP audit lines, disabled interactive-docs routes, and the litellm
+egress pin).*
 
 ## Architecture & trust model
 
@@ -25,6 +25,9 @@ emails, commit messages — the schema contains no developer-identity fields.
 Retention is entirely yours (your database, your logs).
 
 ## Who can read which repos (authorization)
+
+*Authorization is a separate axis from authentication; both are set out together
+in the deploy guide's [Access](deploy.md#access-authentication--authorization).*
 
 Per deployment, one of two modes:
 
@@ -61,7 +64,7 @@ contract). Both are defined in the deploy guide.
 |---|---|---|---|
 | Embedding provider (your account & API key; LiteLLM) | index + query time | code-chunk text; query text | Choose any provider — Azure OpenAI, or a self-hosted in-VPC endpoint for **zero egress** (default config is an OpenAI model) |
 | `api.keygen.sh` (optional) | license validation (online mode only) | the license key string — nothing else | Use the **offline signed key** → no license egress at all |
-| Your code hosts (GitHub/GitLab) | indexing | API reads with *your* read-only credentials | Your tokens, your scope |
+| Your code hosts (GitHub/GitLab) | indexing — **and at query time under `codeHostMirrored`** (short-TTL cached) | repo content at index time; **identity and permission lookups only** at query time — never repo content | Your tokens, your scope |
 
 Nothing else — including third-party libraries: the shipped images pin
 litellm to its bundled model-cost data (`LITELLM_LOCAL_MODEL_COST_MAP=true`),
@@ -75,12 +78,17 @@ license key + in-VPC embedding endpoint.
 ## Deployment hardening checklist
 
 - **Authentication:** bearer-token (`apiKey`) mode is the default and
-  fail-closed — missing/invalid tokens get 401 on every route (REST and
-  MCP). The only unauthenticated route is `/health` (status, version, and
-  uptime for probes — no index data); the interactive docs and OpenAPI
-  schema routes are disabled. The server accepts a *set* of tokens
-  (`CCX_API_TOKEN`) for zero-downtime rotation. Never run
-  `CCX_AUTH_MODE=none` outside local development (it warns loudly).
+  fail-closed — missing/invalid credentials get 401 on every route
+  returning code or index data, REST and MCP alike. Exactly three routes
+  are unauthenticated, `GET`/`HEAD` only, none of them touching index
+  data: `/health`, `/openapi.json` (the interface *description* — generated
+  from the same paths and request models that ship in the public `ccx`
+  package), and — under `oidc` —
+  `/.well-known/oauth-protected-resource/mcp`, which a client reads
+  precisely because it has no credential yet. Swagger/ReDoc are not
+  served. Never run `CCX_AUTH_MODE=none` outside local development (it
+  warns loudly). Modes, key records, and rotation:
+  [Access](deploy.md#access-authentication--authorization).
 - **TLS:** terminate at your ingress; the chart ships with ingress
   **disabled** by default and its install notes state the TLS-in-front
   requirement. Fronting the service with your ZTNA (e.g., ZPA) adds your
