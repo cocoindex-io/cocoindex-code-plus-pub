@@ -33,39 +33,53 @@ talk to, and it answers two independent questions on every request:
   every authenticated caller the whole index; the alternative mirrors each
   person's real code-host permissions.
 
-Separate knobs, with two couplings worth knowing up front: mirrored
-authorization needs real per-person identities, so it requires `oidc`; and
-setting *any* `authz` value moves the chart onto the file lane described below,
-which changes how you supply caller credentials.
+Separate knobs, with a coupling worth knowing up front: mirrored authorization
+needs real per-person identities, so it requires `oidc`.
 
-**Authentication — `auth.mode`**
+**Which credential, for whom.** Callers authenticate with one of three things: a
+**shared API token** (one string you invent; every caller presents it), an **API
+key record** (a `ccxk_<id>_<secret>` key — labelled, individually revocable,
+scoped), or **SSO through your company IdP** (`ccx login`). You never weigh all
+three at once — two facts decide it. CI jobs and headless agents cannot sign in
+interactively, so they carry one of the two static kinds (an MCP client that
+supports OAuth can instead sign in through the human driving it —
+[cli.md](cli.md)). And a shared secret is fine while you evaluate, but has a
+ceiling once a real team depends on the deployment. Find your row in the
+decision table:
 
-| Mode | What callers present | Good for | Notes |
+| Your deployment | Humans | CI & agents | What you set |
 |---|---|---|---|
-| `apiKey` **(default)** | a shared bearer token **you invent** (`secrets.apiTokens`), or a key record | getting started, a small team, CI | shared tokens are **not attributable** — every caller logs alike; the server accepts a **set** of them so rotation is add-new → migrate → drop-old ([caveat](#operate) when they come from an `existingSecret`). Key records fix attribution — see below |
-| `oidc` | a JWT from your company IdP, obtained by `ccx login` | company-wide rollout; per-person attribution, and offboarding that happens in your IdP | needs an IdP that mints **JWT access tokens for a dedicated audience** — Okta, Entra ID, Keycloak, Auth0, Ping do. **Google Workspace and SAML-only IdPs do not**, and need [an authorization server in front](#bring-your-own-authorization-server-google-workspace-saml-only-idps). Setup: [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
-| `none` | nothing | local development only | warns loudly; never expose it |
+| **Evaluating, or a small trusted team** (the default) | shared token | the same shared token | `secrets.apiTokens` — the [quickstart](#quickstart-bundled-postgres-api-key-auth) does exactly this |
+| **Attributable keys, no IdP yet** | a key record each | a key record each | `auth.apiKeys`, `secrets.apiTokens` empty — [minting](#minting-a-key-record) |
+| **Production, on your company IdP** | `ccx login` | key records | `auth.mode: oidc` + `auth.oidc` + `queryServer.publicUrl`, plus records — [setup](#sso-login-oidc--api-key-records) |
+| **… plus per-person repo permissions** | `ccx login` | key records (own scope) | add `authz.mode: codeHostMirrored` + attestations + a permission-check credential — [setup](#code-host-mirrored-authorization) |
 
-**Two similarly-named settings — not the same credential:**
+**Why two static kinds?** The shared token is the getting-started credential,
+and its simplicity is exactly its ceiling: the server resolves every shared
+token — even distinct strings in the rotation set — to one identity, so the
+audit log cannot tell callers apart, they all share one rate-limit bucket
+(limits run with defaults on every deployment), and unless you hand-allocate a
+string per caller and track who holds which, revoking one caller means rotating
+all of them. Key records lift those limits — each is labelled (the audit log
+shows its id), individually revocable (delete the record), and rate-limited per
+key — and each additionally carries its own repo scope and sits in your values
+as a `sha256:` hash rather than the secret. Humans get the same per-person
+properties from SSO instead — plus offboarding that happens in your IdP — so a
+production deployment uses records only for machines; the no-IdP row presses
+them into per-person duty as a stopgap until SSO. The chart never mixes the two
+static kinds: configure anything beyond the plain shared token and a non-empty
+`secrets.apiTokens` becomes a rendering error (the lane rule below has the
+exact trigger list).
 
-- **`secrets.apiTokens`** — the **shared bare token set**. Simple and anonymous:
-  callers present one of the same handful of strings, and the audit log cannot
-  tell them apart. The quickstart default.
-- **`auth.apiKeys`** — **key records**. Each is labelled, individually revocable,
-  and carries its own repo scope; the presented token is `ccxk_<id>_<secret>`,
-  and your values hold only a `sha256:` hash, never the secret itself.
+**Authentication reference — `auth.mode`**
 
-The chart never blends them: bare tokens ride the env lane, records ride the file
-lane, and configuring a record makes a non-empty `secrets.apiTokens` a rendering
-error (see the lanes below).
+| Mode | What callers present | Notes |
+|---|---|---|
+| `apiKey` **(default)** | the shared token, **or** key records — never both | the server accepts a **set** of shared tokens, so rotation needs no downtime — procedure and one `existingSecret` caveat in [Operate](#operate) |
+| `oidc` | a JWT from your IdP via `ccx login`; key records auto-enable alongside for machines (no extra switch) | needs an IdP that mints **JWT access tokens for a dedicated audience** — Okta, Entra ID, Keycloak, Auth0, Ping do. **Google Workspace and SAML-only IdPs do not**, and need [an authorization server in front](#bring-your-own-authorization-server-google-workspace-saml-only-idps). Setup: [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| `none` | nothing | local development only; warns loudly, never expose it |
 
-Records **auto-enable alongside `oidc`**, so CI runners and agents keep a static
-credential while humans sign in through SSO. They do **not** require it, though:
-`auth.mode: apiKey` with records and an empty `secrets.apiTokens` is supported,
-and is how you get attributable, revocable keys without adopting an IdP —
-[minting one](#minting-a-key-record).
-
-**Authorization — `authz.mode`**
+**Authorization reference — `authz.mode`**
 
 | Mode | What a caller sees |
 |---|---|
@@ -75,17 +89,8 @@ and is how you get attributable, revocable keys without adopting an IdP —
 API-key records are deliberately never mirrored — a key has no code-host
 identity — so each record's own `scope` governs it, and CI keeps working.
 
-**Where to start**
-
-| You want | Set | Also needed |
-|---|---|---|
-| A quick evaluation, or team access on one shared secret | `secrets.apiTokens` — the defaults (`apiKey` + `indexScope`) do the rest | nothing else; rotate by editing the token set |
-| Attributable, revocable keys, no IdP | `auth.apiKeys` records, `secrets.apiTokens` empty | one `ccxk_…` per caller — [minting](#minting-a-key-record) |
-| Everyone signs in with company SSO | `auth.mode: oidc` | `queryServer.publicUrl`, two IdP registrations (minimum), and `auth.apiKeys` records for CI |
-| SSO **and** per-person repo permissions | `auth.mode: oidc` + `authz.mode: codeHostMirrored` | a code-host credential for permission checks, plus two operator attestations |
-
-**Two config lanes, never blended.** Which one you're on decides how you supply
-caller credentials:
+**The lane rule.** Two config lanes, never blended — which one you're on decides
+how you supply caller credentials:
 
 - **The env lane** — `auth.mode` alone (`apiKey` or `none`) plus the bare
   `secrets.apiTokens`. The default, and what the quickstart below uses.
@@ -97,8 +102,8 @@ caller credentials:
   per-instance `codeHosts.<instance>.rateLimit` is an unrelated setting, a
   code-host API budget, and does **not** switch lanes.)
 
-The shared API token is therefore the **default, not a requirement**: on the file
-lane it is a rendering error.
+The shared API token is therefore the **default, not a requirement** — every
+decision-table shape except the shared-token row runs without one.
 
 **Unauthenticated routes** (`GET`/`HEAD` only, none returning index data), if
 you're writing a WAF rule or an allowlist: `/health`, `/openapi.json` (rationale
@@ -126,8 +131,9 @@ reads *before* it has a credential. Swagger/ReDoc are not served at all.
   default `apiKey` mode that is an **API token you invent** — unlike the license
   and pull token above, we don't issue this one. An SSO deployment drops the
   shared token and authenticates people through your IdP instead (machines still
-  carry a key record). Which one you want changes what else you need, so decide
-  before writing values: [Access](#access-authentication--authorization).
+  carry a key record); key records can also stand alone, with no IdP. Which one
+  you want changes what else you need, so decide before writing values:
+  [Access](#access-authentication--authorization).
 - **Source access** to the repos you index. Every code-host **instance** you
   index from — github.com, a GitHub Enterprise Server, gitlab.com, a
   self-managed GitLab — is one entry in the chart's **`codeHosts`** map,
@@ -167,7 +173,7 @@ component holds it. The bottom four apply only if you enable that feature.
 | **CocoIndex Plus license key** | **we issue it** | indexer + query server → `api.keygen.sh` | running the software |
 | **Image pull token** | **we issue it** | your cluster → GHCR | pulling the private images |
 | **API token** | **you invent it** | CLI / CI / agents → query server | every query — see [Access](#access-authentication--authorization) |
-| **API key record** `ccxk_<id>_<secret>` | you mint it; values keep only the hash | CI / agents → query server | same, but attributable and revocable |
+| **API key record** `ccxk_<id>_<secret>` | you mint it; values keep only the hash | CI / agents (every caller, when no IdP) → query server | same, but attributable and revocable |
 | **Embedding-provider key** | your model provider | indexer + query server → the provider | computing embeddings |
 | **Code-host credential** — GitHub App id + PEM, or GitLab token | you create it at your code host | indexer → code host | reading the repos you index |
 | **Postgres URLs** (passwords inline) — a writer and an internal DSN, plus an optional read-only one for the query server | you | both workloads → your database | the index store |
@@ -784,12 +790,14 @@ Anything beyond the plain shared token — `oidc`, `apiKeys` records, or any `au
 
 #### Minting a key record
 
-Key records work on any `auth.mode` — with `oidc` for CI alongside SSO, or on
-`auth.mode: apiKey` on their own. A record's secret is **exactly 32 random bytes
-carried as unpadded base64url** (43 characters); the format is pinned, so a
-presented token in any other shape is refused before hashing even reaches the
-comparison. Generate it, never hand-pick it — you keep the secret, your values
-keep only the hash:
+Key records are the **production static credential**: on an SSO deployment they
+serve CI and coding agents alongside `oidc`, and with no IdP they serve every
+caller (`auth.mode: apiKey` + records — the "Attributable keys, no IdP yet" row
+of the [Access](#access-authentication--authorization) decision table). A record's secret is
+**exactly 32 random bytes carried as unpadded base64url** (43 characters); the
+format is pinned, so a presented token in any other shape is refused before
+hashing even reaches the comparison. Generate it, never hand-pick it — you keep
+the secret, your values keep only the hash:
 
 ```bash
 python3 - <<'EOF'

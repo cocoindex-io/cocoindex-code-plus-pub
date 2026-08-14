@@ -87,8 +87,9 @@ license key + in-VPC embedding endpoint.
   `/.well-known/oauth-protected-resource/mcp`, which a client reads
   precisely because it has no credential yet. Swagger/ReDoc are not
   served. Never run `CCX_AUTH_MODE=none` outside local development (it
-  warns loudly). Modes, key records, and rotation:
-  [Access](deploy.md#access-authentication--authorization).
+  warns loudly). Modes and key records:
+  [Access](deploy.md#access-authentication--authorization); rotation:
+  [Operate](deploy.md#operate).
 - **TLS:** terminate at your ingress; the chart ships with ingress
   **disabled** by default and its install notes state the TLS-in-front
   requirement. Fronting the service with your ZTNA (e.g., ZPA) adds your
