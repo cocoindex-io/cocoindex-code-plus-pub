@@ -411,7 +411,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 **Secrets: inline or existingSecret.** Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
@@ -694,6 +694,75 @@ agentQuery:
 - **Capacity.** `agentQuery.maxConcurrentRequests` (default 4 per pod) admits
   agentic queries; over-capacity callers get an immediate retryable `503` while
   low-level search is unaffected. Each principal may hold 2 at a time.
+
+#### Answer cache (optional)
+
+`agentQuery.cache.enabled` lets the server reuse work across requests: a
+repeated question is answered from its stored answer, a paraphrase is
+recognised as the same question, and a partially-changed investigation reuses
+the parts that still hold. Repeated questions then cost almost nothing.
+
+```yaml
+agentQuery:
+  cache:
+    enabled: true
+    # The one schema the query server owns and writes.
+    schema: ccx_agentic
+```
+
+Three consequences to know before you turn it on.
+
+- **The query server becomes a writer — of exactly one schema.** It owns
+  `agentQuery.cache.schema` and creates its tables there at startup; your index
+  schemas keep their read-only grants. With the bundled database the chart
+  provisions this for you. With an **external** database, create it first:
+
+  ```sql
+  CREATE SCHEMA ccx_agentic AUTHORIZATION <your query role>;
+  CREATE EXTENSION IF NOT EXISTS vector;  -- if it is a separate database
+  ```
+
+  Startup fails loudly if the role cannot do this — an enabled cache never
+  quietly turns itself off.
+
+- **The indexer moves to cycle mode.** A cached answer may only be built from
+  an index read the indexer has confirmed complete, and only a *finished* pass
+  can confirm that. Enabling the cache therefore defaults
+  `indexer.cycleSeconds` to 300: the indexer runs a catch-up pass every five
+  minutes instead of watching continuously. Index freshness becomes bounded by
+  that interval plus the pass duration. Set `indexer.cycleSeconds` to change
+  the interval, or to `0` to keep live indexing — in which case the cache will
+  serve normally and store nothing.
+
+- **Nothing is evicted automatically.** There is no TTL or capacity limit in
+  this release. The two ways to remove cached content are a repository purge
+  and dropping the schema:
+
+  ```bash
+  # Remove every cached record touching one repository.
+  kubectl exec deploy/<release>-query-server -- \
+      python -m cocoindex_code_plus.query_server.agentic.cache.purge \
+      --repo acme/service --dry-run   # drop --dry-run to apply
+
+  # Start over.
+  psql -c 'DROP SCHEMA ccx_agentic CASCADE'
+  ```
+
+  Purge is also the answer to "someone asked something they should not have":
+  it removes the questions, the answers, and everything derived from them for
+  that repository, and it linearizes against in-flight requests, so nothing
+  from before the purge can be written after it.
+
+If you change `CCX_EMBED_MODEL`, the server refuses to start until the cache's
+compatibility epoch is bumped in the same release — searching behaves
+differently under a new model, and stored answers must not outlive that. A
+companion command re-embeds stored questions after a change that only affects
+how they are indexed:
+
+```bash
+kubectl exec deploy/<release>-query-server -- \
+    python -m cocoindex_code_plus.query_server.agentic.cache.backfill --limit 500
+```
 
 ### Exposing the query server
 

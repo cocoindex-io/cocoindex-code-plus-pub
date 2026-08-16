@@ -226,9 +226,19 @@ Two things to expect:
   reads to a model provider. When it's off the command exits non-zero with
   `agent_query_unavailable`; ask your platform team.
 
+- **A repeated question may come back instantly.** If your deployment enables
+  the answer cache, asking something already answered — by you or by a
+  colleague — returns the stored answer without re-running the investigation,
+  and a rephrasing of the same question counts as the same question. A stored
+  answer is only reused while the code it was derived from is unchanged; edit
+  the files it cited and the next ask investigates again. `--json` reports
+  which happened, under `usage.result_cache_hit`.
+
 The agent can only read what **you** can already read — it runs under your
 identity and the same repository permissions as every other command, so it
-never surfaces a repo you couldn't search yourself.
+never surfaces a repo you couldn't search yourself. That applies to cached
+answers too: nothing is served from the cache before your own authorization
+has been checked against the repositories in question.
 
 ## Troubleshooting
 
