@@ -234,6 +234,22 @@ Two things to expect:
   the files it cited and the next ask investigates again. `--json` reports
   which happened, under `usage.result_cache_hit`.
 
+By default the command prints the answer and nothing else. Pass `--stats` to
+also see what the request cost and how much of that the cache covered — per
+metric, the no-cache total and the share served from storage:
+
+```text
+cache: queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
+input tokens 238142 (reused 105992 / 45%), output tokens 14554
+(reused 6610 / 45%), tool calls 73 (reused 38 / 52%)
+```
+
+A metric with nothing reused shows just its total. The reuse can be partial:
+an investigation reuses whatever stored work still applies — whole
+sub-answers, or earlier investigation steps re-checked against the current
+code — and pays live for the rest. `--json` carries the full breakdown under
+`usage.cost` whether or not `--stats` is set.
+
 The agent can only read what **you** can already read — it runs under your
 identity and the same repository permissions as every other command, so it
 never surfaces a repo you couldn't search yourself. That applies to cached
@@ -302,8 +318,9 @@ and REST API closely (same capabilities, same scoping).
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
-  - `query_codebase(question, repos)` → a written, citation-backed answer to a
-    natural-language question — the MCP form of [`ccx query`](#ccx-query--ask-a-question-get-an-answer).
+  - `query_codebase(question, repos, include_stats?)` → a written,
+    citation-backed answer to a natural-language question — the MCP form of
+    [`ccx query`](#ccx-query--ask-a-question-get-an-answer).
     A server-side agent investigates with the tools above under the caller's
     own permissions and returns Markdown plus any supporting documents.
     The tool is always advertised, but **fails with `agent_query_unavailable`
@@ -311,7 +328,10 @@ and REST API closely (same capabilities, same scoping).
     and the code read to a model provider). It also runs far longer than the
     other tools — up to the agentic deadline, 600 s by default — so give the
     client a generous timeout. Prefer it for open-ended "how/why" questions
-    and the typed tools above for targeted lookups.
+    and the typed tools above for targeted lookups. By default the response
+    carries the answer and the resolved scopes only; `include_stats: true`
+    adds the usage and cache-savings counters, which are operator
+    information a querying agent rarely needs.
 
 Most clients take a remote HTTP MCP server with custom headers, e.g.:
 
