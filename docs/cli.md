@@ -239,9 +239,9 @@ also see what the request cost and how much of that the cache covered — per
 metric, the no-cache total and the share served from storage:
 
 ```text
-cache: queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
+stats: queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
 input tokens 238142 (reused 105992 / 45%), output tokens 14554
-(reused 6610 / 45%), tool calls 73 (reused 38 / 52%)
+(reused 6610 / 45%), tool calls 73 (reused 38 / 52%), 47.8s
 ```
 
 A metric with nothing reused shows just its total. The reuse can be partial:
