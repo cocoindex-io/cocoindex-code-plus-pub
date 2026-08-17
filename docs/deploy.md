@@ -753,6 +753,14 @@ Three consequences to know before you turn it on.
   that repository, and it linearizes against in-flight requests, so nothing
   from before the purge can be written after it.
 
+**Seeing whether it pays.** Every request's audit event carries the full cost
+split — `cost_spent` (what the request actually consumed, model calls and
+tokens included) and `cost_reused` (what it would have cost to recompute the
+work served from the cache) — so fleet-level savings aggregate straight from
+the audit log. Per request, `ccx query --stats` prints the same numbers as
+one line (see [cli.md](cli.md)); the counters never show unless asked, and
+the MCP tool omits them unless called with `include_stats`.
+
 If you change `CCX_EMBED_MODEL`, the server refuses to start until the cache's
 compatibility epoch is bumped in the same release — searching behaves
 differently under a new model, and stored answers must not outlive that. A
