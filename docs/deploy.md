@@ -280,11 +280,13 @@ The install NOTES print the exact service name + port-forward command.
 ## Index config repo
 
 Which repos to index isn't a chart setting — it lives in **config repos** you
-own, one per code-host instance: each `codeHosts` entry names its own
-(`configRepo: { owner, name, gitRef, dir }`; set in
+own. The default layout is one per code-host instance: each `codeHosts` entry
+names its own (`configRepo: { owner, name, gitRef, dir }`; set in
 [Chart configuration](#chart-configuration)), and that repo lists the repos to
 index **from that instance** — so the people who govern an instance's config
-repo control exactly what gets indexed from it. The indexer reads **every
+repo control exactly what gets indexed from it. (Prefer one repo for
+everything? See [Central config repo](#central-config-repo) below.) The
+indexer reads **every
 config file** — `*.yaml`, `*.yml`, `*.json` — under `dir` (at `gitRef`) of each
 config repo, **recursively**, concatenates them, and re-polls on
 `indexer.repoRefreshIntervalSeconds` — so you add or drop repos by committing
@@ -302,10 +304,12 @@ Pick deliberately, because the scan takes **every** file with one of those
 extensions under `dir`: at the root of a repo that also holds tooling files,
 something like `.pre-commit-config.yaml`, `docker-compose.yml`,
 `.github/workflows/ci.yml`, or `package.json` would be parsed as index config.
-A file that doesn't parse makes that instance's config refresh **fail closed**
-— the indexer keeps its last-known-good repo list and logs the error rather
-than indexing a wrong set — so the symptom is "my config edits stopped taking
-effect", not an outage. Use `dir` whenever the repo isn't dedicated.
+A file that doesn't parse makes the config refresh **fail closed** — the
+indexer keeps the previously configured repo set and logs the error rather
+than indexing a wrong set (one bad file pauses config changes for **all**
+config repos until it's fixed; indexing of already-configured repos
+continues) — so the symptom is "my config edits stopped taking effect", not
+an outage or data loss. Use `dir` whenever the repo isn't dedicated.
 
 Each file is a **list** of repo entries, written in YAML:
 
@@ -350,10 +354,12 @@ erroring.
 | `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
 | `max_file_size` | default: `indexer.maxFileSizeBytes`, else 1 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 1 MiB** — a larger value is rejected at parse time (see below) |
 | `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
+| `code_host` | central config repos only | which `codeHosts` instance the repo lives on — see [Central config repo](#central-config-repo) |
 
 An entry's **provider and instance come from the config repo that declares
 it** — the `codeHosts` entry the repo belongs to — so entries carry neither
-(an entry setting `provider` or `instance` is rejected). A bad regex or an
+(an entry setting `provider` or `instance` is rejected; in a central config
+repo, `code_host` selects the instance instead). A bad regex or an
 entry missing both `branches` and `tags` fails the config parse with a clear
 error (nothing is indexed) rather than failing mid-index.
 
@@ -384,6 +390,69 @@ Two behaviors worth knowing, shared with `included_patterns` /
 
 Binary files are never indexed, at any size.
 
+## Central config repo
+
+If your organization prefers **one config repo governing every code host**,
+mark one instance's config repo `scope: central`:
+
+```yaml
+codeHosts:
+  github.com:
+    provider: github
+    baseUrl: https://github.com
+    indexer: { appId: "12345", privateKeySecret: { name: ccx-github-app } }
+    configRepo:
+      owner: acme
+      name: index-configs
+      dir: configs
+      scope: central # ← this repo's entries may name ANY instance below
+  ghes:
+    provider: github
+    baseUrl: https://ghes.example.com
+    indexer: { appId: "7", privateKeySecret: { name: ccx-ghes-app } }
+    # no configRepo — an index target only, declared from the central repo
+```
+
+Entries in a central config repo pick their instance with **`code_host`**,
+whose value is a **`codeHosts` map key** (not a URL). An entry without
+`code_host` belongs to the instance hosting the config repo, so naming it
+explicitly everywhere keeps a central repo uniform:
+
+```yaml
+- repo_owner: acme
+  repo_name: backend
+  branches: main
+  code_host: github.com
+
+- repo_owner: infra
+  repo_name: deploy-tools
+  branches: main
+  code_host: ghes
+```
+
+Notes:
+
+- **Governance:** whoever can merge to the central config repo controls what
+  gets indexed — and thus what becomes searchable — across **every** instance
+  its entries name. That is the point of the layout; set `scope: central`
+  only when that review model is what you want. (With per-instance repos,
+  each instance's owners govern only their own exposure.)
+- **Credentials are unchanged:** the central repo's host only needs read
+  access to that one repo; each instance's own `indexer` credential still
+  reads the repos it indexes.
+- **Mixing is fine:** some instances can keep their own (default,
+  instance-scoped) config repos alongside a central one. A repo declared by
+  **two** config repos is an error — the indexer pauses config changes and
+  logs both declaring repos until you remove one.
+- **Moving an entry between config repos** (e.g. migrating to a central
+  repo): remove it from the old repo, wait one poll cycle, then add it to the
+  new one. Adding before removing trips the duplicate error above (nothing
+  breaks — config changes just pause until it's resolved); the brief absence
+  re-indexes that repo, which is much cheaper than a cold index thanks to
+  warm caches.
+- An instance-scoped config repo (the default) **rejects** `code_host` — the
+  error points at the `scope: central` setting.
+
 ## Chart configuration
 
 These are the **Helm chart** values (which repos to index lives separately, in the
@@ -399,7 +468,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license, wired to both workloads — see [License key](#license-key) |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **env lane only** | the shared bearer token the server accepts and the CLI sends. Required on the **env lane** (`auth.mode: apiKey` with nothing richer set) — empty there means every request is rejected. **Must be empty on the file lane** (`mode: oidc`, `auth.oidc`, any `auth.apiKeys` record, any top-level `authz`/`audit`/`rateLimit` value), where rendering fails otherwise and `auth.apiKeys` records replace it. See [Access](#access-authentication--authorization) |
-| **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
+| **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo) (optional if a [central config repo](#central-config-repo) declares this instance's repos; `scope: central` marks the central one); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
