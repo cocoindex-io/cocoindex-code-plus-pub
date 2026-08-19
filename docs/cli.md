@@ -222,8 +222,7 @@ ccx query "what are the main components?" --json    # exact response model
 
 Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
-answer is Markdown on stdout; some questions also attach longer supporting
-documents, which are printed after the answer.
+answer is Markdown on stdout.
 
 Two things to expect:
 
@@ -334,7 +333,7 @@ and REST API closely (same capabilities, same scoping).
     citation-backed answer to a natural-language question — the MCP form of
     [`ccx query`](#ccx-query--ask-a-question-get-an-answer).
     A server-side agent investigates with the tools above under the caller's
-    own permissions and returns Markdown plus any supporting documents.
+    own permissions and returns a Markdown answer.
     The tool is always advertised, but **fails with `agent_query_unavailable`
     unless the deployment enables the feature** (answering sends the question
     and the code read to a model provider). It also runs far longer than the
