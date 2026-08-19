@@ -1044,24 +1044,30 @@ Keycloak is the reference shape; the realm essentials, portable to any AS:
 The server enforces a per-request deadline (`queryServer.requestDeadlineSeconds`,
 default **60 s**): an over-deadline request is cancelled and answered with a
 clear `503` (or, mid-tool on `/mcp`, a `deadline_exceeded` tool error). For that
-answer to reach the caller, each outer layer must time out *later* than the one
-inside it:
+answer to reach the caller, the transport in between must time out *later* than
+the server:
 
-**client (90) > ingress (75) > server deadline (60 + a ≤5 s grace)**
+**ingress (75) > server deadline (60 + a ≤5 s grace)**
 
-- The chart's defaults implement this: `queryServer.ingress.timeoutSeconds: 75`
-  and the CLI's 90 s default. **If you raise `requestDeadlineSeconds`, raise
-  the outer two as well** — nothing auto-derives them.
+- The chart's default implements this: `queryServer.ingress.timeoutSeconds: 75`.
+  **If you raise `requestDeadlineSeconds`, raise the ingress as well** —
+  nothing auto-derives it.
+- **The ccx CLI needs no retuning.** Its timeouts are deliberately not
+  coordinated with the server: connects fail on a fixed 10 s bound, and the
+  read ceiling is a generous fixed 600 s (1200 s for `ccx query`) that only
+  catches a dead network path or a wedged server — the server's own error
+  always arrives first. A custom REST/MCP client must still keep its own
+  timeout above the chain.
 - **[Agentic query](#agentic-query) has its own, much longer deadline**
   (`agentQuery.requestDeadlineSeconds`, default 600 s) — and one backend
   timeout covers every route, so the ingress must clear *that* one:
-  **client (660) > ingress (630) > agentic deadline (600 + ≤5 s)**. `ccx query`
-  already uses a 660 s client timeout. Raising the ingress budget does not
-  weaken the low-level routes: their own 60 s server deadline still answers
-  first, and the ingress is only the backstop behind it. The chart enforces
-  this at render time — enabling `agentQuery` while leaving the ingress at 75 s
-  fails `helm upgrade` with the required value, rather than deploying a
-  service whose load balancer cuts off the queries it is waiting on.
+  **ingress (630) > agentic deadline (600 + ≤5 s)**. Raising the ingress
+  budget does not weaken the low-level routes: their own 60 s server deadline
+  still answers first, and the ingress is only the backstop behind it. The
+  chart enforces this at render time — enabling `agentQuery` while leaving the
+  ingress at 75 s fails `helm upgrade` with the required value, rather than
+  deploying a service whose load balancer cuts off the queries it is waiting
+  on.
 - The **ingress budget is controller-specific** and the chart emits the right
   form for the classes it knows: `gce`/`gce-internal` get a `BackendConfig`
   with `timeoutSec` attached via the Service (GKE's default backend timeout is

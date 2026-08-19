@@ -35,7 +35,7 @@ deployment.
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`). Optional interactively: prompted once and saved as your default; a one-off `--server` overrides without changing the default |
 | `CCX_API_TOKEN` | your API token — your platform team issues it: a token shared across the deployment, or your own `ccxk_…` key. Both go in this one variable, sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
-| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; per-request client timeout, default **90** — deliberately above the server's own deadline chain so the server's clearer error arrives instead of a client-side cutoff. Keep it above the ingress timeout if your platform team raised the server deadline. [`ccx query`](#ccx-query--ask-a-question-get-an-answer) uses a **660 s** floor instead, matching its much longer server deadline; setting this higher raises that too |
+| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; **debug override** of the client's read ceiling — default **600 s** (**1200 s** for [`ccx query`](#ccx-query--ask-a-question-get-an-answer)), with connects failing on their own fixed 10 s bound. The server enforces and reports its own deadline (`deadline_exceeded`), so the ceiling is deliberately generous and uncoordinated: it only catches a dead network path or a wedged server, and your platform team raising the server deadline needs **no** change here |
 
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
@@ -228,9 +228,9 @@ documents, which are printed after the answer.
 Two things to expect:
 
 - **It is slower.** The agent runs many reads before answering — seconds to a
-  couple of minutes for a broad question, against a 660 s client timeout.
-  Reach for `ccx search`/`grep` when you know what you're looking for, and
-  `ccx query` when you don't.
+  couple of minutes for a broad question, up to the server's agentic deadline
+  (10 min by default). Reach for `ccx search`/`grep` when you know what you're
+  looking for, and `ccx query` when you don't.
 - **It may be turned off.** It is off unless your deployment enables it,
   because answering requires sending your question and the code the agent
   reads to a model provider. When it's off the command exits non-zero with
