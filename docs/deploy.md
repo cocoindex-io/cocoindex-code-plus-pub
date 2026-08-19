@@ -920,7 +920,10 @@ auth:
   oidc:
     issuer: https://your-idp.example.com
     audience: api://ccx                # the API/resource registration's identifier
-    cli: { clientId: ccx-cli }         # the public client `ccx login` uses
+    cli:
+      clientId: ccx-cli                # the public client `ccx login` uses
+      # redirectPorts: [3276, 3277]    # login callback ports (the default) — advertised to the
+                                       #   CLI automatically; register each at the IdP (see below)
   apiKeys:                             # optional: keys for CI/agents, working alongside SSO
     - { id: ci, secretHash: "sha256:<hex>", label: CI, scope: { mode: indexScope } }
 ```
