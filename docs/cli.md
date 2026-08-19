@@ -66,6 +66,16 @@ client id and default server stay, so signing back in takes no flags. CI jobs
 and agents keep using `CCX_API_TOKEN` — on SSO deployments that's an issued key
 of the form `ccxk_<id>_<secret>`.
 
+During a browser login the CLI listens on a local port to catch the redirect
+back from your IdP — and the server tells it which ports to use (typically
+3276/3277), so there is nothing to configure. If every listed port is busy,
+login says so: free one, or — only if your admin registered an alternative
+port — pin it with `--redirect-port <port>` (or `CCX_OIDC_REDIRECT_PORT`).
+On Okta-backed deployments, sign in with `ccx login --scope "ccx.search
+offline_access"` if your admin enabled refresh tokens — Okta issues them
+only for that scope; without it you log in again when the token expires
+(typically an hour).
+
 **Where your token is stored.** In your OS keyring when one is available,
 otherwise in `~/.config/ccx/tokens.json` (created `0600`). `ccx config` reports
 which is in force. The keyring needs an optional package — install it with
@@ -266,6 +276,8 @@ has been checked against the repositories in question.
 | talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
 | `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
 | `no usable keyring backend` | Your token cache is set to `keyring` on a host without one. `ccx config set token-cache auto`, or `CCX_TOKEN_CACHE=file` for one command. |
+| `Cannot bind … login callback port` | Every callback port the server advertises is in use on your machine (another `ccx login`, or an unrelated app). Free one, or pin an admin-registered alternative with `--redirect-port`. |
+| IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin. |
 | version-mismatch warning | Align `ccx` with the server: `uv tool install cocoindex-code-plus==X.Y.Z`. |
 
 ## For agents & automation
