@@ -71,7 +71,7 @@ back from your IdP — and the server tells it which ports to use (typically
 3276/3277), so there is nothing to configure. If every listed port is busy,
 login says so: free one, or — only if your admin registered an alternative
 port — pin it with `--redirect-port <port>` (or `CCX_OIDC_REDIRECT_PORT`).
-On Okta-backed deployments, sign in with `ccx login --scope "ccx.search
+On Okta-backed deployments, sign in with `ccx login --scope "ccx.read
 offline_access"` if your admin enabled refresh tokens — Okta issues them
 only for that scope; without it you log in again when the token expires
 (typically an hour).
