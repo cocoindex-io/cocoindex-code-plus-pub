@@ -32,8 +32,9 @@ either way sign-in stays on your IdP's screen and the server and chart notice
 nothing special (`auth.oidc.issuer` simply points at the AS):
 
 - **An Entra ID tenant your organization already federates to your IdP** —
-  the same composition with **no new component to operate**, and the common
-  answer where Microsoft 365 sign-in already goes through Okta:
+  the same composition with **no new component to operate** (Entra's
+  MCP-sign-in limitation carries over), and the common answer where
+  Microsoft 365 sign-in already goes through Okta:
   [Entra ID → Sign-in federated to another IdP](#sign-in-federated-to-another-idp).
 - **[Keycloak brokering to your IdP](#keycloak)** — a component you operate,
   for estates with no Entra tenant (or that want the AS fully in-house).
@@ -44,8 +45,8 @@ nothing special (`auth.oidc.issuer` simply points at the AS):
 |---|---|---|
 | Entra ID | full authorization server | [Entra ID](#entra-id) — but see its MCP-sign-in limitation |
 | Okta **with** API Access Management | full authorization server | [Okta](#okta-with-api-access-management) |
-| Okta **without** the add-on | login IdP only | [Entra federated to Okta](#sign-in-federated-to-another-idp) if you have a federated Microsoft tenant (no new component) · [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) · or add the add-on and use the direct recipe |
-| Keycloak | full authorization server (and the documented front) | [Keycloak](#keycloak) |
+| Okta **without** the add-on | login IdP only | [Entra federated to Okta](#sign-in-federated-to-another-idp) if you have a federated Microsoft tenant (no new component; Entra's MCP-sign-in limitation applies) · [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) · or add the add-on and use [Okta](#okta-with-api-access-management) directly |
+| Keycloak | full authorization server (and the self-operated front) | [Keycloak](#keycloak) |
 | Google Workspace | login IdP only | [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) |
 | SAML-only IdP | login IdP only | [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) |
 | Auth0, Ping, another OIDC AS | full authorization server | [Any OIDC authorization server](#any-oidc-authorization-server) |
@@ -169,9 +170,10 @@ token's `iss` ends in `/v2.0`, `aud` is the GUID, and `roles` contains
 
 Entra can be the authorization server while **your IdP keeps the sign-in** —
 if your tenant's domain is federated (the standard setup where Microsoft 365
-sign-in already goes through Okta), a user opening the Entra sign-in is
-redirected to your IdP for credentials and returned to Entra, which mints the
-tokens. This is a fully supported shape — for Okta estates without the API
+sign-in already goes through Okta), users in that domain who open the Entra
+sign-in are redirected to your IdP for credentials and returned to Entra,
+which mints the tokens (cloud-only accounts and non-federated domains keep
+the Entra screen). This is a fully supported shape — for Okta estates without the API
 Access Management add-on it is usually the best one: no add-on to buy and no
 Keycloak to operate, and a "sign-in must go through our IdP" security
 requirement is satisfied.
@@ -179,9 +181,11 @@ requirement is satisfied.
 **Everything in the recipe above applies unchanged** — registrations, the app
 role, the values block, the MCP-sign-in limitation. The deltas:
 
-- **Federation is tenant configuration that usually already exists**; if not,
-  setting it up is an IdP-admin task (e.g. Okta's Microsoft 365 integration),
-  independent of ccx.
+- **Federation is tenant configuration this shape assumes you already
+  have** — it is how Microsoft 365 sign-in reaches your IdP today.
+  Federating a domain changes sign-in for every Microsoft workload in it —
+  an org-level identity decision nobody should take on for ccx; if you don't
+  already have it, use [Keycloak in front](#keycloak) instead.
 - **Access management can stay in your IdP**: provision users and groups from
   the IdP into Entra (e.g. Okta group push), then bind the provisioned group
   to the `ccx.read` app role — membership is then edited on the IdP side.
@@ -263,7 +267,8 @@ no such scope.
 ## Keycloak
 
 Keycloak plays **both roles**: your primary authorization server, or the
-documented front for login-only providers. The realm essentials (all of this
+front you operate yourself for login-only providers (the alternative to
+[a federated Entra tenant](#sign-in-federated-to-another-idp)). The realm essentials (all of this
 is one realm's configuration):
 
 - **Resource registration** `api://ccx` — a client with every login flow
