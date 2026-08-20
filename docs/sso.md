@@ -27,10 +27,16 @@ OAuth server issues opaque access tokens and cannot mint tokens for a
 third-party API (its only JWTs are ID tokens, which this server deliberately
 rejects as bearer credentials). Okta's base-tier org server has no custom
 audiences, scopes, or claims. SAML speaks no OAuth at all. For those, you compose an
-authorization server **you** operate in front — the documented shape is
-[Keycloak brokering to your IdP](#keycloak): sign-in stays on your IdP's
-screen, Keycloak mints the API tokens, and the server and chart notice nothing
-special (`auth.oidc.issuer` simply points at Keycloak).
+authorization server in front, and there are **two documented shapes** —
+either way sign-in stays on your IdP's screen and the server and chart notice
+nothing special (`auth.oidc.issuer` simply points at the AS):
+
+- **An Entra ID tenant your organization already federates to your IdP** —
+  the same composition with **no new component to operate**, and the common
+  answer where Microsoft 365 sign-in already goes through Okta:
+  [Entra ID → Sign-in federated to another IdP](#sign-in-federated-to-another-idp).
+- **[Keycloak brokering to your IdP](#keycloak)** — a component you operate,
+  for estates with no Entra tenant (or that want the AS fully in-house).
 
 ## Which recipe applies to you
 
@@ -38,7 +44,7 @@ special (`auth.oidc.issuer` simply points at Keycloak).
 |---|---|---|
 | Entra ID | full authorization server | [Entra ID](#entra-id) — but see its MCP-sign-in limitation |
 | Okta **with** API Access Management | full authorization server | [Okta](#okta-with-api-access-management) |
-| Okta **without** the add-on | login IdP only | [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) — or add the add-on and use the direct recipe |
+| Okta **without** the add-on | login IdP only | [Entra federated to Okta](#sign-in-federated-to-another-idp) if you have a federated Microsoft tenant (no new component) · [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) · or add the add-on and use the direct recipe |
 | Keycloak | full authorization server (and the documented front) | [Keycloak](#keycloak) |
 | Google Workspace | login IdP only | [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) |
 | SAML-only IdP | login IdP only | [Keycloak in front](#fronting-google-workspace-okta-without-the-add-on-or-a-saml-only-idp) |
@@ -158,6 +164,33 @@ is required for `oidc`, and the config-lane rule empties `secrets.apiTokens`.
 **Verify** with [the checklist below](#verifying-before-rollout): the decoded
 token's `iss` ends in `/v2.0`, `aud` is the GUID, and `roles` contains
 `ccx.read`.
+
+### Sign-in federated to another IdP
+
+Entra can be the authorization server while **your IdP keeps the sign-in** —
+if your tenant's domain is federated (the standard setup where Microsoft 365
+sign-in already goes through Okta), a user opening the Entra sign-in is
+redirected to your IdP for credentials and returned to Entra, which mints the
+tokens. This is a fully supported shape — for Okta estates without the API
+Access Management add-on it is usually the best one: no add-on to buy and no
+Keycloak to operate, and a "sign-in must go through our IdP" security
+requirement is satisfied.
+
+**Everything in the recipe above applies unchanged** — registrations, the app
+role, the values block, the MCP-sign-in limitation. The deltas:
+
+- **Federation is tenant configuration that usually already exists**; if not,
+  setting it up is an IdP-admin task (e.g. Okta's Microsoft 365 integration),
+  independent of ccx.
+- **Access management can stay in your IdP**: provision users and groups from
+  the IdP into Entra (e.g. Okta group push), then bind the provisioned group
+  to the `ccx.read` app role — membership is then edited on the IdP side.
+- **Both policy layers apply**: your IdP's sign-on policies at credential
+  time, plus any Entra Conditional Access on top.
+- On the [verification checklist](#verifying-before-rollout), additionally
+  confirm a federated user's token carries the expected claims — in
+  particular the `email` value for mirrored deployments, which must match the
+  code-host SSO NameID byte-for-byte.
 
 ## Okta (with API Access Management)
 
