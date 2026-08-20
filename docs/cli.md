@@ -57,7 +57,7 @@ ccx logout           # drops the cached token
 ```
 
 The server advertises its OAuth client id, so a bare `ccx login` is normally
-all you need. If your deployment doesn't advertise one, the first login asks
+all you need (what your admin registered to make that work: [sso.md](sso.md)). If your deployment doesn't advertise one, the first login asks
 for the id your admin provides — you're prompted in a terminal (or pass
 `--client-id` / set `CCX_OIDC_CLIENT_ID`, or run `ccx config set client-id
 <id>`); it's remembered per server afterwards. `ccx login` also makes that
@@ -278,7 +278,7 @@ has been checked against the repositories in question.
 | `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
 | `no usable keyring backend` | Your token cache is set to `keyring` on a host without one. `ccx config set token-cache auto`, or `CCX_TOKEN_CACHE=file` for one command. |
 | `Cannot bind … login callback port` | Every callback port the server advertises is in use on your machine (another `ccx login`, or an unrelated app). Free one, or pin an admin-registered alternative with `--redirect-port`. |
-| IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin. |
+| IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin ([sso.md → Verifying before rollout](sso.md#verifying-before-rollout) ends with the per-IdP error table). |
 | version-mismatch warning | Align `ccx` with the server: `uv tool install cocoindex-code-plus==X.Y.Z`. |
 
 ## For agents & automation
@@ -371,4 +371,6 @@ claude mcp add --transport http cocoindex-code-plus https://ccx.example.com/mcp 
 header.) Token auth works on every deployment. On SSO (OIDC) deployments an
 MCP client that supports OAuth can instead sign in interactively — the server
 advertises standard protected-resource metadata; your IdP admin pre-registers
-each approved MCP client.
+each approved MCP client. (Exception: Entra-direct deployments cannot serve
+interactive MCP sign-in — [sso.md → Entra ID](sso.md#entra-id); key records
+still work there.)

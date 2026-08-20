@@ -65,6 +65,7 @@ contract). Both are defined in the deploy guide.
 | Embedding provider (your account & API key; LiteLLM) | index + query time | code-chunk text; query text | Choose any provider — Azure OpenAI, or a self-hosted in-VPC endpoint for **zero egress** (default config is an OpenAI model) |
 | `api.keygen.sh` (optional) | license validation (online mode only) | the license key string — nothing else | Use the **offline signed key** → no license egress at all |
 | Your code hosts (GitHub/GitLab) | indexing — **and at query time under `codeHostMirrored`** (short-TTL cached) | repo content at index time; **identity and permission lookups only** at query time — never repo content | Your tokens, your scope |
+| Your IdP / authorization server (under `auth.mode: oidc`) | query-server startup + cached refresh | **fetches only**: OIDC discovery + the JWKS public keys — no customer data is sent | It's your IdP; a self-managed one keeps this in-VPC (private CA via `auth.oidc.caBundleSecret`) |
 
 Nothing else — including third-party libraries: the shipped images pin
 litellm to its bundled model-cost data (`LITELLM_LOCAL_MODEL_COST_MAP=true`),

@@ -11,6 +11,12 @@ endpoint.
   server) on Kubernetes with the
   [`cocoindex-code-plus` Helm chart](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   (public; released versions listed there). For platform / IT teams.
+- **[docs/sso.md](docs/sso.md)** — SSO sign-in (OIDC) provider setup: which
+  role your provider can play (authorization server vs login-only), and the
+  per-provider recipes — Entra ID, Okta, Keycloak (direct or fronting
+  Google Workspace, Okta without its API Access Management add-on, or SAML-only IdPs) — each ending in the
+  Helm values it produces. For IdP admins and the platform engineer pairing
+  with them.
 - **[docs/cli.md](docs/cli.md)** — install and use the `ccx` CLI (and the MCP
   integration) to query an indexed codebase. For engineers and coding agents.
 - **[docs/security.md](docs/security.md)** — security & deployment guide:

@@ -51,7 +51,7 @@ decision table:
 |---|---|---|---|
 | **Evaluating, or a small trusted team** (the default) | shared token | the same shared token | `secrets.apiTokens` — the [quickstart](#quickstart-bundled-postgres-api-key-auth) does exactly this |
 | **Attributable keys, no IdP yet** | a key record each | a key record each | `auth.apiKeys`, `secrets.apiTokens` empty — [minting](#minting-a-key-record) |
-| **Production, on your company IdP** | `ccx login` | key records | `auth.mode: oidc` + `auth.oidc` + `queryServer.publicUrl`, plus records — [setup](#sso-login-oidc--api-key-records) |
+| **Production, on your company IdP** | `ccx login` | key records | `auth.mode: oidc` + `auth.oidc` + `queryServer.publicUrl`, plus records — [setup](#sso-login-oidc) |
 | **… plus per-person repo permissions** | `ccx login` | key records (own scope) | add `authz.mode: codeHostMirrored` + attestations + a permission-check credential — [setup](#code-host-mirrored-authorization) |
 
 **Why two static kinds?** The shared token is the getting-started credential,
@@ -76,7 +76,7 @@ exact trigger list).
 | Mode | What callers present | Notes |
 |---|---|---|
 | `apiKey` **(default)** | the shared token, **or** key records — never both | the server accepts a **set** of shared tokens, so rotation needs no downtime — procedure and one `existingSecret` caveat in [Operate](#operate) |
-| `oidc` | a JWT from your IdP via `ccx login`; key records auto-enable alongside for machines (no extra switch) | needs an IdP that mints **JWT access tokens for a dedicated audience** — Entra ID, Keycloak, Auth0, Ping do; **Okta only with the API Access Management add-on**. **Google Workspace, Okta without that add-on, and SAML-only IdPs do not**, and need [an authorization server in front](#bring-your-own-authorization-server-google-workspace-okta-without-api-access-management-saml-only-idps). Setup: [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| `oidc` | a JWT from your IdP via `ccx login`; key records auto-enable alongside for machines (no extra switch) | needs your IdP to act as the **authorization server** — mint JWT access tokens for a dedicated audience. Not every product can: [sso.md's provider matrix](sso.md#which-recipe-applies-to-you) says which role yours plays and which recipe applies (login-only providers get an authorization server composed in front — same sign-in screen). Server-side setup: [SSO login (OIDC)](#sso-login-oidc) |
 | `none` | nothing | local development only; warns loudly, never expose it |
 
 **Authorization reference — `authz.mode`**
@@ -178,7 +178,7 @@ component holds it. The bottom four apply only if you enable that feature.
 | **Code-host credential** — GitHub App id + PEM, or GitLab token | you create it at your code host | indexer → code host | reading the repos you index |
 | **Postgres URLs** (passwords inline) — a writer and an internal DSN, plus an optional read-only one for the query server | you | both workloads → your database | the index store |
 | *(agentic query)* **Completion-model key** | your model provider | **query server only** → the provider | `ccx query` |
-| *(`oidc`)* **IdP registrations** — an API/resource id and a public CLI client id | your IdP admin | `ccx login` → your IdP → query server | engineers signing in |
+| *(`oidc`)* **IdP registrations** — an API/resource id and a public CLI client id | your IdP admin — recipes in [sso.md](sso.md) | `ccx login` → your IdP → query server | engineers signing in |
 | *(`codeHostMirrored`)* **Permission-check credential** | you create it at your code host | **query server** → code host | checking each caller's repo access |
 | *(`codeHostMirrored`, some topologies)* **Identity-mapping credential** — an enterprise PAT, or a GitLab admin token | you create it at your code host | **query server** → code host | joining an IdP identity to a code-host account |
 
@@ -213,7 +213,7 @@ This path takes the chart's default access model, `apiKey` + `indexScope`
 shared bearer token **you invent here**, your engineers put it in `CCX_API_TOKEN`
 ([cli.md](cli.md)), and anyone holding it can search **everything you index**.
 For company-IdP sign-in instead, read
-[SSO login (OIDC)](#sso-login-oidc--api-key-records) before writing values.
+[SSO login (OIDC)](#sso-login-oidc) before writing values.
 
 Put your values in a gitignored `values-secret.yaml`:
 
@@ -471,7 +471,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo) (optional if a [central config repo](#central-config-repo) declares this instance's repos; `scope: central` marks the central one); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
-| **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc--api-key-records) |
+| **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc), and [sso.md](sso.md) for provider recipes |
 | **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc` plus operator attestations. The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
@@ -908,9 +908,9 @@ web app on another origin that embeds an MCP client needs its origin added to
 `queryServer.mcpExtraAllowedOrigins`. Non-browser clients — the `ccx` CLI and
 coding agents — send no `Origin` header and are unaffected.
 
-### SSO login (OIDC) + API-key records
+### SSO login (OIDC)
 
-The default auth is the shared API token above (`secrets.apiTokens`); [Access](#access-authentication--authorization) has the whole model in one place. To let engineers sign in with your company IdP instead (Okta, Entra ID, Keycloak, …— any OIDC IdP issuing JWT access tokens), switch to `oidc`:
+The default auth is the shared API token above (`secrets.apiTokens`); [Access](#access-authentication--authorization) has the whole model in one place. To let engineers sign in with your company IdP instead, switch to `oidc`. This section is the **operator's half** — the chart values and their semantics; the **provider's half** (what your IdP admin registers at Okta, Entra ID, Keycloak, or a composed authorization server, and the exact values each produces) is [sso.md](sso.md) — it opens with a matrix of which recipe fits your provider. The operator's values:
 
 ```yaml
 queryServer:
@@ -920,6 +920,7 @@ auth:
   oidc:
     issuer: https://your-idp.example.com
     audience: api://ccx                # the API/resource registration's identifier
+                                       #   (Entra: its client-id GUID, not the api:// URI — sso.md)
     cli:
       clientId: ccx-cli                # the public client `ccx login` uses
       # redirectPorts: [3276, 3277]    # login callback ports (the default) — advertised to the
@@ -928,18 +929,52 @@ auth:
     - { id: ci, secretHash: "sha256:<hex>", label: CI, scope: { mode: indexScope } }
 ```
 
-**An entitlement is required by default — plan for it.** The server demands the scope **`ccx.read`** on every OIDC token (`auth.oidc.requiredScope`, read from the `scope` claim by default). It gates every read operation — queries may be answered from, and contribute to, the deployment's answer cache, and cached answers never cross repository-authorization boundaries. A token that validates but lacks it is refused with **`403 insufficient_scope`**, not `401` — so a rollout where nobody mapped that scope fails for *every* user, with an error that looks nothing like "misconfigured entitlement". Which claim carries it is **provider-determined, not a free choice** — validate the claim whose issuance your IdP gates *per user*: on Okta that is the scope itself (`requiredScopeClaim: scp`, `requiredScopeEncoding: array` — access policies grant scopes per user/group at mint time); on Entra ID and Keycloak it is a role (`requiredScopeClaim: roles`, `requiredScopeEncoding: array`) — Entra's `scp` is client-wide *consent* evidence (after one admin consent every tenant user's token carries it), never user entitlement. The per-IdP notes below give the exact registration shape. Opting out stays explicit: `requiredScope: ""` lets any validly-audienced token from your tenant through.
+**An entitlement is required by default — plan for it.** The server demands
+**`ccx.read`** on every OIDC token (`auth.oidc.requiredScope`). It gates every
+read operation, and cached answers never cross repository-authorization
+boundaries.
 
-Your IdP admin registers **two things at minimum**: an **API/resource registration** (its identifier becomes `audience` — it must be distinct from any login client; on Entra the v2 audience is the registration's client-id **GUID**, see the Entra notes) and a **public CLI client** (PKCE, loopback redirect — its id goes in `cli.clientId`). For the CLI client's **redirect URIs**: if your IdP matches redirect URIs exactly, port included (Okta does — it doesn't honor the RFC 8252 any-loopback-port rule), register `http://127.0.0.1:3276/callback` and `http://127.0.0.1:3277/callback` — the server's default callback ports, which it advertises to the CLI automatically so **engineers never configure a port**; `ccx login` binds the first free one. Different ports? Set `auth.oidc.cli.redirectPorts` to match what you registered — the config list and the IdP registration must stay in step, or logins fail with an IdP-side redirect-URI error. IdPs that do honor RFC 8252 (Keycloak) can instead register a port-wildcard loopback URI, which covers the advertised ports too. Engineers then run `ccx login` (see [cli.md](cli.md)); no per-user setup on the server. **Dynamic client registration is deliberately unsupported** (the server rejects it at startup), so any MCP client that signs in *interactively* — rather than presenting a key record's bearer token — needs its own pre-registration as well. For a self-managed IdP with a private CA, add `auth.oidc.caBundleSecret: { name: <secret> }`.
+A token that validates but lacks the entitlement is refused with
+**`403 insufficient_scope`**, not `401` — so a rollout where nobody granted it
+fails for *every* user, with an error that looks nothing like "misconfigured
+entitlement". Opting out stays explicit: `requiredScope: ""` lets any
+validly-audienced token from your tenant through.
 
-**Okta notes.** The registrations above — a custom audience, the `ccx.read` scope, custom claims — live on an Okta **custom authorization server**, which requires the **API Access Management add-on**; without that SKU there is no direct path, and Okta joins the [bring-your-own-authorization-server](#bring-your-own-authorization-server-google-workspace-okta-without-api-access-management-saml-only-idps) estates below. With it: Okta grants scopes in the **`scp` array claim** and stamps no RFC 9068 `typ` header, so set `requiredScopeClaim: scp`, `requiredScopeEncoding: array`, and leave `requireTypAtJwt` off. Okta also issues **refresh tokens only when `offline_access` is requested** — enable the Refresh Token grant on the CLI app, allow the scope in the access policy, and advertise it server-side (`auth.oidc.advertisedScopes: [ccx.read, offline_access]`) so a bare `ccx login` requests it automatically; without it every session ends when the access token expires (typically an hour). Keep the access-policy rule that grants `ccx.read` **conditioned on your entitled group** — a rule granting it to any authenticated user turns the scope into mere consent evidence and defeats the entitlement. Finally, remember Okta's exact redirect-URI matching from the paragraph above (register every advertised `redirectPorts` entry), and assign users or a group to the CLI app — an unassigned user's login fails at Okta regardless of token policy.
+**Which claim carries the entitlement is provider-determined, not a free
+choice** — the server must validate the claim whose issuance your IdP gates
+*per user* (Okta: the scope itself, via access policies; Entra and Keycloak: a
+role). Set `requiredScopeClaim` and `requiredScopeEncoding` to the values your
+provider's recipe in [sso.md](sso.md) states — each recipe ends in the
+complete `auth.oidc` block.
 
-**Entra ID notes.** Entra mints JWT access tokens for custom APIs on every tenant — no add-on needed. Register one API app registration per environment (App ID URI e.g. `api://ccx`) plus the public CLI client, then four Entra-specific facts: **(1)** set `requestedAccessTokenVersion: 2` in the API registration's manifest — v1 tokens carry a different issuer (`sts.windows.net`) and fail validation; with v2 the token's audience is the registration's **client ID (GUID)**, so `auth.oidc.audience` takes that GUID (the `api://…` URI appears only in request scopes). **(2)** **The entitlement rides an app role, not a scope**: create app role `ccx.read` (member type Users/Groups), assign your entitled group on the enterprise application, and enable **"Assignment required?"** so unentitled users fail at sign-in; set `requiredScopeClaim: roles`, `requiredScopeEncoding: array`. Keep one delegated scope purely for token acquisition — Entra's default `user_impersonation` is fine: interactive flows cannot mint a token without a delegated scope, and app-role/scope *values share one namespace per registration* (both cannot be `ccx.read`), so the meaningful name lives on the role. Advertise the request scopes server-side — `auth.oidc.advertisedScopes: ["api://ccx/user_impersonation", "offline_access"]` — Entra accepts only the qualified form in requests and, like Okta, issues refresh tokens only when `offline_access` is requested. **(3)** Set `auth.oidc.cli.resourceIndicator: false`: Entra's v2 endpoints reject the RFC 8707 `resource` parameter (`AADSTS901002`) that `ccx login` otherwise sends. **(4)** Redirect URIs: Entra ignores the port only for the literal hostname `localhost`, and the CLI calls back on `127.0.0.1` — register every advertised port (`http://127.0.0.1:3276/callback`, `http://127.0.0.1:3277/callback`) via the app-registration **manifest** (`replyUrlsWithType`; the portal's Redirect URI box refuses `http://` loopback-IP entries), and enable **"Allow public client flows"** for `ccx login --device`. For mirrored deployments add the `email` **optional claim** to access tokens. **Known limitation — third-party MCP clients:** the MCP spec requires clients to send exactly the `resource` parameter Entra rejects, so spec-conformant MCP clients cannot sign in against an Entra-direct deployment (the ccx CLI is unaffected — the switch above). If third-party MCP clients matter, use the [bring-your-own authorization server](#bring-your-own-authorization-server-google-workspace-okta-without-api-access-management-saml-only-idps) below, which restores full fidelity; the other remedies are upstream (Microsoft accepting the parameter, or the MCP spec relaxing the requirement).
+What your IdP admin registers — and the checklist of what they send back —
+lives per provider in **[sso.md](sso.md)**:
+
+| Provider | Recipe |
+|---|---|
+| Entra ID | [sso.md → Entra ID](sso.md#entra-id) *(read its third-party-MCP limitation first)* |
+| Okta with API Access Management | [sso.md → Okta](sso.md#okta-with-api-access-management) |
+| Keycloak — direct, or fronting Google Workspace / SKU-less Okta / SAML-only IdPs | [sso.md → Keycloak](sso.md#keycloak) |
+| Auth0, Ping, another OIDC AS | [sso.md → Any OIDC authorization server](sso.md#any-oidc-authorization-server) |
+
+Two knobs on the operator side pair with those registrations. **Callback
+ports**: the server advertises `auth.oidc.cli.redirectPorts` (default
+`[3276, 3277]`) to the CLI automatically, so engineers never configure a
+port — but the same ports must be registered at the IdP, so if you change the
+list, change the registration with it, or logins fail with an IdP-side
+redirect-URI error. **Private CA**: for a self-managed IdP, add
+`auth.oidc.caBundleSecret: { name: <secret> }`.
 
 Anything beyond the plain shared token — `oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value (`helm show values` documents them) — moves the whole auth configuration into one server-side config file the chart renders. Note `authz:` is a trigger too, so even `authz: { mode: indexScope }` (the default, set explicitly) flips the lane. Two consequences:
 
 - **`secrets.apiTokens` must then be empty** (the chart refuses to render otherwise): shared bare tokens are replaced by `auth.apiKeys` **records** — each carries only a `sha256:` hash of its secret (safe to keep in values), and the presented token becomes `ccxk_<id>_<secret>`. Records are attributable and individually revocable; rotation is editing the list + `helm upgrade`.
 - **Rate limiting needs to know your ingress**: the chart derives the client-IP extraction strategy from `queryServer.ingress.className` automatically for `gce` (including the trusted GCLB ranges), and for `gce-internal` / `nginx` requires `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress peer CIDRs). Any other ingress class: set `rateLimit.clientIpStrategy` explicitly or rendering fails.
+
+### API-key records
+
+Attributable, individually revocable machine credentials — the model is in
+[Access](#access-authentication--authorization); they work with or without
+`oidc` (and are how CI keeps working on an SSO deployment).
 
 #### Minting a key record
 
@@ -980,6 +1015,10 @@ a re-pointed key would silently re-bind the allowlist to another installation's
 repos.
 
 ### Code-host-mirrored authorization
+
+> The IdP-side half of this mode — making the access token carry your
+> `mappingClaim` byte-identical to the code-host SSO NameID — is in
+> [sso.md → Verifying before rollout](sso.md#verifying-before-rollout).
 
 By default every authenticated caller can search everything indexed (`authz.mode: indexScope` — the index config repo is the access authority, by governing what gets indexed). With **`codeHostMirrored`**, results instead mirror each signed-in engineer's **real code-host permissions**: public repos serve any authenticated user; a private repo serves only callers whose IdP identity maps to a code-host account with read access — and to everyone else it is **indistinguishable from a repo that doesn't exist** (the same 404, no name, no counts). Requires `auth.mode: oidc`. API-key records are deliberately *not* mirrored — a key has no code-host identity; its own `scope` governs it, so CI and agents keep working.
 
@@ -1026,20 +1065,6 @@ gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProv
 ```
 
 `nameId` must byte-match your `mappingClaim` values (typically the SSO email). A `null` `samlIdentityProvider` means the org has no SAML linkage to mirror against — fix that first.
-
-### Bring your own authorization server (Google Workspace, Okta without API Access Management, SAML-only IdPs)
-
-The OIDC integration validates **JWT access tokens minted for a dedicated audience** — an authorization-server capability that Entra ID, Keycloak, Auth0, and Ping provide, and **Okta only with its API Access Management add-on**. Some login providers don't have it: **Google Workspace's** OAuth server issues opaque access tokens and cannot mint tokens for a third-party API (its only JWTs are ID tokens, which this server deliberately rejects as bearer credentials); **Okta without the add-on** has only its org authorization server — no custom audiences, scopes, or claims, and access tokens consumable only by Okta's own APIs; and SAML-only IdPs speak no OAuth at all. For those estates, front the login provider with an authorization server **you** operate — sign-in stays with your IdP (users still see the Google or Okta SSO screen, with your MFA and sign-on policies); the AS brokers the login and mints the API tokens. The server and chart notice nothing special: `auth.oidc.issuer` simply points at your AS. It is also the **full-MCP-fidelity path for Entra estates** — the third-party-MCP limitation in the Entra notes does not apply behind a standards-tolerant AS.
-
-Keycloak is the reference shape; the realm essentials, portable to any AS:
-
-- **Resource registration** `api://ccx` — a client with every login flow disabled; its id is your `audience`. Never use it as a login client.
-- **Audience mapper** on the CLI client adding `api://ccx` to access tokens — single-audience (the server rejects multi-audience tokens unless RFC 9068 `typ` is enforced).
-- **Entitlement** `ccx.read` — either a realm role mapped into a flat array claim (`requiredScopeClaim: roles`, `requiredScopeEncoding: array` — per-user grantable) or a plain OAuth scope (`requiredScopeClaim: scope`, `spaceDelimited`). Either way, keep a `ccx.read` **client scope** attached to the CLI client: `ccx login` requests the scope the server advertises, and that request must be honored even when the entitlement itself rides the `roles` claim.
-- **CLI client** (`cli.clientId`): public, PKCE S256, loopback redirect URIs (`http://127.0.0.1/*` — Keycloak honors the wildcard, covering the server's advertised `redirectPorts` as-is), device grant optional.
-- **Broker** to your IdP — a standard login-app registration there, needing no add-on SKU. For Google: an *internal-only* OAuth client, plus the broker's hosted-domain restriction so only your workspace can sign in. For Okta (or any OIDC IdP): an **OIDC Web App** whose redirect URI is `https://<keycloak-host>/realms/<realm>/broker/<alias>/endpoint`; keep gating sign-in through that app's user/group assignment in Okta.
-- **Mirrored deployments** (`codeHostMirrored`): the access token must carry the claim your `mappingClaim` names (typically `email`), **byte-identical to the code-host SSO NameID** — make the broker import that attribute from the IdP (Keycloak imports email by default; verify on a decoded token before rollout).
-- Keycloak stamps `typ: JWT` rather than `at+jwt` — leave `requireTypAtJwt: false`.
 
 ### Timeout chain
 
