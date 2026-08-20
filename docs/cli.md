@@ -56,10 +56,12 @@ ccx login --device   # device-code flow instead (no local browser, e.g. over SSH
 ccx logout           # drops the cached token
 ```
 
-The first login needs the OAuth client id your admin provides — you're
-prompted for it in a terminal (or pass `--client-id` / set
-`CCX_OIDC_CLIENT_ID`, or run `ccx config set client-id <id>`); it's remembered
-per server afterwards, and `ccx login` also makes that server your saved
+The server advertises its OAuth client id, so a bare `ccx login` is normally
+all you need. If your deployment doesn't advertise one, the first login asks
+for the id your admin provides — you're prompted in a terminal (or pass
+`--client-id` / set `CCX_OIDC_CLIENT_ID`, or run `ccx config set client-id
+<id>`); it's remembered per server afterwards. `ccx login` also makes that
+server your saved
 default (with a printed notice). The token is cached and refreshed
 automatically. `ccx logout` drops the **credential** only — your remembered
 client id and default server stay, so signing back in takes no flags. CI jobs
@@ -71,10 +73,10 @@ back from your IdP — and the server tells it which ports to use (typically
 3276/3277), so there is nothing to configure. If every listed port is busy,
 login says so: free one, or — only if your admin registered an alternative
 port — pin it with `--redirect-port <port>` (or `CCX_OIDC_REDIRECT_PORT`).
-On Okta-backed deployments, sign in with `ccx login --scope "ccx.read
-offline_access"` if your admin enabled refresh tokens — Okta issues them
-only for that scope; without it you log in again when the token expires
-(typically an hour).
+The scopes to request come from the server too — deployments advertise
+them (including `offline_access` where refresh tokens need it, as on Okta
+and Entra), so there is nothing to pass; `--scope` remains a debugging
+override only.
 
 **Where your token is stored.** In your OS keyring when one is available,
 otherwise in `~/.config/ccx/tokens.json` (created `0600`). `ccx config` reports
