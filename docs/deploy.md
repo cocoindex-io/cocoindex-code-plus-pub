@@ -1274,3 +1274,31 @@ Until you restart, pods keep the old value silently — a rotated-but-not-restar
 credential is the first thing to check when a rotation "didn't work". (The
 image-pull secret is the exception: it's read at pull time, so it applies on the
 next image pull with no restart.)
+
+**Resetting the index.** A reset is exceptional, not routine: the engine evolves
+the index in place across releases — schema changes reconcile automatically, and
+removed repos drop their own partitions. Reach for a reset only when release
+notes for your upgrade path call for one, or after changing a permanent identity
+(a code host's `instance` key). It **destroys all index state**: the next start
+re-indexes every repo from scratch, including re-computing embeddings, so expect
+a bootstrap-scale run and the matching embedding-API spend, and plan a window —
+queries fail or return 503 until the rebuild restores the tables.
+
+```bash
+# 1. Stop the indexer (singleton; leave the query server up):
+kubectl -n ccx scale deploy/ccx-cocoindex-code-plus-indexer --replicas=0
+
+# 2. Drop both schemas with a role that owns them (adjust the names if you
+#    overrode CCX_TARGET_DB_SCHEMA / CCX_INTERNAL_DB_SCHEMA):
+#      DROP SCHEMA IF EXISTS ccx CASCADE;
+#      DROP SCHEMA IF EXISTS ccx_internal CASCADE;
+
+# 3. Restart; the first pass recreates everything:
+kubectl -n ccx scale deploy/ccx-cocoindex-code-plus-indexer --replicas=1
+```
+
+To verify the rebuild is clean, run one catch-up pass and check its exit code —
+`ccx-indexer --once` exits non-zero if any component failed during the pass (and
+the pod logs carry `component build failed` lines worth alerting on in any
+deployment; a pass with failures also withholds its index-completeness stamps,
+so the agentic cache never trusts a partially-applied index).
