@@ -36,7 +36,9 @@ talk to, and it answers two independent questions on every request:
 Separate knobs, with a coupling worth knowing up front: mirrored authorization
 needs real per-person identities, so it requires `oidc`.
 
-**Which credential, for whom.** Callers authenticate with one of three things: a
+### Which credential, for whom
+
+Callers authenticate with one of three things: a
 **shared API token** (one string you invent; every caller presents it), an **API
 key record** (a `ccxk_<id>_<secret>` key — labelled, individually revocable,
 scoped), or **SSO through your company IdP** (`ccx login`). You never weigh all
@@ -89,7 +91,9 @@ exact trigger list).
 API-key records are deliberately never mirrored — a key has no code-host
 identity — so each record's own `scope` governs it, and CI keeps working.
 
-**The lane rule.** Two config lanes, never blended — which one you're on decides
+### The lane rule
+
+Two config lanes, never blended — which one you're on decides
 how you supply caller credentials:
 
 - **The env lane** — `auth.mode` alone (`apiKey` or `none`) plus the bare
@@ -155,7 +159,9 @@ reads *before* it has a credential. Swagger/ReDoc are not served at all.
 - For production: an **external Postgres with pgvector** (e.g. Cloud SQL — enable
   the `vector` extension).
 
-**Getting access.** Your CocoIndex representative provides the **CocoIndex Plus
+### Getting access
+
+Your CocoIndex representative provides the **CocoIndex Plus
 license key** and **image pull access** — a revocable **pull token**
 (GitHub-account read grants are possible case-by-case) — contact them to get
 set up. The pull token is the whole credential: registry auth is HTTP Basic, so
@@ -193,7 +199,9 @@ Two that are genuinely easy to conflate:
   [Code-host-mirrored authorization](#code-host-mirrored-authorization) for when
   to split them.
 
-**How credentials are referenced.** Anything the chart never inlines is named as
+### How credentials are referenced
+
+Anything the chart never inlines is named as
 `{ name, key }`, where `key` defaults to `private-key.pem` for App private keys,
 `token` for tokens and PATs, `ca.crt` for CA bundles, and `hmac-key` for the
 audit HMAC key. Every inline secret
@@ -482,7 +490,9 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 | **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
-**Secrets: inline or existingSecret.** Every secret group accepts an
+### Secrets: inline or existingSecret
+
+Every secret group accepts an
 `existingSecret` (name a pre-created k8s Secret — e.g. from your secret manager via
 External Secrets/CSI) instead of an inline value. Prefer that in production.
 
@@ -1039,9 +1049,13 @@ authz:
         - { orgId: <immutable org id>, installationId: <the App's installation id> }
 ```
 
-**App permissions.** Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field also requires administration-read; the pre-flight check below catches it. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
+#### App permissions
 
-**Identity-mapping topologies** — pick the row matching where your SSO linkage lives:
+Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field also requires administration-read; the pre-flight check below catches it. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
+
+#### Identity-mapping topologies
+
+Pick the row matching where your SSO linkage lives:
 
 | Linkage | Extra values | Extra credential |
 |---|---|---|
@@ -1056,9 +1070,13 @@ authz:
 
 The two are required under different conditions. `contextControlReviewCompleted` is required whenever `codeHostMirrored` is on. `instanceBindingContractAccepted` is required only while the deployment declares `codeHosts` instances **and** uses uid-scoped authorization (mirrored mode, or an apiKey `repoAllowlist` scope) — and setting it when nothing needs it is **rejected at startup as dead config**, so it cannot sit in your values as a no-op. It substitutes for mechanical binding guardrails that have not shipped yet, so expect it to become unnecessary in a later release.
 
-**Behavior to expect.** An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso` (mapping and permission answers are cached — roughly an hour and a few minutes respectively — so grants, revocations, and first-time links propagate within those windows plus token lifetime). A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+#### Behavior to expect
 
-**Pre-flight check** (run before the rollout, with an org-owner token): confirm the linkage exists and records the claim you configured —
+An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso` (mapping and permission answers are cached — roughly an hour and a few minutes respectively — so grants, revocations, and first-time links propagate within those windows plus token lifetime). A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+
+#### Pre-flight check
+
+Run before the rollout, with an org-owner token: confirm the linkage exists and records the claim you configured —
 
 ```bash
 gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProvider { externalIdentities(first: 3, membersOnly: true) { nodes { samlIdentity { nameId } user { login } } } } } }'
@@ -1254,14 +1272,18 @@ the table, and **401** without a valid API token — both expected. The indexer 
 **singleton** indexer (`Recreate` — indexing pauses for the restart while the
 query server keeps serving), so pin `<X.Y.Z>` deliberately.
 
-**Rotating the API token.** `secrets.apiTokens.tokens` is a single string (not
+### Rotating the API token
+
+`secrets.apiTokens.tokens` is a single string (not
 a YAML list) that can hold multiple tokens, whitespace/comma/newline-separated. To rotate without downtime: add the new
 token, `helm upgrade`, migrate clients, then drop the old token and upgrade again.
 On the file lane there is no such string — rotate an **`auth.apiKeys` record** by
 editing its `secretHash` (or adding a second record and retiring the first) and
 `helm upgrade`; see [Access](#access-authentication--authorization).
 
-**Rotating `existingSecret`-managed secrets.** Both workloads read credentials
+### Rotating `existingSecret`-managed secrets
+
+Both workloads read credentials
 **at startup only**, and updating a Kubernetes Secret in place changes no pod
 checksum — so a rotation via your secret manager takes effect only after an
 explicit restart:
@@ -1275,7 +1297,9 @@ credential is the first thing to check when a rotation "didn't work". (The
 image-pull secret is the exception: it's read at pull time, so it applies on the
 next image pull with no restart.)
 
-**Resetting the index.** A reset is exceptional, not routine: the engine evolves
+### Resetting the index
+
+A reset is exceptional, not routine: the engine evolves
 the index in place across releases — schema changes reconcile automatically, and
 removed repos drop their own partitions. Reach for a reset only when release
 notes for your upgrade path call for one, or after changing a permanent identity
