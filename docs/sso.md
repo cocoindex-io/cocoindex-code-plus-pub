@@ -73,6 +73,20 @@ per-provider sections below are this list in each vendor's vocabulary:
    (`roles` claim) — Entra's `scp` is client-wide consent evidence, never
    user entitlement. A token without the entitlement is refused
    `403 insufficient_scope`.
+
+   **A second, optional entitlement — `ccx.usage.read`** — grants the
+   organization-wide Insights views (see [insights.md](insights.md)). It rides
+   the *same claim*, gated per user the same way, and is purely **additive**:
+   a token without it keeps everything `ccx.read` allows, including each
+   caller's own repositories' usage figures. Grant it to the few people who
+   should see organization-wide cost and identity drill-down — typically
+   engineering leadership and whoever owns the budget — and to any reporting
+   service account.
+
+   Do **not** add `ccx.usage.read` to `auth.oidc.advertisedScopes` on a
+   scope-carried IdP (Okta): every `ccx login` would then request it, and a
+   user who is not entitled to it would fail to log in at all rather than
+   simply not seeing the extra views.
 4. **Refresh tokens** where sessions should outlive the ~1-hour access token:
    Okta and Entra issue them only when `offline_access` is requested — put it
    in `auth.oidc.advertisedScopes` so a bare `ccx login` requests it;
@@ -115,7 +129,9 @@ registrations):
    Entra's conventional `user_impersonation` is fine. Interactive sign-in
    cannot mint a token without a delegated scope; it carries no entitlement.
 3. On the same registration, **the app role `ccx.read`** (member type
-   *Users/Groups*) — the entitlement. App-role and scope *values* share one
+   *Users/Groups*) — the entitlement. Add a second app role
+   **`ccx.usage.read`** if you want organization-wide Insights, assigned to
+   its own (smaller) group; both roles arrive in the same `roles` claim. App-role and scope *values* share one
    namespace per registration, so the role holds the meaningful name and the
    scope stays a throwaway. On the API's **enterprise application**: assign
    the entitled group to the role and enable **"Assignment required?"** so
