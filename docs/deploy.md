@@ -823,8 +823,16 @@ Three consequences to know before you turn it on.
       python -m cocoindex_code_plus.query_server.agentic.cache.purge \
       --repo acme/service --dry-run   # drop --dry-run to apply
 
-  # Start over.
-  psql -c 'DROP SCHEMA ccx_agentic CASCADE'
+  # Start over — drop the cache's tables, KEEP the schema. The query
+  # server's role owns the tables and rebuilds them at next startup; it
+  # deliberately cannot re-create the schema itself, so a schema drop
+  # would need the provisioning statement run again by the database owner.
+  # (A contract-mismatch error at startup prints this same command with
+  # the exact table list.)
+  psql -c "DO \$\$ DECLARE t text; BEGIN
+    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'ccx_agentic'
+    LOOP EXECUTE format('DROP TABLE IF EXISTS ccx_agentic.%I CASCADE', t); END LOOP;
+  END \$\$;"
   ```
 
   Purge is also the answer to "someone asked something they should not have":
