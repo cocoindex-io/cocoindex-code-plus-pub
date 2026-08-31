@@ -851,6 +851,109 @@ kubectl exec deploy/<release>-query-server -- \
     python -m cocoindex_code_plus.query_server.agentic.cache.backfill --limit 500
 ```
 
+### Usage analytics (ccx Insights)
+
+Usage, cost and savings dashboards for the deployment — **off by default**,
+and no new deployable component when on. The feature guide, including the web
+UI, the CLI, reports and the BI views, is [insights.md](insights.md); this
+section is what a platform team needs to provision it.
+
+```yaml
+usageAnalytics:
+  enabled: true
+  schema: ccx_usage
+  retention:
+    rawDays: 90        # raw request events — the storage driver
+    principalDays: 180 # identity-grain rows, for developer counts
+    rollupDays: 400    # the daily aggregates every chart reads
+  freshness:
+    freshMinutes: 15   # a repository indexed within this reads as "fresh"
+    laggingMinutes: 60 # past this it reads as "lagging"
+```
+
+Nothing leaves your deployment: there is no telemetry endpoint and no vendor
+callback.
+
+**Enabling it also defaults `indexer.cycleSeconds` to 300**, because the
+indexing metrics count cycles and live mode has no pass boundary to count. An
+explicit `indexer.cycleSeconds` (including `0` for live mode) still wins.
+
+**Provisioning.** One schema, two writers, per-table ownership: the indexer
+owns the cycle and freshness tables, the query server owns the request and
+rollup tables, and neither writes the other's. With the bundled Postgres the
+chart runs the statements for you. With your own Postgres, run them once as a
+superuser:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS ccx_usage AUTHORIZATION cocoindex;
+GRANT USAGE, CREATE ON SCHEMA ccx_usage TO ccx_query;
+```
+
+Substitute your own role names — `cocoindex` is whatever the indexer connects
+as, `ccx_query` whatever the query server connects as. The query credential
+must also be able to **read** the indexer's tables in that schema; the chart's
+bundled role holds `pg_read_all_data`, which covers it.
+
+**Enabled but unprovisioned fails startup, loudly** — an analytics feature
+that silently collected nothing would be discovered weeks later from an empty
+dashboard.
+
+#### Capacity
+
+Raw request events are ~99% of the footprint, so one figure sizes it:
+
+> **≈ 50 MB per weekday-active developer** at the 90-day default, measured at
+> 241 bytes per event including indexes.
+
+| Deployment | Steady state |
+|---|---|
+| 50 developers | ≈ 3 GB |
+| 1,000 developers | ≈ 50–60 GB |
+
+Both knobs are linear: request volume and `retention.rawDays`. Halving the raw
+horizon halves the total. The rollups (400-day default) and the indexer's own
+rows are megabytes — the indexer records *cycles that did work*, not every
+poll, so its rows scale with commit activity rather than polling cadence.
+
+Analytics can live on cheaper storage than the index. Point it at another
+database and move the two provisioning statements there with it:
+
+```yaml
+usageAnalytics:
+  # A DSN is a credential. Set inline it lands in the chart's Secret — never
+  # the shared ConfigMap — or point at a Secret you manage that carries the
+  # key `CCX_USAGE_DB_URL` and leave `url` empty.
+  url: postgres://user:pass@analytics-host:5432/ccx
+  # existingSecret: my-analytics-dsn
+```
+
+Provision the schema on that database with the same two statements above, and
+move the query credential's read grant with it.
+
+The schema's own size is reported inside the Indexing view under the storage
+group `usage`, so the cost of analytics is visible in analytics.
+
+#### Who can see what
+
+Per-repository figures need no special entitlement — any caller sees them for
+the repositories they can already query. Organization-wide totals, error
+triage and the identity drill-down need the additive **`ccx.usage.read`**
+entitlement, granted the same way as `ccx.read` ([sso.md](sso.md)) or on an
+API key record:
+
+```yaml
+auth:
+  apiKeys:
+    - id: reporting
+      secretHash: sha256:…
+      label: quarterly reporting job
+      entitlements: [ccx.usage.read]
+```
+
+Granting a BI role `SELECT` on the analytics schema is the **same decision**
+made in a different place: it is organization-wide read. See the SQL-views
+section of [insights.md](insights.md).
+
 ### Exposing the query server
 
 The CLI, agents, and the **MCP** endpoint (`<host>/mcp` — see [cli.md](cli.md))
