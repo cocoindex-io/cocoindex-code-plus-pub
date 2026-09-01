@@ -24,11 +24,11 @@ resource-indicator switch), so on SSO deployments an older `ccx` prompts for
 a client id it shouldn't need, and can fail Entra sign-in with
 `AADSTS901002` — treat both as "upgrade me", not misconfiguration.
 
-Recent builds say so themselves: when the server advertises a login setting
-the CLI doesn't recognise, it warns, names the setting, and points at the
-upgrade — then carries on, since login often still works without it. A CLI
-older than that warning stays silent, which is why the 0.1.34 floor is still
-worth checking by hand when a login fails.
+From **0.1.38 on** the CLI says so itself: when the server advertises a login
+setting it doesn't recognise, it warns, names the setting, and points at the
+upgrade — then carries on, since login often still works without it. An older
+CLI stays silent, which is why the 0.1.34 floor is still worth checking by
+hand when a login fails.
 
 ## Configure
 
