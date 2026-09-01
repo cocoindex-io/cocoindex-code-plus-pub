@@ -34,9 +34,14 @@ Enabling it also defaults `indexer.cycleSeconds` to `300`, because the
 indexing metrics count *cycles* and live mode has no pass boundary to count.
 An explicit `indexer.cycleSeconds` still wins.
 
-With the bundled Postgres the chart provisions the schema for you. With your
-own Postgres, run these two statements once as a superuser (adjust the names
-to match your values):
+With the bundled Postgres the chart provisions the schema for you — but its
+init scripts run **only on a first, empty data directory**. Turning analytics
+on for a deployment whose bundled volume already exists means they never run,
+and the query server fails startup naming the grant it needs. Run the
+statements below by hand in that case.
+
+With your own Postgres, run them once as a superuser (adjust the names to
+match your values):
 
 ```sql
 -- The indexer's credential owns the schema; the query server's is granted
@@ -51,7 +56,8 @@ covered; otherwise grant `SELECT` on the indexer's tables in that schema.
 
 **Enabled but unprovisioned fails startup, loudly.** That is deliberate: an
 analytics feature that silently collected nothing would be discovered weeks
-later, from an empty dashboard.
+later, from an empty dashboard. The error names the exact grant to run, so
+the fix is a copy-paste rather than a diagnosis.
 
 Analytics history lives in its own schema and **survives an index rebuild** —
 dropping and re-indexing your repositories does not reset your usage history.

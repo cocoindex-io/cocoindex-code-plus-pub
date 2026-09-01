@@ -888,9 +888,13 @@ explicit `indexer.cycleSeconds` (including `0` for live mode) still wins.
 
 **Provisioning.** One schema, two writers, per-table ownership: the indexer
 owns the cycle and freshness tables, the query server owns the request and
-rollup tables, and neither writes the other's. With the bundled Postgres the
-chart runs the statements for you. With your own Postgres, run them once as a
-superuser:
+rollup tables, and neither writes the other's.
+
+With the bundled Postgres the chart runs the statements for you — but only on
+a **first, empty data directory**, the same rule as every other init script
+here. Enabling analytics on a deployment whose bundled volume already exists
+means they never run; do it by hand then. With your own Postgres, run them
+once as a superuser:
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS ccx_usage AUTHORIZATION cocoindex;
