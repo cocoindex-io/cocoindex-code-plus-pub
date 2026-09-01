@@ -481,7 +481,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc), and [sso.md](sso.md) for provider recipes |
 | **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc`, operator attestations, and **an `authz.codeHosts` block for every registry instance** (`identityMapping: publicOnly` declares one with no linkage to mirror). The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
-| **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
+| **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}`, `database.provisioning.adminExistingSecret` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod, with a one-time role setup you run once or hand to the chart via `provisioning.adminExistingSecret` — see [Production Postgres](#production-postgres-cloud-sql--external) |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
@@ -551,8 +551,8 @@ database:
 ```
 
 **Give the query server a read-only role** (recommended for production): the
-indexer needs the writer credential, but the query server only reads. Create a
-role such as
+indexer needs the writer credential, but the query server only reads the
+index. Create a role such as
 
 ```sql
 CREATE ROLE ccx_query LOGIN PASSWORD '…';
@@ -560,11 +560,32 @@ GRANT pg_read_all_data TO ccx_query;   -- covers current and future tables
 ```
 
 and point `database.target.queryUrl` (or `queryExistingSecret`, key
-`CCX_TARGET_DB_URL`) at its DSN. The **bundled** Postgres sets this split up
-automatically on first init. Left unconfigured on an external DB, the query
-server falls back to the writer credential. Also run
+`CCX_TARGET_DB_URL`) at its DSN. Left unconfigured on an external DB, the
+query server falls back to the writer credential. Also run
 `CREATE EXTENSION pg_prewarm;` at provisioning (see
 [Postgres memory sizing](#postgres-memory-sizing)).
+
+**Then run the one-time role setup** — two statements, once, as the database
+admin. They are everything a deployment ever needs in the database beyond the
+roles themselves: every schema a feature adds (the answer cache, usage
+analytics) is created at startup by the component that owns it.
+
+```sql
+GRANT CREATE ON DATABASE <your database> TO ccx_query;  -- it creates the schemas it owns
+GRANT ccx_query TO <your writer role>;                  -- the indexer inherits them
+```
+
+The query server owns and creates the schemas it writes; the indexer, a
+member of the query role, writes its own tables into them; and the query role
+never gains write on the index schemas. A component that starts without these
+fails loudly and prints exactly these two statements with your real names.
+Prefer to have the chart apply them? Put an admin DSN (a role that owns the
+database) in a Secret under the key `CCX_ADMIN_DB_URL` and name it in
+`database.provisioning.adminExistingSecret`: a Helm hook then runs the two
+statements before every install and upgrade, reading the role names from
+your workload DSNs (which must be `existingSecret`s). The **bundled**
+Postgres needs none of this — its first init creates the role with these
+grants, and the same hook re-applies them before every upgrade.
 
 > **Cloud SQL trap — the read-only role is not read-only by default.**
 > A user created with `gcloud sql users create` (or the Cloud SQL console)
@@ -791,18 +812,20 @@ agentQuery:
 
 Three consequences to know before you turn it on.
 
-- **The query server becomes a writer — of exactly one schema.** It owns
-  `agentQuery.cache.schema` and creates its tables there at startup; your index
-  schemas keep their read-only grants. With the bundled database the chart
-  provisions this for you. With an **external** database, create it first:
+- **The query server becomes a writer — of a schema it owns.** It creates
+  `agentQuery.cache.schema` and its tables at startup; your index schemas keep
+  their read-only grants. Nothing is provisioned per feature: the
+  [one-time role setup](#production-postgres-cloud-sql--external) (`CREATE`
+  on the database for the query role) is all it needs, and the bundled
+  database already has it. A deployment that would rather not grant `CREATE`
+  on the database can pre-create the schema instead:
 
   ```sql
   CREATE SCHEMA ccx_agentic AUTHORIZATION <your query role>;
-  CREATE EXTENSION IF NOT EXISTS vector;  -- if it is a separate database
   ```
 
-  Startup fails loudly if the role cannot do this — an enabled cache never
-  quietly turns itself off.
+  Startup fails loudly if the role can do neither, printing the statements —
+  an enabled cache never quietly turns itself off.
 
 - **The indexer moves to cycle mode.** A cached answer may only be built from
   an index read the indexer has confirmed complete, and only a *finished* pass
@@ -824,11 +847,11 @@ Three consequences to know before you turn it on.
       --repo acme/service --dry-run   # drop --dry-run to apply
 
   # Start over — drop the cache's tables, KEEP the schema. The query
-  # server's role owns the tables and rebuilds them at next startup; it
-  # deliberately cannot re-create the schema itself, so a schema drop
-  # would need the provisioning statement run again by the database owner.
-  # (A contract-mismatch error at startup prints this same command with
-  # the exact table list.)
+  # server's role owns the tables and rebuilds them at next startup. (With
+  # the one-time role setup in place it could re-create the schema too; a
+  # deployment that pre-created the schema instead cannot, so dropping only
+  # the tables is the command that works everywhere. A contract-mismatch
+  # error at startup prints this same command with the exact table list.)
   psql -c "DO \$\$ DECLARE t text; BEGIN
     FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'ccx_agentic'
     LOOP EXECUTE format('DROP TABLE IF EXISTS ccx_agentic.%I CASCADE', t); END LOOP;
@@ -886,29 +909,21 @@ callback.
 indexing metrics count cycles and live mode has no pass boundary to count. An
 explicit `indexer.cycleSeconds` (including `0` for live mode) still wins.
 
-**Provisioning.** One schema, two writers, per-table ownership: the indexer
-owns the cycle and freshness tables, the query server owns the request and
-rollup tables, and neither writes the other's.
-
-With the bundled Postgres the chart runs the statements for you — but only on
-a **first, empty data directory**, the same rule as every other init script
-here. Enabling analytics on a deployment whose bundled volume already exists
-means they never run; do it by hand then. With your own Postgres, run them
-once as a superuser:
-
-```sql
-CREATE SCHEMA IF NOT EXISTS ccx_usage AUTHORIZATION cocoindex;
-GRANT USAGE, CREATE ON SCHEMA ccx_usage TO ccx_query;
-```
-
-Substitute your own role names — `cocoindex` is whatever the indexer connects
-as, `ccx_query` whatever the query server connects as. The query credential
-must also be able to **read** the indexer's tables in that schema; the chart's
-bundled role holds `pg_read_all_data`, which covers it.
+**Provisioning: nothing per feature.** One schema, two writers, per-table
+ownership: the query server owns the schema and creates it at startup, along
+with its request and rollup tables; the indexer — a member of the query role
+— creates its own cycle and freshness tables inside it; neither writes the
+other's. All of that rests on the
+[one-time role setup](#production-postgres-cloud-sql--external) every
+external Postgres gets (`GRANT CREATE ON DATABASE … TO ccx_query; GRANT
+ccx_query TO <writer>;`); the bundled Postgres has it from its first init and
+re-applies it before every upgrade. There is no analytics-specific SQL to
+run, and no first-init caveat.
 
 **Enabled but unprovisioned fails startup, loudly** — an analytics feature
 that silently collected nothing would be discovered weeks later from an empty
-dashboard.
+dashboard. The error prints the two role statements with your real database
+and role names.
 
 #### Capacity
 
@@ -927,23 +942,9 @@ horizon halves the total. The rollups (400-day default) and the indexer's own
 rows are megabytes — the indexer records *cycles that did work*, not every
 poll, so its rows scale with commit activity rather than polling cadence.
 
-Analytics can live on cheaper storage than the index. Point it at another
-database and move the two provisioning statements there with it:
-
-```yaml
-usageAnalytics:
-  # A DSN is a credential. Set inline it lands in the chart's Secret — never
-  # the shared ConfigMap — or point at a Secret you manage that carries the
-  # key `CCX_USAGE_DB_URL` and leave `url` empty.
-  url: postgres://user:pass@analytics-host:5432/ccx
-  # existingSecret: my-analytics-dsn
-```
-
-Provision the schema on that database with the same two statements above, and
-move the query credential's read grant with it.
-
-The schema's own size is reported inside the Indexing view under the storage
-group `usage`, so the cost of analytics is visible in analytics.
+Analytics lives in the target database beside the index, in its own schema.
+Its size is reported inside the Indexing view under the storage group
+`usage`, so the cost of analytics is visible in analytics.
 
 #### Who can see what
 
