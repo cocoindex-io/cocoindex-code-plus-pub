@@ -17,8 +17,12 @@ uv tool install cocoindex-code-plus     # recommended
 ccx version
 ```
 
-Pin a version for CI/automation (`cocoindex-code-plus==X.Y.Z`); keep it in step
-with the query server you target (the CLI warns on a server version mismatch).
+Pin a version for CI/automation (`cocoindex-code-plus==X.Y.Z`), and keep
+installs current — nothing warns about a stale CLI yet. Login settings are
+fully **discovered from the server** from **0.1.34 on** (client id, scopes,
+callback ports, Entra's resource-indicator switch), so on SSO deployments an
+older `ccx` prompts for a client id it shouldn't need and can fail Entra
+sign-in with `AADSTS901002`: treat both as "upgrade me", not misconfiguration.
 
 ## Configure
 
@@ -279,7 +283,7 @@ has been checked against the repositories in question.
 | `no usable keyring backend` | Your token cache is set to `keyring` on a host without one. `ccx config set token-cache auto`, or `CCX_TOKEN_CACHE=file` for one command. |
 | `Cannot bind … login callback port` | Every callback port the server advertises is in use on your machine (another `ccx login`, or an unrelated app). Free one, or pin an admin-registered alternative with `--redirect-port`. |
 | IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin ([sso.md → Verifying before rollout](sso.md#verifying-before-rollout) ends with the per-IdP error table). |
-| version-mismatch warning | Align `ccx` with the server: `uv tool install cocoindex-code-plus==X.Y.Z`. |
+| login prompts for a client id on an SSO server, or Entra fails with `AADSTS901002` despite `resourceIndicator: false` | Your `ccx` predates server-advertised login settings — upgrade to 0.1.34+: `uv tool install -U cocoindex-code-plus`. |
 
 ## For agents & automation
 

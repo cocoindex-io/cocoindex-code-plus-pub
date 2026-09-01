@@ -480,7 +480,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc), and [sso.md](sso.md) for provider recipes |
-| **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc` plus operator attestations. The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
+| **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc`, operator attestations, and **an `authz.codeHosts` block for every registry instance** (`identityMapping: publicOnly` declares one with no linkage to mirror). The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod — see below |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
@@ -1150,7 +1150,7 @@ By default every authenticated caller can search everything indexed (`authz.mode
 ```yaml
 authz:
   mode: codeHostMirrored
-  attestations:                          # two explicit operator acknowledgments — below
+  attestations:                          # the acknowledgments your routes need — below
     contextControlReviewCompleted: true
     instanceBindingContractAccepted: true
   codeHosts:
@@ -1164,6 +1164,29 @@ authz:
         - { orgId: <immutable org id>, installationId: <the App's installation id> }
 ```
 
+**The mode is deployment-wide, so every registry instance needs a block.**
+`authz.mode` is one setting for the deployment, and startup **refuses** a
+`codeHosts` registry entry with no matching `authz.codeHosts` block —
+an unconfigured instance could not be permission-checked, so every non-public
+repo on it would fail closed with nothing saying why. A deployment spanning
+instances with different linkage (a GHES instance mirrored, a github.com org
+whose engineers use personal accounts) declares the linkage-less one
+**`identityMapping: publicOnly`**: every principal is unmapped there, so its
+public repos serve everyone and its private repos serve no one, while the
+mirrored instance works normally.
+
+```yaml
+    github.com:
+      identityMapping: publicOnly        # no linkage to mirror: public repos serve, private ones don't
+      permissionCredential: { appId: "<app id>", privateKeySecret: { name: ccx-github-app } }
+      approvedOrgs: [ { orgId: <immutable org id>, installationId: <installation id> } ]
+```
+
+`publicOnly` still needs the App credential and `approvedOrgs` — deciding a
+repo *is* public is itself a verified code-host read, and it is made against
+approved installations only. It takes no `mappingClaim` and no mapping
+credential; naming one is rejected at startup rather than sitting inert.
+
 #### App permissions
 
 Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field also requires administration-read; the pre-flight check below catches it. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
@@ -1176,28 +1199,172 @@ Pick the row matching where your SSO linkage lives:
 |---|---|---|
 | GitHub org-level SAML (common case) | — (the block above) | none — the App reads the org's `externalIdentities` itself |
 | GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
+| **GHES, usernames managed by your IdP** (the GHES default — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim carrying the GHES login>` + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
+| **GHES with SCIM provisioning** ([below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` |
 | GitLab | `externProvider: <extern_uid provider, e.g. saml>`; `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
+| **No linkage to mirror** (personal accounts, no SSO) | `identityMapping: publicOnly` — public repos serve everyone, private ones no one | none |
 
-**The two attestations** are deliberate, named acknowledgments of facts the server cannot verify itself, so it refuses to start without the one your configuration needs (which is which is spelled out after the two):
+There is no `identityMapping` value named after a code host: the value is
+`codeHostLookup` (the code host stores the linkage; we look it up), `claim`
+(the token carries the code-host identity), or `publicOnly`. Which *lookup*
+runs under `codeHostLookup` follows from the instance — its provider, whether
+its host is github.com, and whether you mounted a mapping credential.
+
+##### GHES: instance-wide SAML
+
+GHES authenticates at the instance level, so `organization.samlIdentityProvider`
+— the field the github.com route reads — is always `null` there, whatever your
+SSO looks like. Two routes work instead, and **which one you can use depends on
+whether SCIM provisioning is enabled on the instance**; find that out first,
+because it decides both the credential and which claim your tokens must carry.
+
+- **Without SCIM — the GHES default.** `identityMapping: claim` with
+  `identityClaimType: username`, plus the `ghesManagedUsernames` attestation.
+  The claim must carry the **GHES login**, and the attestation is your
+  statement that logins are IdP-derived and users cannot rename themselves
+  (otherwise a username is a pointer someone else can re-point). No extra
+  credential: the login is resolved to the immutable numeric user id and
+  everything keys on that.
+- **With SCIM — the attested exception.** `identityMapping: codeHostLookup`
+  plus `identityMappingCredential.patSecret` and the `ghesScimPatAccepted`
+  attestation. The credential is an **enterprise-owner classic PAT with
+  `scim:enterprise`** — GHES's instance SCIM API does not accept GitHub App
+  callers. That PAT can also *provision and deprovision* identities, which is
+  why enabling this route requires attesting to it: you are accepting a
+  provisioning-capable credential in the read path.
+
+  The join is against the SCIM **`userName`** — not the SAML NameID, not
+  `externalId`, not an `emails[]` entry. Your `mappingClaim` value goes into a
+  `userName eq "…"` filter, the result is re-compared **byte-for-byte** by the
+  server, the record must be `active`, and its `userName` is then resolved to
+  the immutable numeric user id. Case differences are not folded: a
+  case-variant is treated as no match, i.e. unmapped. (`mappingNormalization:
+  lowercaseEmail` lowercases the *claim* side only, so it helps only where the
+  stored `userName` is already lowercase.)
+
+`codeHostLookup` **without** a mapping credential is the org-level route and is
+rejected at startup on a GHES instance, naming these alternatives — it would
+otherwise start cleanly and fail every private-repo check with a `503`.
+
+Nothing requires the IdP minting your tokens to be the IdP your code host
+federates to: a deployment can take tokens from Entra ID while GHES takes SAML
+from Okta. What must line up is the *value* — the claim you name must equal the
+stored `userName` (or login) byte-for-byte, so pick the claim that carries it
+([sso.md](sso.md) covers what each IdP can emit).
+
+#### Attestations
+
+**Two attestations** are deliberate, named acknowledgments of facts the server cannot verify itself, so it refuses to start without the one your configuration needs (which is which is spelled out after the two):
 
 - `contextControlReviewCompleted`: you reviewed whether context controls (org/enterprise IP allowlists, IdP conditional access) guard your code host, and either none are in use or you re-imposed the equivalent at this deployment's own front door. No server-side check can see a caller's device or source IP the way your code host does.
 - `instanceBindingContractAccepted`: you accept the **instance-key binding contract** as an organizational rule — a `codeHosts` key is permanently bound to one installation; never re-point its `baseUrl` and never reuse a key (relocation = a new key + a reindex). Mirrored decisions are keyed by `{provider}:{instance}:{repo id}`, so a re-pointed key would evaluate *another installation's* same-numbered repos. Every startup logs an `instance-binding snapshot` line — diff it across rollouts.
 
 The two are required under different conditions. `contextControlReviewCompleted` is required whenever `codeHostMirrored` is on. `instanceBindingContractAccepted` is required only while the deployment declares `codeHosts` instances **and** uses uid-scoped authorization (mirrored mode, or an apiKey `repoAllowlist` scope) — and setting it when nothing needs it is **rejected at startup as dead config**, so it cannot sit in your values as a no-op. It substitutes for mechanical binding guardrails that have not shipped yet, so expect it to become unnecessary in a later release.
 
+Three more attestations exist, each required only by the route that reads it,
+and each described in its topology row above: `ghesScimPatAccepted` (the GHES
+SCIM route's provisioning-capable PAT), `ghesManagedUsernames` and
+`gitlabManagedUsernames` (a username claim is authoritative only where your IdP
+controls usernames and self-rename is off). Startup names the missing one.
+
 #### Behavior to expect
 
-An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso` (mapping and permission answers are cached — roughly an hour and a few minutes respectively — so grants, revocations, and first-time links propagate within those windows plus token lifetime). A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+
+Two consequences worth planning for:
+
+- **An unmapped engineer is quietly under-granted, not refused.** No error
+  distinguishes "your identity does not map" from "you have no access to that
+  repo" — both are the same 404. So a mapping mistake looks like a quiet,
+  partial rollout rather than a failure, which is why the verification below
+  matters more here than it would for a setting that breaks loudly.
+- **A renamed or transferred repository answers `503` until it is reindexed.**
+  Checks are anchored to the immutable repo id, and when the stored
+  owner/name no longer resolves the fallback needs a `node_id` the indexer
+  does not persist yet — so the check reports "cannot determine" rather than
+  guessing. It fails closed and logs a line naming the repo. On instances
+  where teams rename repositories often, expect this until the reindex.
+
+Caching sets how fast a change reaches callers: **permission decisions 300 s**
+(`authz.permissionDecisionCacheTtlSeconds`) and **identity mappings 3600 s**
+(`authz.identityMapCacheTtlSeconds`). A grant, a revocation, or a first-time SSO
+link propagates within its window plus the access token's remaining lifetime.
+
+**Request cost**, for sizing the App's rate budget: a *cold* decision for one
+(engineer, repo) pair costs 4 code-host calls — locate the installation, fetch
+and id-verify the repo, resolve the id to a login, read the collaborator
+permission — plus, once per engineer per mapping TTL, the identity lookup (2
+calls on the GHES SCIM route). A public repo settles in 2. Within the decision
+TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
+worst case is ~40 calls fully cold and zero warm; `ccx repos` checks each
+indexed repo once per TTL window, at most `authz.listReposCheckConcurrency`
+(default 10) in flight. Size the envelope as active engineers × indexed repos
+per TTL window. On GHES the ceiling is your instance's own rate-limit setting
+(often disabled by default) rather than a per-installation hourly quota.
 
 #### Pre-flight check
 
-Run before the rollout, with an org-owner token: confirm the linkage exists and records the claim you configured —
+Before the rollout, confirm the linkage exists and records the exact value your
+claim carries. The query is per topology — each one only sees its own level.
+
+**GitHub org-level SAML** (org-owner token):
 
 ```bash
 gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProvider { externalIdentities(first: 3, membersOnly: true) { nodes { samlIdentity { nameId } user { login } } } } } }'
 ```
 
-`nameId` must byte-match your `mappingClaim` values (typically the SSO email). A `null` `samlIdentityProvider` means the org has no SAML linkage to mirror against — fix that first.
+`nameId` must byte-match your `mappingClaim` values (typically the SSO email). A `null` `samlIdentityProvider` means this **org-scoped** query sees no org-level SAML linkage. On github.com with org-level SAML that is the thing to fix before going further. But `null` is also what the query returns when the linkage legitimately lives somewhere this query cannot see — use the matching check instead:
+
+**GHES with SCIM** (the `scim:enterprise` PAT), which is instance-scoped, so the
+org query above always returns `null` regardless of your SSO:
+
+```bash
+curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/scim/v2/Users?filter=userName%20eq%20%22<the-claim-value>%22'
+```
+
+One `active` result whose `userName` equals your claim value byte-for-byte is a
+pass; an empty `Resources` list means that engineer would be unmapped. A `404`
+or `403` on this path usually means SCIM provisioning is not enabled on the
+instance — in which case this route is unavailable and the username route
+applies.
+
+**GHES without SCIM**, and **enterprise-level SAML / EMU**: there is no
+server-readable linkage query to run. Verify by decoding a test user's token
+and confirming the claim you named carries exactly their GHES login (or, for
+enterprise SAML, their linked identity) — [sso.md → Verifying before
+rollout](sso.md#verifying-before-rollout).
+
+#### Verifying a rollout
+
+There is **no dry-run or preview mode**: nothing reports, ahead of enforcement,
+which repositories each engineer would get. Verify it this way instead.
+
+**Before enforcing**, in a non-production deployment with the same values, run
+`ccx repos` as a test user. Under mirrored mode that listing *is* the
+authorization walk, so it enumerates exactly what that principal may read —
+check one engineer who should see a private repo and one who should not.
+
+**Once enforcing**, the audit stream carries the answer for real traffic. The
+query server emits a structured `repo_decision` JSON event per named repository
+on the `cocoindex_code_plus.audit` logger, carrying the principal, the
+operation, the outcome (`allow` / `deny` / `indeterminate`), and — whenever
+authorization actually ran — the repository uid in plain text. Aggregating
+`allow` events by principal reconstructs precisely what each engineer was
+granted; `deny` and `indeterminate` show what was withheld and what could not be
+determined. Three caveats:
+
+- it is **post-enforcement and traffic-driven** — it says nothing about an
+  engineer who has not searched yet;
+- **identity mapping is deliberately not in the audit stream** (no mapped
+  account ids), so an unmapped engineer appears only as an ordinary run of
+  `deny` decisions;
+- consequently **an absence of denials is not evidence that mapping works** —
+  pair the audit view with the `ccx repos` check above.
+
+Two log lines are worth alerting on: the mapping tripwire, warning that a
+principal re-resolved to a *different* immutable account id (an upstream rebind
+or directory churn), and the `instance-binding snapshot` emitted at every
+startup — diff it across rollouts to detect a re-pointed instance key.
 
 ### Timeout chain
 

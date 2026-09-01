@@ -53,10 +53,16 @@ Per deployment, one of two modes:
     (index-wide or an explicit repo list), never mirrored — a key has no
     code-host identity. Issue them accordingly.
 
-Enabling mirrored mode requires two named operator attestations
-(`authz.attestations.*`) — explicit acknowledgments of facts the server
-cannot verify itself (the context-control review; the instance-key binding
-contract). Both are defined in the deploy guide.
+Enabling mirrored mode requires named operator attestations
+(`authz.attestations.*`) — explicit acknowledgments of facts the server cannot
+verify itself. **`contextControlReviewCompleted`** (the context-control review)
+is required whenever the mode is on; **`instanceBindingContractAccepted`** (the
+instance-key binding contract) is required alongside a code-host registry.
+Individual identity-mapping routes require one more —
+`ghesScimPatAccepted`, `ghesManagedUsernames`, `gitlabManagedUsernames`. The
+server refuses to start without the ones your configuration needs and names
+them; all are defined in
+[the deploy guide](deploy.md#code-host-mirrored-authorization).
 
 ## Network egress — the complete list
 
