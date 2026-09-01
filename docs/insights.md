@@ -34,30 +34,25 @@ Enabling it also defaults `indexer.cycleSeconds` to `300`, because the
 indexing metrics count *cycles* and live mode has no pass boundary to count.
 An explicit `indexer.cycleSeconds` still wins.
 
-With the bundled Postgres the chart provisions the schema for you — but its
-init scripts run **only on a first, empty data directory**. Turning analytics
-on for a deployment whose bundled volume already exists means they never run,
-and the query server fails startup naming the grant it needs. Run the
-statements below by hand in that case.
-
-With your own Postgres, run them once as a superuser (adjust the names to
-match your values):
+There is no analytics-specific provisioning. The query server creates the
+schema at startup and the indexer writes its own tables into it; what that
+rests on is the one-time role setup every deployment already has — two
+statements, run once as the database admin
+([deploy.md § Production Postgres](deploy.md#production-postgres-cloud-sql--external)):
 
 ```sql
--- The indexer's credential owns the schema; the query server's is granted
--- CREATE so each service makes and maintains its own tables.
-CREATE SCHEMA IF NOT EXISTS ccx_usage AUTHORIZATION cocoindex;
-GRANT USAGE, CREATE ON SCHEMA ccx_usage TO ccx_query;
+GRANT CREATE ON DATABASE <your database> TO ccx_query;
+GRANT ccx_query TO <your writer role>;
 ```
 
-The query credential also needs to read the indexer's analytics tables. If it
-holds `pg_read_all_data` (the chart's bundled role does) that is already
-covered; otherwise grant `SELECT` on the indexer's tables in that schema.
+The bundled Postgres has them from its first init and re-applies them before
+every upgrade, so there is no first-init caveat either.
 
 **Enabled but unprovisioned fails startup, loudly.** That is deliberate: an
 analytics feature that silently collected nothing would be discovered weeks
-later, from an empty dashboard. The error names the exact grant to run, so
-the fix is a copy-paste rather than a diagnosis.
+later, from an empty dashboard. The error prints the two statements with your
+real database and role names, so the fix is a copy-paste rather than a
+diagnosis.
 
 Analytics history lives in its own schema and **survives an index rebuild** —
 dropping and re-indexing your repositories does not reset your usage history.
@@ -238,21 +233,8 @@ The two knobs that matter are both linear: request volume and
 the indexer records *cycles that did work*, not every poll.
 
 The schema's own size shows up in the Indexing view's footprint under the
-group `usage`, so the cost of analytics is visible inside analytics.
-
-To put analytics on cheaper storage than the index, point it at another
-database and move the grants with it:
-
-```yaml
-usageAnalytics:
-  # A DSN is a credential: set inline it lands in the chart's Secret (never a
-  # ConfigMap), or name your own Secret carrying the key CCX_USAGE_DB_URL.
-  url: postgres://…
-  # existingSecret: my-analytics-dsn
-```
-
-Provision the schema on that database with the same two statements, and move
-the read grant with it.
+group `usage`, so the cost of analytics is visible inside analytics. It lives
+in the target database beside the index, in its own schema.
 
 ## Reading the numbers honestly
 
