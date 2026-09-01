@@ -1,10 +1,12 @@
 # CocoIndex Code Plus — Security & Deployment Guide
 
 For customer security and platform teams. Everything here is verifiable in
-the shipped artifacts. *Applies to CocoIndex Code Plus **v0.1.8 and later**
-(earlier releases predate some hardening described here: default audit-log
-emission, MCP audit lines, disabled interactive-docs routes, and the litellm
-egress pin).*
+the shipped artifacts. *Applies to CocoIndex Code Plus **v0.1.29 and later**.
+Earlier releases predate parts of what follows: the interactive-docs routes
+were disabled and the litellm egress pinned in **v0.1.8**, the structured JSON
+audit stream arrived in **v0.1.14**, agentic query — off by default — in
+**v0.1.24**, and its answer-only response form plus the optional answer cache
+in **v0.1.29**.*
 
 ## Architecture & trust model
 
@@ -22,7 +24,10 @@ Code chunk text and embedding vectors; full file bodies; file paths; SHA-1
 content/commit identifiers; branch/tag names; repository owner/name;
 language; line/column positions. **Not extracted:** git author names,
 emails, commit messages — the schema contains no developer-identity fields.
-Retention is entirely yours (your database, your logs).
+With the optional [agentic-query answer cache](#agentic-query--off-by-default)
+enabled, one more schema holds callers' questions and the generated,
+source-derived answers and investigation records. Retention is entirely yours
+(your database, your logs).
 
 ## Who can read which repos (authorization)
 
@@ -63,6 +68,7 @@ contract). Both are defined in the deploy guide.
 | Destination | When | Content | Your control |
 |---|---|---|---|
 | Embedding provider (your account & API key; LiteLLM) | index + query time | code-chunk text; query text | Choose any provider — Azure OpenAI, or a self-hosted in-VPC endpoint for **zero egress** (default config is an OpenAI model) |
+| Completion provider for [agentic query](deploy.md#agentic-query) (your account & API key; LiteLLM) — **off by default** | query time, only while `agentQuery.enabled` | the caller's question, the tool schemas, the source snippets the agent chooses to read, and that request's conversation history | Off unless you turn it on; the model is operator configuration, never caller-selected. Credentials reach the **query server only**, never the indexer. See [AI/ML data handling](#aiml-data-handling) |
 | `api.keygen.sh` (optional) | license validation (online mode only) | the license key string — nothing else | Use the **offline signed key** → no license egress at all |
 | Your code hosts (GitHub/GitLab) | indexing — **and at query time under `codeHostMirrored`** (short-TTL cached) | repo content at index time; **identity and permission lookups only** at query time — never repo content | Your tokens, your scope |
 | Your IdP / authorization server (under `auth.mode: oidc`) | query-server startup + cached refresh | **fetches only**: OIDC discovery + the JWKS public keys — no customer data is sent | It's your IdP; a self-managed one keeps this in-VPC (private CA via `auth.oidc.caBundleSecret`) |
@@ -74,7 +80,8 @@ suppressing an import-time metadata fetch the library would otherwise make
 your own images or run outside our containers, set that variable too.
 
 **Fully air-gapped recipe:** mirror the images to your registry + offline
-license key + in-VPC embedding endpoint.
+license key + in-VPC embedding endpoint + `agentQuery` left off (the default),
+or pointed at a tool-calling model you host.
 
 ## Deployment hardening checklist
 
@@ -104,27 +111,101 @@ license key + in-VPC embedding endpoint.
 - **Pods:** images run as a non-root user (uid 10001); set your
   `securityContext`/`runAsNonRoot`, resource limits, and NetworkPolicy per
   your cluster standards (the service needs only: ingress from clients,
-  egress to your Postgres, code hosts, the embedding endpoint — and
-  `api.keygen.sh` if you use online license mode).
+  egress to your Postgres, code hosts, the embedding endpoint — plus the
+  completion endpoint if you enable `agentQuery`, and `api.keygen.sh` if you
+  use online license mode).
 
 ## Logging & audit
 
 Both components log to stdout/stderr for your pipeline. The query server
-emits HTTP access logs (auth failures visible as 401s) and a per-request
-**audit record** on every served operation — REST and MCP. The exact
-formats:
+emits HTTP access logs (auth failures visible as 401s) and a **structured
+JSON audit stream** for your SIEM to ingest. There is no audit store we own
+or can read. REST and MCP feed the same stream; a `route_class` field
+distinguishes them.
+
+Audit events go to the process's **standard error** under the logger name
+`cocoindex_code_plus.audit` — one event per line, as a single JSON object
+after the standard log prefix, so a collector can select the stream by that
+name and take everything from the first `{`:
 
 ```
-audit principal=<s> search query=<q> repo=<r> git_ref=<ref> results=<n>
-audit principal=<s> grep repo=<r> git_ref=<ref> language=<l> pattern=<p> matches=<n>
-audit principal=<s> read_file repo=<r> git_ref=<ref> path=<p> lines=<a>-<b>
-audit principal=<s> find_files repo=<r> git_ref=<ref> patterns=<p> total=<n>
-audit principal=<s> list_git_refs repo=<r> refs=<n>
+2026-08-13 09:14:22,418 INFO cocoindex_code_plus.audit: {"event":"request", …}
 ```
 
-MCP tool calls emit the same lines with an `mcp <tool>` operation token.
-Note that **query text appears in these logs** — apply your normal log
-retention and access controls.
+The examples below show the JSON bodies alone. There are exactly **two**
+record kinds.
+
+**A terminal `request` event, exactly one per request, whatever the
+outcome.** It is emitted by the outermost middleware, so a rejection at any
+stage — oversized URI, Origin, pre-auth, admission, authentication,
+deadline — still produces exactly one, carrying the correlation id assigned
+before any of them ran:
+
+```json
+{"event":"request","ts":"2026-08-13T09:14:22.418Z","correlation_id":"f9045689f8cb46b68a50066784612758","route_class":"code","operation":"semantic_search","status":200,"authn_outcome":"success","principal":"ccx:apikey/analytics-team","named_input_count":1,"resolved_repo_keys":["github:github.com:acme/web"],"result_count":3,"free_text":{"query":"[redacted]"}}
+```
+
+`operation` is `semantic_search`, `code_grep`, `read_file`, `find_files`,
+`find_definitions`, `find_references`, `list_git_refs`, `list_repos`, or
+`agent_query` — `null` when the request was rejected before routing.
+`authn_outcome` is `success` / `failure` / `not_attempted`. Optional fields
+appear when they apply: `azp` / `act` (client and actor identifiers),
+`candidates_examined` (the `list_repos` page walk), `result_paths`, `agent`
+(agentic-query counters — see [AI/ML data handling](#aiml-data-handling)),
+and `tool_code` — an MCP tool error's code. Worth a rule in your SIEM: MCP
+reports tool failures *inside* a successful response, so a failed MCP call
+carries `status: 200` and its `tool_code`, not an HTTP error status.
+
+**A `repo_decision` event per named repo the request actually processed** —
+emitted at the authorization seam, joined to its request by
+`correlation_id`:
+
+```json
+{"event":"repo_decision","ts":"2026-08-13T09:14:22.402Z","correlation_id":"f9045689f8cb46b68a50066784612758","principal":"ccx:apikey/analytics-team","operation":"semantic_search","outcome":"deny","repo_key":"github:github.com:acme/api"}
+```
+
+`outcome` is `allow` / `deny` / `indeterminate` when authorization ran (the
+repo uid is present), or `not_resolved` / `ambiguous` when the name never
+resolved (no uid exists, so the caller's input string appears instead, under
+the free-text policy below). This is what makes the uniform `404` legible to
+**you** without leaking anything to the caller: audit records each processed
+input's real decision, while the client sees one indistinguishable 404.
+Inputs the request short-circuited before processing have no decision event —
+the terminal event's `named_input_count` exposes the gap.
+
+Always logged in the clear: principal ids, repo uids, operation names,
+decision outcomes, counts, status, and `authn_outcome`. **Never** logged: raw
+claims and token material. The client/actor identifiers (`azp`, `act`) are
+recorded only from a token that *validated* — a failed validation's claims are
+attacker-controlled text.
+
+### Caller free text is redacted by default
+
+`audit.freeText` governs **all** caller-supplied free text uniformly — query
+text, grep patterns, path globs, `read_file` / `find_files` paths, and symbol
+targets. (A toggle that redacted the query while logging the grep pattern
+would redact nothing.)
+
+| `audit.freeText` | Rendered as | Notes |
+|---|---|---|
+| `redact` — **the default** | `[redacted]` | nothing the caller typed reaches the log |
+| `hmac` | `hmac:<32 hex chars>` | a **keyed** HMAC-SHA-256: stable per key, so an analyst can correlate repeated queries without reading them. Requires `audit.hmacKeySecret` — an unkeyed digest of low-entropy text would be dictionary-invertible by anyone reading the SIEM, so the server refuses `hmac` without key material |
+| `plain` | verbatim | development only |
+
+A separate `audit.logResultPaths` (default `false`) decides whether
+result-derived filenames, refs, and aliases are logged at all; when enabled
+they still pass through the same policy. These keys live in the chart's
+`audit:` block — setting any of them moves auth configuration onto the chart's
+file lane ([Chart configuration](deploy.md#chart-configuration)).
+
+Even at the default the stream still identifies **who** searched **which
+repo**, so apply your normal log retention and access controls to it.
+
+One scope limit, stated plainly: the redaction promise above covers the
+**application audit stream**. Repo aliases ride in URL paths (e.g.
+`GET /repo/v0/git_refs/{repo}`), so they appear in your ingress and
+web-server **access logs** regardless of any audit setting — retention and
+redaction there are yours.
 
 ## Supply-chain verification
 
@@ -183,13 +264,87 @@ for that subtree.
 
 ## AI/ML data handling
 
-The product's only AI use today is **text-embedding inference** for semantic
-code search. CocoIndex trains no models and **never trains on customer
-data**. All model calls go exclusively to the endpoint *you* configure under
-*your* key — including asynchronous indexing-time calls. Future inference
-capabilities (e.g., code summarization, agentic query decomposition) are
-governed by the same invariants: customer-keyed endpoints only, air-gap
-compatible or disableable, data flows documented here **before** release.
+CocoIndex trains no models and **never trains on customer data**. Every model
+call goes exclusively to an endpoint *you* configure under *your* key. Two
+inference capabilities ship today.
+
+### Text-embedding inference — always on
+
+Code-chunk text at index time and query text at query time go to your
+configured embedding provider, including asynchronous indexing-time calls.
+Point `embedding` at a self-hosted in-VPC endpoint for zero egress.
+
+### Agentic query — off by default
+
+`agentQuery` (`POST /code/v0/query`, the MCP `query_codebase` tool, and
+`ccx query`) runs a server-side agent that investigates your indexed code and
+returns a cited prose answer instead of raw hits. It is **disabled by
+default**, because enabling it moves source code to a model provider — an
+operator data-governance decision, not one a default should make. Setup is in
+the deploy guide's [Agentic query](deploy.md#agentic-query) section; the data
+flow is:
+
+- **What leaves the cluster**, per query, to your configured completion
+  provider: the caller's question, the tool schemas, the source snippets the
+  agent chooses to read, and that request's conversation history. Provider
+  credentials are read by LiteLLM from the query server's environment and
+  never appear in prompts, tool results, responses, or logs. The model is
+  operator configuration — never caller-selected, with no per-request
+  provider override.
+- **What the agent can reach:** a closed tool set — search, grep, read file,
+  list files, symbol definitions and references, and delegation to helper
+  sub-investigations over the same scopes — running through **the same
+  authorized reads the low-level API already exposes**. Every named repo is
+  resolved and authorized **before inference**; that admission decision then
+  holds for the request's lifetime (bounded by the request deadline), so a
+  revocation mid-run takes effect on the caller's *next* request — stated
+  rather than omitted. Each read is bound to the commit resolved at the start
+  of the request: a ref that moves mid-run fails the request with a retry
+  signal rather than blending revisions. There is no fetch, shell,
+  filesystem, secret, or mutation tool, and no repository the caller could
+  not already search itself.
+- **What is stored: by default, nothing new.** The transcript exists only in
+  request memory — no trace file, no trace table, no stored prompts or
+  answers, no new database. The audit stream gains only plain counters and
+  cost figures (model, tool, and subquery counts; token totals; finish code;
+  cache-reuse counters; the `cost_spent` / `cost_reused` split). Prompts,
+  source snippets, model text, subquery questions, and tool arguments are
+  never logged.
+- **The optional answer cache changes that — inside your database only.**
+  With `agentQuery.cache.enabled`
+  ([setup](deploy.md#answer-cache-optional), off by default), the query
+  server persists callers' questions (verbatim, plus their embeddings),
+  the generated answers, and the accepted investigation turns — including
+  the source-derived read observations they consumed — so repeated and
+  rephrased questions can be answered from storage. All of it lives in **one
+  dedicated schema in your Postgres** (`agentQuery.cache.schema`, default
+  `ccx_agentic`) that the query-server role owns and writes — index schemas
+  keep their read-only grants, and nothing new leaves the cluster (a repeated
+  question served from storage makes no model call at all). A stored answer is shared across callers by
+  design — a question your teammate already asked is answered from their
+  stored result — but it is keyed to the named repository scope, and it is
+  served only inside a request that already passed the same admission as a
+  live run for exactly those repositories: cache lookup never precedes
+  authorization. Nothing is evicted
+  automatically (no TTL in this release): removal is the per-repository purge
+  tool — which deletes the questions, answers, and everything derived from
+  them for that repository, linearized against in-flight requests — or
+  dropping the schema. Your database, your retention.
+- **Untrusted-input posture:** indexed source, comments, documentation, and
+  file names are treated as data, not instructions. A successful prompt
+  injection still faces the closed capability set above — there is nothing to
+  escalate into. The answer text is the one channel that stays open, so treat
+  the answer Markdown as untrusted model output: render it without automatic
+  remote fetches, and note that citations are not yet mechanically
+  verified.
+- **Cost and load are bounded per request**, not left to a knob: one query is
+  capped at 30 model turns plus at most 8 helper sub-investigations of 15
+  turns each, under a whole-query deadline (`requestDeadlineSeconds`, default
+  600 s) and per-pod concurrency caps.
+
+Any future inference capability is governed by the same invariants:
+customer-keyed endpoints only, air-gap compatible or disableable, data flows
+documented here **before** release.
 
 ## Vulnerability reporting & fixes
 
