@@ -111,8 +111,13 @@ the CA bundle (`auth.oidc.caBundleSecret` in the chart).
 add-on SKU. Decide one thing up front: **MCP clients cannot sign in with
 OAuth against an Entra-direct deployment** (the MCP spec requires clients to
 send the RFC 8707 `resource` parameter, which Entra's v2 endpoints reject
-with `AADSTS901002`). The ccx CLI is unaffected — a chart switch below omits
-the parameter — and MCP clients presenting an **API-key record** work fine;
+with `AADSTS901002`). The ccx CLI is unaffected **from 0.1.34 on** — a chart
+switch below omits the parameter, and the CLI discovers that switch (along
+with the client id and scopes) from the server at login. An **older ccx never
+sees the switch**: it keeps sending `resource` and fails with `AADSTS901002`
+no matter how the chart is configured, and it prompts for a client id the
+server already advertises — both symptoms mean *upgrade the CLI*, not
+*re-check the values*. MCP clients presenting an **API-key record** work fine;
 what's blocked is only interactive MCP sign-in. If that matters to you, use
 [Keycloak in front](#keycloak) instead; the remedies beyond it are upstream
 (Microsoft accepting the parameter, or the MCP spec relaxing the
@@ -136,7 +141,12 @@ registrations):
    scope stays a throwaway. On the API's **enterprise application**: assign
    the entitled group to the role and enable **"Assignment required?"** so
    unentitled users fail at sign-in instead of receiving tokens the server
-   then refuses.
+   then refuses. Treat a role's `value` as **write-once**: renaming it in
+   place is unreliable — Graph shows the new value on both the application
+   and the service principal while freshly minted tokens keep carrying the
+   old one, for days (observed persisting through a second rename). To change
+   an entitlement's value, create a **new** app role, move the assignments,
+   then disable and delete the old role.
 4. **The CLI client registration**, e.g. `ccx-cli`: a public client — enable
    **"Allow public client flows"** (device sign-in). Add its redirect URIs
    through the **manifest** (`replyUrlsWithType`, type `InstalledClient`):
@@ -149,7 +159,14 @@ registrations):
    consent** for the tenant — without it, tenants that restrict user consent
    fail the first login with `AADSTS65001`.
 6. *(Mirrored deployments)* add the **`email` optional claim** to the API
-   registration's **access** tokens.
+   registration's **access** tokens — knowing Entra fills it **only from the
+   account's populated `mail` attribute**. With `mail` empty the claim never
+   appears, no matter how it is registered — and empty is common in tenants
+   federated from another IdP with no Exchange Online mailboxes, exactly the
+   estates the federated shape below serves. For those, add the **`upn`
+   optional claim** instead and set the `authz` `mappingClaim` to `upn`; the
+   byte-identical requirement is unchanged, so the code-host SSO NameID must
+   then be the UPN.
 
 **Reply to the platform team with:** the tenant ID, the API registration's
 **client ID (a GUID)**, the App ID URI (`api://ccx`), and the CLI
@@ -208,9 +225,11 @@ role, the values block, the MCP-sign-in limitation. The deltas:
 - **Both policy layers apply**: your IdP's sign-on policies at credential
   time, plus any Entra Conditional Access on top.
 - On the [verification checklist](#verifying-before-rollout), additionally
-  confirm a federated user's token carries the expected claims — in
-  particular the `email` value for mirrored deployments, which must match the
-  code-host SSO NameID byte-for-byte.
+  confirm a federated user's token carries the expected claims — for mirrored
+  deployments, the `mappingClaim` value. `email` works here only if the
+  tenant's `mail` attributes are populated; federated tenants often have them
+  empty (step 6's caveat), making `upn` the working choice. Either way the
+  value must match the code-host SSO NameID byte-for-byte.
 
 ## Okta (with API Access Management)
 
@@ -383,11 +402,15 @@ run `ccx login` and decode the cached token) and check:
    **outside** the entitled group does not carry it (that user should either
    fail at sign-in, or reach the server and get `403 insufficient_scope`,
    never results).
-4. *(Mirrored deployments)* the `mappingClaim` value (typically `email`) is
-   present and byte-identical to the user's code-host SSO NameID.
+4. *(Mirrored deployments)* the `mappingClaim` value (typically `email`; on
+   Entra, `upn` where `mail` attributes are empty — recipe step 6) is present
+   and byte-identical to the user's code-host SSO NameID. On Entra, an
+   `email` claim that never appears means the account's `mail` attribute is
+   empty — switch to `upn` rather than re-registering the claim.
 
 Then the smoke test: a bare `ccx login` (no flags — the server advertises the
-client id, scopes, and callback ports) followed by `ccx repos`.
+client id, scopes, and callback ports; that needs **ccx 0.1.34+**, and an
+older CLI prompts for a client id instead) followed by `ccx repos`.
 
 Common sign-in errors and what they mean:
 
@@ -398,4 +421,4 @@ Common sign-in errors and what they mean:
 | `AADSTS50011` (Entra), Okta's redirect-URI error | the callback port isn't registered — register every advertised `redirectPorts` entry (Entra: via the manifest) |
 | `AADSTS50105` (Entra), "User is not assigned to the client application" (Okta) | the user isn't assigned (Entra: to the API's enterprise app / role; Okta: to the CLI app) — the fail-at-sign-in gate working as intended |
 | Login succeeds but every query is `403 insufficient_scope` | the token lacks `ccx.read` — the role/scope wasn't granted to the user, or `requiredScopeClaim`/`requiredScopeEncoding` doesn't match where the provider emits it |
-| `AADSTS901002` (Entra) | the RFC 8707 `resource` parameter reached Entra — set `auth.oidc.cli.resourceIndicator: false` |
+| `AADSTS901002` (Entra) | the RFC 8707 `resource` parameter reached Entra — set `auth.oidc.cli.resourceIndicator: false`. Already set? Then the **CLI** predates the server-advertised switch and still sends the parameter — upgrade ccx to 0.1.34+ (that vintage also prompts for a client id the server advertises) |
