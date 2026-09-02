@@ -11,6 +11,9 @@ endpoint.
   server) on Kubernetes with the
   [`cocoindex-code-plus` Helm chart](https://github.com/orgs/cocoindex-io/packages/container/package/charts%2Fcocoindex-code-plus)
   (public; released versions listed there). For platform / IT teams.
+- **[docs/upgrade.md](docs/upgrade.md)** — upgrade a running deployment
+  between releases: the normal one-command upgrade, and an entry for every
+  release that needs anything more. For platform / IT teams.
 - **[docs/sso.md](docs/sso.md)** — SSO sign-in (OIDC) provider setup: which
   role your provider can play (authorization server vs login-only), and the
   per-provider recipes — Entra ID, Okta, Keycloak (direct or fronting
