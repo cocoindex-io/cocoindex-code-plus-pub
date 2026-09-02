@@ -10,10 +10,11 @@ Every release ships as a new chart version with matching images. The upgrade
 is one command, and the index is never rebuilt by an upgrade:
 
 ```bash
-helm upgrade <release> oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
-  --version <X.Y.Z> -n <namespace> -f values.yaml
+helm upgrade ccx oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
+  --version <X.Y.Z> -n ccx -f values-secret.yaml
 ```
 
+Release name, namespace, and values file are the quickstart's; substitute yours.
 Both workloads roll. The singleton indexer restarts once (indexing pauses for
 the restart; the query server keeps serving), so pin `<X.Y.Z>` deliberately.
 `helm rollback` works as usual.

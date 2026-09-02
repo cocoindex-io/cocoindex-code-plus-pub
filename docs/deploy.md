@@ -241,7 +241,7 @@ secrets:
   # list — it may pack several tokens (space/comma/newline-separated) so you can
   # rotate; a caller sends one of them. Generate one, don't hand-pick it:
   #   python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
-  apiTokens:     { tokens: "<a-strong-token>" }
+  apiTokens:     { tokens: "<your-token>" }
 codeHosts:
   github.com:                          # one entry per code-host instance; the map key is the instance's identity
     provider: github
@@ -280,7 +280,7 @@ helm install ccx oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
 helm test ccx -n ccx                                   # GET /health
 kubectl -n ccx port-forward svc/ccx-cocoindex-code-plus-query-server 8080:8080
 # then, from a workstation (see cli.md):
-CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<a-strong-token> ccx search "rate limiter"
+CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<your-token> ccx search "rate limiter"
 ```
 
 The install NOTES print the exact service name + port-forward command.
@@ -635,7 +635,7 @@ Recommendations:
 
 - **Managed Postgres (Cloud SQL, RDS, …) uses a provider CA that is not in
   system trust stores** — download it and use
-  `sslmode=verify-ca&sslrootcert=<path>`. `verify-ca` rather than
+  `sslmode=verify-ca&sslrootcert=<mounted-path>`. `verify-ca` rather than
   `verify-full` because you typically dial the instance **by IP** while its
   certificate names the instance. Mount the CA into the indexer Pod via
   `indexer.extraVolumes`/`extraVolumeMounts` and point `sslrootcert` at the
@@ -666,7 +666,7 @@ Two supported ways to connect, both keeping the instance `ENCRYPTED_ONLY`:
   (`gcloud sql instances describe <instance>
   --format='value(serverCaCert.cert)'`), put it in a Secret, mount it via
   `indexer.extraVolumes`, and use
-  `sslmode=verify-ca&sslrootcert=<mounted path>` in the indexer DSNs (the
+  `sslmode=verify-ca&sslrootcert=<mounted-path>` in the indexer DSNs (the
   query-server DSN can do the same or use `require`).
 - **Cloud SQL Auth Proxy sidecar:** set `database.cloudSqlProxy.enabled:
   true` + `instanceConnectionName`, authenticate via Workload Identity (a
@@ -849,7 +849,7 @@ Three consequences to know before you turn it on.
 
   ```bash
   # Remove every cached record touching one repository.
-  kubectl exec deploy/<release>-query-server -- \
+  kubectl exec deploy/ccx-cocoindex-code-plus-query-server -- \
       python -m cocoindex_code_plus.query_server.agentic.cache.purge \
       --repo acme/service --dry-run   # drop --dry-run to apply
 
@@ -885,7 +885,7 @@ companion command re-embeds stored questions after a change that only affects
 how they are indexed:
 
 ```bash
-kubectl exec deploy/<release>-query-server -- \
+kubectl exec deploy/ccx-cocoindex-code-plus-query-server -- \
     python -m cocoindex_code_plus.query_server.agentic.cache.backfill --limit 500
 ```
 
@@ -1139,7 +1139,7 @@ underscores** (that is what separates `<id>` from `<secret>` in the token), so
 `id: ci-prod` works and `id: ci_prod` is rejected at startup.
 
 A record's `scope` is normally `{ mode: indexScope }` (the whole index). An
-explicit `{ mode: repoAllowlist, repos: [<canonical repo uid>, …] }` also exists
+explicit `{ mode: repoAllowlist, repos: [<repo-uid>, …] }` also exists
 — `ccx repos` prints each repo's stable uid ([cli.md](cli.md)) — but, like
 `codeHostMirrored`, once the deployment declares any `codeHosts` instance it is
 **refused at startup** unless you accept the instance-key binding contract
@@ -1167,10 +1167,10 @@ authz:
       identityMapping: codeHostLookup    # join the IdP claim against GitHub's own SSO linkage
       mappingClaim: email                # the value GitHub's linkage records (usually the SSO email)
       permissionCredential:
-        appId: "<app id>"                # the indexer App reused (default) — or a dedicated authz App
+        appId: "<app-id>"                # the indexer App reused (default) — or a dedicated authz App
         privateKeySecret: { name: ccx-github-app }
       approvedOrgs:                      # the governance boundary: only these installations are ever consulted
-        - { orgId: <immutable org id>, installationId: <the App's installation id> }
+        - { orgId: <org-id>, installationId: <installation-id> }
 ```
 
 **The mode is deployment-wide, so every registry instance needs a block.**
@@ -1187,8 +1187,8 @@ mirrored instance works normally.
 ```yaml
     github.com:
       identityMapping: publicOnly        # no linkage to mirror: public repos serve, private ones don't
-      permissionCredential: { appId: "<app id>", privateKeySecret: { name: ccx-github-app } }
-      approvedOrgs: [ { orgId: <immutable org id>, installationId: <installation id> } ]
+      permissionCredential: { appId: "<app-id>", privateKeySecret: { name: ccx-github-app } }
+      approvedOrgs: [ { orgId: <org-id>, installationId: <installation-id> } ]
 ```
 
 `publicOnly` still needs the App credential and `approvedOrgs` — deciding a
@@ -1208,9 +1208,9 @@ Pick the row matching where your SSO linkage lives:
 |---|---|---|
 | GitHub org-level SAML (common case) | — (the block above) | none — the App reads the org's `externalIdentities` itself |
 | GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
-| **GHES, usernames managed by your IdP** (the GHES default — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim carrying the GHES login>` + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
+| **GHES, usernames managed by your IdP** (the GHES default — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
 | **GHES with SCIM provisioning** ([below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` |
-| GitLab | `externProvider: <extern_uid provider, e.g. saml>`; `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
+| GitLab | `externProvider: <extern-provider>` (the `extern_uid` provider, e.g. `saml`); `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
 | **No linkage to mirror** (personal accounts, no SSO) | `identityMapping: publicOnly` — public repos serve everyone, private ones no one | none |
 
 There is no `identityMapping` value named after a code host: the value is
@@ -1328,7 +1328,7 @@ gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProv
 org query above always returns `null` regardless of your SSO:
 
 ```bash
-curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/scim/v2/Users?filter=userName%20eq%20%22<the-claim-value>%22'
+curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/scim/v2/Users?filter=userName%20eq%20%22<claim-value>%22'
 ```
 
 One `active` result whose `userName` equals your claim value byte-for-byte is a
@@ -1445,7 +1445,7 @@ in-cluster pull secret at all:
   trust stores — download the
   [region bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html),
   mount it via `indexer.extraVolumes`, and use
-  `sslmode=verify-ca&sslrootcert=<mounted path>`
+  `sslmode=verify-ca&sslrootcert=<mounted-path>`
   (see [Database TLS](#database-tls)). Plain `require` also connects (encrypts
   without authenticating the server).
 - **Secrets:** AWS **Secrets Manager** → k8s Secrets (External Secrets Operator or
@@ -1475,7 +1475,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/code/v0/semantic_search \
   -H 'Content-Type: application/json' -d '{"query":"x","limit":1}'   # expect 401
 
 # 3. The index is built and queryable end to end:
-export CCX_SERVER_URL=$URL CCX_API_TOKEN=<token>
+export CCX_SERVER_URL=$URL CCX_API_TOKEN=<your-token>
 ccx repos                              # lists your indexed repos once built
 ccx search --repo <owner>/<repo> "some phrase from that codebase"
 ```

@@ -181,13 +181,13 @@ auth:
   mode: oidc
   oidc:
     issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
-    audience: <API registration client ID (GUID)>   # NOT the api:// URI — v2 tokens carry the GUID
+    audience: <api-client-id>                       # the API registration's client ID (a GUID) — NOT the api:// URI; v2 tokens carry the GUID
     requiredScopeClaim: roles                       # the entitlement rides the app role
     requiredScopeEncoding: array
     requireTypAtJwt: false                          # Entra stamps typ: JWT, not RFC 9068 at+jwt
-    advertisedScopes: ["<App ID URI>/user_impersonation", "offline_access"]  # e.g. api://ccx/user_impersonation
+    advertisedScopes: ["<app-id-uri>/user_impersonation", "offline_access"]  # e.g. api://ccx/user_impersonation
     cli:
-      clientId: <CLI registration client ID>
+      clientId: <client-id>                       # the CLI registration's client ID
       resourceIndicator: false                      # Entra rejects RFC 8707 `resource` (AADSTS901002)
 ```
 
@@ -288,7 +288,7 @@ auth:
     requireTypAtJwt: false             # Okta access tokens carry no typ header
     advertisedScopes: [ccx.read, offline_access]
     cli:
-      clientId: <CLI app client ID>
+      clientId: <client-id>               # the CLI app's client ID
 ```
 
 Pair it with the operator half in
