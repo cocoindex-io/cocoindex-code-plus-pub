@@ -1271,7 +1271,9 @@ because it decides both the credential and which claim your tokens must carry.
   the `gh` CLI's generic hint for enterprise endpoints still says. That PAT can
   also *provision and deprovision* identities, which is why enabling this
   route requires attesting to it: you are accepting a provisioning-capable
-  credential in the read path.
+  credential in the read path. Startup probes this PAT with a one-identity
+  SCIM list and warns ahead of its expiry
+  ([Behavior to expect](#behavior-to-expect)).
 
   The join is against the SCIM **`userName`** — not the SAML NameID, not
   `externalId`, not an `emails[]` entry. Your `mappingClaim` value goes into a
@@ -1309,7 +1311,7 @@ controls usernames and self-rename is off). Startup names the missing one.
 
 #### Behavior to expect
 
-An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission, an **expired or revoked mapping credential** (the enterprise-level or GHES SCIM PAT) — fails closed as `503`, never a silent grant and never a silent public-only downgrade. Classic PATs expire on a date you chose when issuing them; put that date in your calendar, because a check that suddenly answers `503` for every private repo on one instance is what expiry looks like.
+An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission, an **expired or revoked mapping credential** (the enterprise-level or GHES SCIM PAT) — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
 
 Two consequences worth planning for:
 
@@ -1326,6 +1328,28 @@ Two consequences worth planning for:
   does not persist yet — so the check reports "cannot determine" rather than
   guessing. It fails closed and logs a line naming the repo. On instances
   where teams rename repositories often, expect this until the reindex.
+
+**A mapping PAT's expiry is announced ahead of time and checked at startup.**
+The two PAT routes (enterprise-level SAML / EMU, GHES SCIM) hold a classic
+PAT that expires on a date you chose when issuing it, and that GitHub states
+on every response the PAT authenticates. You do not have to track that date by
+hand; the query server acts on it three ways:
+
+- **A daily `WARNING` from `authz.credentialExpiryWarningDays` (default 14)
+  days out** — `mapping PAT expires …` — read off every call the PAT makes.
+  Alert on it and rotate before the date.
+- **A startup probe of the PAT itself**, with one cheap read (a one-identity
+  SCIM list on GHES; the enterprise `externalIdentities` on github.com). A
+  PAT that is expired, revoked, or missing its scope — or a GHES instance
+  without SCIM provisioning — latches the instance nonconformant at rollout,
+  and **every request on that instance answers `503`, public repos
+  included**, until a rollout carries a working PAT. That is deliberate:
+  otherwise each private-repo check fails on its own while public repos keep
+  serving, which looks like a partial outage rather than the credential
+  problem it is.
+- **An INFO line from the first successful probe** naming the expiry date and
+  the days remaining — diff it across rollouts like the `instance-binding
+  snapshot`.
 
 Caching sets how fast a change reaches callers: **permission decisions 300 s**
 (`authz.permissionDecisionCacheTtlSeconds`) and **identity mappings 3600 s**
@@ -1425,10 +1449,13 @@ One caveat stands: the stream is **post-enforcement and traffic-driven** — it
 says nothing about an engineer who has not used the tool yet, which is what
 the `ccx repos` check above is for.
 
-Two more log lines are worth alerting on: the mapping tripwire, warning that a
-principal re-resolved to a *different* immutable account id (an upstream rebind
-or directory churn), and the `instance-binding snapshot` emitted at every
-startup — diff it across rollouts to detect a re-pointed instance key.
+Three more log lines are worth alerting on: the mapping tripwire, warning that
+a principal re-resolved to a *different* immutable account id (an upstream
+rebind or directory churn); the `instance-binding snapshot` emitted at every
+startup — diff it across rollouts to detect a re-pointed instance key; and the
+mapping PAT expiry warning (`mapping PAT expires`), logged once a day from
+`authz.credentialExpiryWarningDays` (default 14) days before the PAT lapses
+([Behavior to expect](#behavior-to-expect)).
 
 ### Timeout chain
 
