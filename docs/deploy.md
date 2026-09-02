@@ -1309,7 +1309,7 @@ controls usernames and self-rename is off). Startup names the missing one.
 
 #### Behavior to expect
 
-An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission, an **expired or revoked mapping credential** (the enterprise-level or GHES SCIM PAT) — fails closed as `503`, never a silent grant and never a silent public-only downgrade. Classic PATs expire on a date you chose when issuing them; put that date in your calendar, because a check that suddenly answers `503` for every private repo on one instance is what expiry looks like.
 
 Two consequences worth planning for:
 
