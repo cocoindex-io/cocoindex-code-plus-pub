@@ -1551,6 +1551,9 @@ kubectl -n ccx logs deploy/ccx-cocoindex-code-plus-indexer -f   # watch indexing
 helm uninstall ccx -n ccx
 ```
 
+Releases that need anything beyond that command have an entry in
+[upgrade.md](upgrade.md); check it before every upgrade.
+
 `/code/v0/semantic_search` returns **503** ("index not built yet") until the indexer has populated
 the table, and **401** without a valid API token — both expected. The indexer runs
 **continuously** (live mode): there's no "done" log line — it's ready once the
