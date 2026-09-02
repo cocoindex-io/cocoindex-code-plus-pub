@@ -550,13 +550,15 @@ database:
   internal: { existingSecret: ccx-db }   # key CCX_INTERNAL_DB_URL
 ```
 
-**Give the query server a read-only role** (recommended for production): the
-indexer needs the writer credential, but the query server only reads the
-index. Create a role such as
+**Give the query server its own role** (recommended for production): the
+indexer needs the writer credential; the query server reads the index and
+writes only the schemas it owns (the answer cache, usage analytics), never the
+index. Name roles after what connects — `cocoindex_server` is the chart's
+bundled default and the name used below. Create it with read on everything:
 
 ```sql
-CREATE ROLE ccx_query LOGIN PASSWORD '…';
-GRANT pg_read_all_data TO ccx_query;   -- covers current and future tables
+CREATE ROLE cocoindex_server LOGIN PASSWORD '…';
+GRANT pg_read_all_data TO cocoindex_server;   -- covers current and future tables
 ```
 
 and point `database.target.queryUrl` (or `queryExistingSecret`, key
@@ -571,8 +573,8 @@ roles themselves: every schema a feature adds (the answer cache, usage
 analytics) is created at startup by the component that owns it.
 
 ```sql
-GRANT CREATE ON DATABASE <your database> TO ccx_query;  -- it creates the schemas it owns
-GRANT ccx_query TO <your writer role>;                  -- the indexer inherits them
+GRANT CREATE ON DATABASE <your database> TO cocoindex_server;  -- it creates the schemas it owns
+GRANT cocoindex_server TO <your writer role>;                  -- the indexer inherits them
 ```
 
 The query server owns and creates the schemas it writes; the indexer, a
@@ -587,24 +589,24 @@ your workload DSNs (which must be `existingSecret`s). The **bundled**
 Postgres needs none of this — its first init creates the role with these
 grants, and the same hook re-applies them before every upgrade.
 
-> **Cloud SQL trap — the read-only role is not read-only by default.**
-> A user created with `gcloud sql users create` (or the Cloud SQL console)
-> is automatically granted **`cloudsqlsuperuser`**, which holds CREATE on
-> the `public` schema. The `GRANT pg_read_all_data` above then does *not*
-> make it read-only — the role can still write. After creating it, revoke
-> the inherited role:
+> **Cloud SQL trap — the server role is not confined to its schemas by
+> default.** A user created with `gcloud sql users create` (or the Cloud SQL
+> console) is automatically granted **`cloudsqlsuperuser`**, which holds
+> CREATE on the `public` schema and more. The grants above then do *not*
+> bound the role — it can still write outside its own schemas. After
+> creating it, revoke the inherited role:
 >
 > ```sql
-> REVOKE cloudsqlsuperuser FROM ccx_query;
+> REVOKE cloudsqlsuperuser FROM cocoindex_server;
 > ```
 >
-> Verify with a connection as that role — `CREATE TABLE t(i int);` must fail
-> with *permission denied for schema public*:
+> Verify with a connection as that role — `CREATE TABLE public.t(i int);`
+> must fail with *permission denied for schema public*:
 >
 > ```sql
 > SELECT ARRAY(SELECT b.rolname FROM pg_auth_members m
 >   JOIN pg_roles b ON m.roleid = b.oid WHERE m.member = r.oid)
-> FROM pg_roles r WHERE r.rolname = 'ccx_query';   -- expect {pg_read_all_data}
+> FROM pg_roles r WHERE r.rolname = 'cocoindex_server';   -- expect {pg_read_all_data}
 > ```
 
 ### Database TLS
@@ -915,8 +917,9 @@ with its request and rollup tables; the indexer — a member of the query role
 — creates its own cycle and freshness tables inside it; neither writes the
 other's. All of that rests on the
 [one-time role setup](#production-postgres-cloud-sql--external) every
-external Postgres gets (`GRANT CREATE ON DATABASE … TO ccx_query; GRANT
-ccx_query TO <writer>;`); the bundled Postgres has it from its first init and
+external Postgres gets (`GRANT CREATE ON DATABASE … TO cocoindex_server;
+GRANT cocoindex_server TO <writer>;`); the bundled Postgres has it from its
+first init and
 re-applies it before every upgrade. There is no analytics-specific SQL to
 run, and no first-init caveat.
 

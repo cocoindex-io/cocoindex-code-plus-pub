@@ -41,8 +41,8 @@ statements, run once as the database admin
 ([deploy.md § Production Postgres](deploy.md#production-postgres-cloud-sql--external)):
 
 ```sql
-GRANT CREATE ON DATABASE <your database> TO ccx_query;
-GRANT ccx_query TO <your writer role>;
+GRANT CREATE ON DATABASE <your database> TO cocoindex_server;
+GRANT cocoindex_server TO <your writer role>;
 ```
 
 The bundled Postgres has them from its first init and re-applies them before
