@@ -554,7 +554,8 @@ database:
 indexer needs the writer credential; the query server reads the index and
 writes only the schemas it owns (the answer cache, usage analytics), never the
 index. Name roles after what connects — `cocoindex_server` is the chart's
-bundled default and the name used below. Create it with read on everything:
+bundled default and the name in the example. Create it with read on
+everything:
 
 ```sql
 CREATE ROLE cocoindex_server LOGIN PASSWORD '…';
@@ -570,11 +571,15 @@ query server falls back to the writer credential. Also run
 **Then run the one-time role setup** — two statements, once, as the database
 admin. They are everything a deployment ever needs in the database beyond the
 roles themselves: every schema a feature adds (the answer cache, usage
-analytics) is created at startup by the component that owns it.
+analytics) is created at startup by the component that owns it. Here and in
+every other guide, the statements use the chart's default role names —
+`cocoindex_server` for the role the query server connects as (created
+above) and `cocoindex` for the role the indexer connects as — and `<db>`
+for your database; substitute your own names:
 
 ```sql
-GRANT CREATE ON DATABASE <your database> TO cocoindex_server;  -- it creates the schemas it owns
-GRANT cocoindex_server TO <your writer role>;                  -- the indexer inherits them
+GRANT CREATE ON DATABASE <db> TO cocoindex_server;  -- it creates the schemas it owns
+GRANT cocoindex_server TO cocoindex;                -- the indexer inherits them
 ```
 
 The query server owns and creates the schemas it writes; the indexer, a
@@ -823,7 +828,7 @@ Three consequences to know before you turn it on.
   on the database can pre-create the schema instead:
 
   ```sql
-  CREATE SCHEMA ccx_agentic AUTHORIZATION <your query role>;
+  CREATE SCHEMA ccx_agentic AUTHORIZATION cocoindex_server;
   ```
 
   Startup fails loudly if the role can do neither, printing the statements —
@@ -917,8 +922,8 @@ with its request and rollup tables; the indexer — a member of the query role
 — creates its own cycle and freshness tables inside it; neither writes the
 other's. All of that rests on the
 [one-time role setup](#production-postgres-cloud-sql--external) every
-external Postgres gets (`GRANT CREATE ON DATABASE … TO cocoindex_server;
-GRANT cocoindex_server TO <writer>;`); the bundled Postgres has it from its
+external Postgres gets (`GRANT CREATE ON DATABASE <db> TO cocoindex_server;
+GRANT cocoindex_server TO cocoindex;`); the bundled Postgres has it from its
 first init and
 re-applies it before every upgrade. There is no analytics-specific SQL to
 run, and no first-init caveat.

@@ -37,12 +37,14 @@ An explicit `indexer.cycleSeconds` still wins.
 There is no analytics-specific provisioning. The query server creates the
 schema at startup and the indexer writes its own tables into it; what that
 rests on is the one-time role setup every deployment already has — two
-statements, run once as the database admin
+statements, run once as the database admin, shown with the chart's default
+role names — `cocoindex_server` for the query server, `cocoindex` for the
+indexer; substitute yours
 ([deploy.md § Production Postgres](deploy.md#production-postgres-cloud-sql--external)):
 
 ```sql
-GRANT CREATE ON DATABASE <your database> TO cocoindex_server;
-GRANT cocoindex_server TO <your writer role>;
+GRANT CREATE ON DATABASE <db> TO cocoindex_server;
+GRANT cocoindex_server TO cocoindex;
 ```
 
 The bundled Postgres has them from its first init and re-applies them before

@@ -46,8 +46,8 @@ per-feature provisioning SQL any more. The whole setup, for both features and
 any future one, is two statements run once as the database admin:
 
 ```sql
-GRANT CREATE ON DATABASE <db> TO <query-server-role>;  -- it creates the schemas it owns
-GRANT <query-server-role> TO <writer-role>;             -- the indexer inherits them
+GRANT CREATE ON DATABASE <db> TO cocoindex_server;  -- it creates the schemas it owns
+GRANT cocoindex_server TO cocoindex;                -- the indexer inherits them
 ```
 
 Two smaller changes ride along:
@@ -55,9 +55,10 @@ Two smaller changes ride along:
 - The values keys `usageAnalytics.url`, `usageAnalytics.existingSecret`, and
   `agentQuery.cache.url` are gone. Both features live in the target database.
   Helm ignores unknown keys silently, so remove them if you had set them.
-- The guides now use `cocoindex_server` as the example name for the query
-  server's role. Your own role keeps whatever name it has; renaming is
-  optional (below).
+- The guides now show the chart's default role names in every statement:
+  `cocoindex_server` for the query server's role (it was `ccx_query`) and
+  `cocoindex` for the indexer's. Your own roles keep whatever names they
+  have; renaming is optional (below).
 
 If you already run the answer cache with a pre-created `ccx_agentic`, nothing
 changes for it.
@@ -75,15 +76,17 @@ analytics later is a values change and a rollout.
 2. **Run the one-time role setup, before or after, as the database admin.**
 
    ```sql
-   GRANT CREATE ON DATABASE <db> TO <query-server-role>;
-   GRANT <query-server-role> TO <writer-role>;
+   GRANT CREATE ON DATABASE <db> TO cocoindex_server;
+   GRANT cocoindex_server TO cocoindex;
    ```
 
-   Use your real names: the role in the query server's DSN and the role in
-   the indexer's DSN. If the query server connects with the writer's
-   credential, run only the first statement. On Cloud SQL, a role created
+   The statements use the chart's default role names — `cocoindex_server`
+   for the role the query server connects as, `cocoindex` for the role the
+   indexer connects as; substitute the names in your DSNs. If the query
+   server connects with the writer's credential, run only the first
+   statement, granting that role. On Cloud SQL, a role created
    with `gcloud sql users create` still needs
-   `REVOKE cloudsqlsuperuser FROM <query-server-role>;`, as
+   `REVOKE cloudsqlsuperuser FROM cocoindex_server;`, as
    [deploy.md](deploy.md#production-postgres-cloud-sql--external) describes.
 
    Prefer the chart to run them? Put an admin DSN in a Secret under the key
@@ -95,8 +98,8 @@ analytics later is a values change and a rollout.
 3. **Verify.**
 
    ```sql
-   SELECT has_database_privilege('<query-server-role>', '<db>', 'CREATE') AS creates_schemas,
-          pg_has_role('<writer-role>', '<query-server-role>', 'MEMBER') AS writer_inherits;
+   SELECT has_database_privilege('cocoindex_server', '<db>', 'CREATE') AS creates_schemas,
+          pg_has_role('cocoindex', 'cocoindex_server', 'MEMBER') AS writer_inherits;
    ```
 
    Expect `creates_schemas = t` and `writer_inherits = t`. That is the whole
@@ -110,14 +113,14 @@ upgrade has finished, and never while a rollout is in progress, because every
 pod that starts in between fails to authenticate.
 
 ```sql
-ALTER ROLE <query-server-role> RENAME TO cocoindex_server;
+ALTER ROLE ccx_query RENAME TO cocoindex_server;   -- ccx_query: the previous example name
 ```
 
 Then, immediately, put the new username into the query server's DSN Secret
 and restart the query server so it picks the Secret up. SCRAM passwords
 survive a rename (the default on Postgres 14 and later, and on Cloud SQL), so
 the password itself does not change. If the query server then fails on every
-restart with `password authentication failed for user "<old name>"`, the
+restart with `password authentication failed for user "ccx_query"`, the
 Secret still carries the old name: Postgres reports an unknown role as a
 password failure.
 
