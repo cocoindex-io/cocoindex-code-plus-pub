@@ -1200,16 +1200,44 @@ credential; naming one is rejected at startup rather than sitting inert.
 
 Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field also requires administration-read; the pre-flight check below catches it. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
 
+#### Installation scope
+
+An installation limited to **selected repositories** is fine — org-wide is not
+required. What every check needs is that the repository is **covered by an
+approved installation**: the check first asks GitHub which installation covers
+the repo, then mints that installation's token, then reads the repo through it.
+
+- A repo **outside the App's selection**, or inside an org missing from
+  `approvedOrgs`, cannot be located → the check is *indeterminate* and the repo
+  answers **`503`** on every request — including public repos, since deciding
+  "public" is itself that read. Not a `404`, not a startup rejection: startup
+  verifies the App's own identity, not which repos its installations cover.
+- **Reusing the indexer App** (the default) makes the selection self-consistent:
+  a repo the App cannot see cannot be indexed, so *indexed ⊆ selected* holds by
+  construction. Then the one list to keep in step is `approvedOrgs` — every org
+  that owns an indexed repo, with its installation id.
+- With a **dedicated authz App**, its selection is a second list you own: add a
+  repo to the index and to that App's installation together.
+
+A pre-deploy check that walks the index config and asserts each repo's org is in
+`approvedOrgs` (and, for a dedicated App, each repo is in its selection) turns
+drift into a failed pipeline instead of a `503` in production.
+
 #### Identity-mapping topologies
 
-Pick the row matching where your SSO linkage lives:
+Pick the row matching where your SSO linkage lives. Rows are chosen **per
+instance**: a deployment can put one instance on the GHES SCIM route and another
+on github.com org-level SAML — each block is validated and resolved on its own,
+and `mappingClaim` is read per instance, so naming the same claim on both (say
+`upn`) is fine even though one compares it against the SCIM `userName` and the
+other against the SAML NameID.
 
 | Linkage | Extra values | Extra credential |
 |---|---|---|
-| GitHub org-level SAML (common case) | — (the block above) | none — the App reads the org's `externalIdentities` itself |
+| GitHub org-level SAML (common case) | — (the block above) | none extra — the App itself reads the org's `externalIdentities`, so it must hold **Organization → Members: read + Administration: read** ([App permissions](#app-permissions)) |
 | GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
 | **GHES, usernames managed by your IdP** (the GHES default — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
-| **GHES with SCIM provisioning** ([below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` |
+| **GHES with SCIM provisioning** ([below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` (GHES 3.16+; `admin:enterprise` on 3.13–3.15) |
 | GitLab | `externProvider: <extern-provider>` (the `extern_uid` provider, e.g. `saml`); `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
 | **No linkage to mirror** (personal accounts, no SSO) | `identityMapping: publicOnly` — public repos serve everyone, private ones no one | none |
 
@@ -1238,9 +1266,12 @@ because it decides both the credential and which claim your tokens must carry.
   plus `identityMappingCredential.patSecret` and the `ghesScimPatAccepted`
   attestation. The credential is an **enterprise-owner classic PAT with
   `scim:enterprise`** — GHES's instance SCIM API does not accept GitHub App
-  callers. That PAT can also *provision and deprovision* identities, which is
-  why enabling this route requires attesting to it: you are accepting a
-  provisioning-capable credential in the read path.
+  callers or fine-grained tokens. The scope name changed in GHES 3.16: older
+  instances (3.13–3.15) take `admin:enterprise` instead, which is also what
+  the `gh` CLI's generic hint for enterprise endpoints still says. That PAT can
+  also *provision and deprovision* identities, which is why enabling this
+  route requires attesting to it: you are accepting a provisioning-capable
+  credential in the read path.
 
   The join is against the SCIM **`userName`** — not the SAML NameID, not
   `externalId`, not an `emails[]` entry. Your `mappingClaim` value goes into a
