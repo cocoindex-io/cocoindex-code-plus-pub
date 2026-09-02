@@ -1315,9 +1315,11 @@ Two consequences worth planning for:
 
 - **An unmapped engineer is quietly under-granted, not refused.** No error
   distinguishes "your identity does not map" from "you have no access to that
-  repo" — both are the same 404. So a mapping mistake looks like a quiet,
-  partial rollout rather than a failure, which is why the verification below
-  matters more here than it would for a setting that breaks loudly.
+  repo" — to the caller both are the same 404. So a mapping mistake looks
+  like a quiet, partial rollout rather than a failure, which is why the
+  verification below matters more here than it would for a setting that
+  breaks loudly. The audit stream does tell the two apart — the `reason`
+  field under [Verifying a rollout](#verifying-a-rollout).
 - **A renamed or transferred repository answers `503` until it is reindexed.**
   Checks are anchored to the immutable repo id, and when the stored
   owner/name no longer resolves the fallback needs a `node_id` the indexer
@@ -1388,20 +1390,42 @@ check one engineer who should see a private repo and one who should not.
 query server emits a structured `repo_decision` JSON event per named repository
 on the `cocoindex_code_plus.audit` logger, carrying the principal, the
 operation, the outcome (`allow` / `deny` / `indeterminate`), and — whenever
-authorization actually ran — the repository uid in plain text. Aggregating
-`allow` events by principal reconstructs precisely what each engineer was
-granted; `deny` and `indeterminate` show what was withheld and what could not be
-determined. Three caveats:
+authorization actually ran — the repository uid in plain text. Every `deny`
+and `indeterminate` also carries a **`reason`**, from a closed vocabulary:
 
-- it is **post-enforcement and traffic-driven** — it says nothing about an
-  engineer who has not searched yet;
-- **identity mapping is deliberately not in the audit stream** (no mapped
-  account ids), so an unmapped engineer appears only as an ordinary run of
-  `deny` decisions;
-- consequently **an absence of denials is not evidence that mapping works** —
-  pair the audit view with the `ccx repos` check above.
+| Outcome | `reason` | Meaning |
+|---|---|---|
+| `deny` | `unmapped` | the engineer's identity maps to no code-host account on this instance (on github.com: in the repo's org) — the public-only under-grant, named |
+| `deny` | `no_access` | mapped, but the account holds no read grant on the repo (or is suspended / blocked) |
+| `deny` | `repo_gone` | GitLab: the project no longer exists upstream — the index is stale |
+| `deny` | `not_allowlisted` | an API-key record's `repoAllowlist` scope excludes the repo |
+| `indeterminate` | `provider_throttled` | the code host rate-limited the check; `Retry-After` when it stated one |
+| `indeterminate` | `provider_unavailable` | code-host outage or malformed answers past the retry budget |
+| `indeterminate` | `credential_failure` | the App key, PAT, or token was refused — rotate or re-permission it |
+| `indeterminate` | `mapping_config_error` | the linkage lookup itself failed: several directory matches, no SAML provider, a GraphQL error (often a missing App permission) |
+| `indeterminate` | `outside_governance_boundary` | a non-public repo is now owned by an org outside `approvedOrgs`, or by a user account |
+| `indeterminate` | `repo_unverified` | the stored owner/name no longer resolves to the indexed repo under an approved installation (renamed, transferred, outside the installation's selection) — reindex |
+| `indeterminate` | `instance_unavailable` | the instance is latched nonconformant, or no `authz.codeHosts` block covers it |
 
-Two log lines are worth alerting on: the mapping tripwire, warning that a
+Aggregating `allow` events by principal reconstructs precisely what each
+engineer was granted; `deny` and `indeterminate` show what was withheld and what
+could not be determined, and why. `ccx repos` emits no per-repository events
+(a listing would otherwise be a member list), so its terminal `request` event
+carries **`denied_by_reason`** instead — the withheld candidates counted per
+reason, e.g. `{"unmapped": 12}`. Two rules cover the mapping question:
+
+- **alert on `reason: "unmapped"`** (per repository) and on
+  `denied_by_reason.unmapped > 0` (listings) — every non-public decision an
+  unmapped engineer triggers, `ccx repos` included, now says so; after a
+  linkage rebuild, a burst of these names exactly who was left out;
+- read `no_access` and `allow` on private repositories as proof the mapping
+  resolved — the mapped account id itself is never logged.
+
+One caveat stands: the stream is **post-enforcement and traffic-driven** — it
+says nothing about an engineer who has not used the tool yet, which is what
+the `ccx repos` check above is for.
+
+Two more log lines are worth alerting on: the mapping tripwire, warning that a
 principal re-resolved to a *different* immutable account id (an upstream rebind
 or directory churn), and the `instance-binding snapshot` emitted at every
 startup — diff it across rollouts to detect a re-pointed instance key.
