@@ -67,6 +67,8 @@ checks **reachability only**: the server's health endpoint is auth-exempt, so
 | `Query server unreachable at <url>` | wrong/empty `CCX_SERVER_URL`, server down, network/port-forward dropped | check the URL; re-establish `kubectl port-forward`; confirm with the user |
 | `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` does **not** catch this — health is auth-exempt) | set a valid token (the server may accept several for rotation) |
 | `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx git-refs`) |
+| `agent_query_unavailable` (from `ccx query`) | the deployment hasn't enabled agentic query — off by default, because answering sends code to a model provider | server config the CLI can't change: answer with `search`/`grep`/`defs`/`refs` instead, and tell the user their platform team decides |
+| `agent_query_busy` / `deadline_exceeded` (from `ccx query`) | the server is at its concurrent agentic-query cap, or the investigation outran the server's deadline | fall back to the other commands for this question; one later retry of a `busy` is fine, a retry loop is not |
 | `No results.` / `No matches.` | query/pattern found nothing | for `search`, rephrase or raise `-k`/`--offset`; for `grep`, re-check [grep-syntax.md](grep-syntax.md) gotchas |
 | server version mismatch warning | CLI and server versions drifted | upgrade the CLI (or pin to the server's version) |
 
@@ -80,9 +82,10 @@ refs (and commit SHAs) are currently indexed.
 The same query server exposes an **MCP** (Model Context Protocol) endpoint at
 `<CCX_SERVER_URL>/mcp` (Streamable HTTP), with tools kept at **parity** with the CLI
 (`code_search`, `code_grep`, `find_definitions`, `find_references`, `read_file`,
-`find_files`, `list_git_refs`, `list_repos` — `git_ref`
-is optional everywhere and takes bare branch/tag names, resolved to the repo's
-default like the CLI). For MCP-capable
+`find_files`, `list_git_refs`, `list_repos`, and `query_codebase` — the MCP form of
+`ccx query`, always advertised but failing with `agent_query_unavailable` unless
+the deployment enables it. `git_ref` is optional everywhere and takes bare
+branch/tag names, resolved to the repo's default like the CLI). For MCP-capable
 agents this is the preferred path — native tool calls, no CLI install, no output
 parsing. Auth uses the same bearer token.
 

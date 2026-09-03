@@ -1,14 +1,15 @@
 ---
 name: ccx
-description: "This skill should be used when querying a codebase indexed by a remote CocoIndex Code Plus query server — semantic search, AST structural grep, symbol navigation (find a symbol's definitions and references), or reading files/listing paths at an indexed git ref. Use it to get codebase information whenever everyday local tools fall short: fuzzy/conceptual search with no exact term to grep, structure-oriented code queries (matching syntax, not text lines), resolved where-is-this-defined / who-calls-this lookups, or corpora that are large, not checked out locally, at another ref, or spread across repos. Also use it when the user asks about ccx, cocoindex-code-plus, or the query server / MCP endpoint. Trigger phrases include 'search the codebase', 'find code related to', 'grep for the pattern', 'where is X defined', 'find all references/usages/call sites', 'ccx', 'cocoindex-code-plus'."
+description: "This skill should be used when querying a codebase indexed by a remote CocoIndex Code Plus query server — semantic search, AST structural grep, symbol navigation (find a symbol's definitions and references), reading files/listing paths at an indexed git ref, or asking a natural-language question about the code and getting a written, citation-backed answer (`ccx query`). Use it to get codebase information whenever everyday local tools fall short: fuzzy/conceptual search with no exact term to grep, structure-oriented code queries (matching syntax, not text lines), resolved where-is-this-defined / who-calls-this lookups, or corpora that are large, not checked out locally, at another ref, or spread across repos. Also use it when the user asks about ccx, cocoindex-code-plus, or the query server / MCP endpoint. Trigger phrases include 'search the codebase', 'find code related to', 'grep for the pattern', 'where is X defined', 'find all references/usages/call sites', 'ask the codebase a question', 'ccx query', 'ccx', 'cocoindex-code-plus'."
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation)
 
 `ccx` is the client CLI for **CocoIndex Code Plus**. It queries a codebase that a
 **remote query server** has indexed into Postgres + pgvector — semantic search,
-AST structural grep, symbol definitions/references, and read-only file access —
-over HTTP. The CLI holds no index and needs no license; it just talks to a server.
+AST structural grep, symbol definitions/references, read-only file access, and
+(where enabled) a cited written answer to a question — over HTTP. The CLI holds
+no index and needs no license; it just talks to a server.
 
 ## When to reach for ccx
 
@@ -28,7 +29,12 @@ file reads, IDE search) fall short:
   C/C++.
 - **Large / remote / multi-repo corpus** — the repo isn't checked out locally,
   you need a branch or tag other than your checkout, or the question spans
-  several indexed repos (`--repo`, repeatable for `search`; `--git-ref`).
+  several indexed repos (`--repo`, repeatable for `search` and `query`;
+  `--git-ref`).
+- **A question, not a lookup** — the deliverable is a written, cited
+  explanation ("how does re-embedding get decided, end to end?", "compare auth
+  in these two services"), or the question is too broad for one search or
+  pattern → `ccx query` (slower; see below).
 
 The one query *not* to route through ccx: a plain literal-identifier lookup in a
 small repo you already have checked out — local `rg` answers that directly, and
@@ -42,8 +48,9 @@ occurrence — `ccx defs` / `ccx refs` beat both.)
 - **Repo auto-detection.** Commands auto-scope to the repo of the current git
   checkout, detected from its `origin` GitHub/GitLab remote (resolved to an
   `<owner>/<repo>` name). Override with `--repo <owner>/<repo>` (repeatable for
-  `search`, up to the server's per-search cap). Without such an origin the
-  command **errors** with guidance rather than guessing — pass `--repo`;
+  `search` and `query`, up to the server's per-search cap). Without such an
+  origin the command **errors** with guidance rather than guessing — pass
+  `--repo`;
   `ccx repos` lists the indexed repos you can target. There is no global
   "search everything" mode.
 - **Ref defaulting.** Every query command is ref-scoped, and `--git-ref` is
@@ -225,6 +232,46 @@ those, a missing symbol may simply be unindexed. Absence is not completeness.
 A stale exact target (definition renamed/removed since the `defs` call) errors
 with `target_not_found` — re-run `ccx defs` for a current target.
 
+## Ask a question, get a cited answer (`ccx query`)
+
+Every command above returns *material* — hits, matches, symbol rows — for you to
+read. `ccx query` returns a **written answer with citations**: a server-side
+agent does the searching, grepping, and reading for you and writes up what it
+found. Scoping is the same as `search`: the current checkout by default,
+`--repo` repeatable, `--git-ref` for a single repo.
+
+```bash
+ccx query "how does the indexer decide what to re-embed?"
+ccx query "compare how these two services authenticate" --repo acme/a --repo acme/b
+```
+
+Reach for it when the deliverable is an **explanation** ("how does X work end to
+end?", "why does Y happen?", "compare A and B" — above all across repos), or the
+question is too broad to reduce to one search or pattern. When the deliverable
+is a **location or code to read** — which file to change, where a symbol lives,
+its call sites — stay with `search`/`grep`/`defs`/`refs`: they answer in a
+second or two, while `query` runs seconds to minutes. Run one `query` at a time
+(the server caps concurrent agentic queries); a question already answered — by
+anyone, even rephrased — may return instantly from the answer cache.
+
+- **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
+  `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and
+  the line numbers are at that commit. Before acting on a claim, open those
+  lines at that commit — `git show <sha>:<path>`, or your working tree when it
+  is at that commit; for a repo you don't have, `ccx read-file` with that
+  `--repo`/`--git-ref` (the ref's indexed head — the same commit unless the
+  index has moved since). A claim its lines don't support is dropped, not
+  repeated.
+- **`--json`** emits the exact response model (`answer`, `resolved_scopes`,
+  `usage`; `usage.result_cache_hit` says whether the cache answered); `--stats`
+  adds a one-line cost/reuse summary on stderr.
+- **It may be off, busy, or out of time.** `agent_query_unavailable` means the
+  deployment hasn't enabled it: answer with the other commands, tell the user
+  their platform team decides, and don't try again this session.
+  `agent_query_busy` (concurrency cap) and `deadline_exceeded` (the
+  investigation outran the server's deadline): fall back to the other commands
+  for this question — at most one later retry, never a loop.
+
 ## Reading & listing files at a ref (remote / cross-ref)
 
 `ccx read-file` and `ccx find-files` fetch file contents and paths at an indexed
@@ -271,5 +318,6 @@ troubleshooting.
 Everything is non-interactive and env-driven, so an agent or CI job can run `ccx`
 directly: errors exit non-zero, notes go to stderr, results to stdout. The query
 server also exposes an **MCP** endpoint (`<CCX_SERVER_URL>/mcp`) with the same
-tools at parity — the preferred path for MCP-capable agents (no CLI install, no
-output parsing). See [references/management.md](references/management.md#mcp).
+tools at parity (`ccx query` is the `query_codebase` tool) — the preferred path
+for MCP-capable agents (no CLI install, no output parsing). See
+[references/management.md](references/management.md#mcp).
