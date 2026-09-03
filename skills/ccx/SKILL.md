@@ -25,8 +25,8 @@ file reads, IDE search) fall short:
   → `ccx grep`.
 - **Symbol navigation** — "where is `X` defined?", "who calls / imports / uses
   `X`?": a **resolved** cross-file answer (alias- and re-export-aware, not a
-  text match) → `ccx defs` / `ccx refs`. Covers Python, TS/JS (incl. TSX), and
-  C/C++.
+  text match) → `ccx defs` / `ccx refs`. Covers Python, TS/JS (incl. TSX), C/C++,
+  C#, and Rust.
 - **Large / remote / multi-repo corpus** — the repo isn't checked out locally,
   you need a branch or tag other than your checkout, or the question spans
   several indexed repos (`--repo`, repeatable for `search` and `query`;
@@ -106,7 +106,7 @@ Requires `-l/--language`.
 
 ```bash
 ccx grep 'foo(\*)' -l python                  # calls to foo(...), any arguments
-ccx grep 'def \_(\*):' -l python              # every function def (incl. async, decorated)
+ccx grep 'def \_(\*) \*:' -l python           # every function def (async, decorated, `-> T` too)
 ccx grep 'isinstance(\_, \_)' -l python --path 'src/**'
 ```
 
@@ -164,8 +164,10 @@ match, and dropping to a bare identifier with no metavariable just floods hits.)
 Key model: a pattern matches a **fragment**, child-aligned; incidental trailing
 `;`/`,` are ignored, but closers (`)`, `}`) are significant. The output shows
 **exactly the span the pattern covers** — extend the pattern to see more:
-`def parse_config(\*):` prints only the header, while `def parse_config(\*): \*`
-prints the whole function including its body. **For the full
+`def parse_config(\*) \*:` prints only the header, while
+`def parse_config(\*) \*: \*` prints the whole function including its body. That
+`\*` before the colon absorbs a `-> T` return annotation — `def f(\*):` matches
+**only** un-annotated defs (zero hits in a typed codebase), a silent miss. **For the full
 pattern language, verified recipes for common queries, and the gotchas (why
 `try \{{ … \}}` needs the `:`, qualified names, fragment spans), read
 [references/grep-syntax.md](references/grep-syntax.md) before writing non-trivial
@@ -178,8 +180,8 @@ patterns.**
 
 Where is a symbol **defined**, and who **uses** it — answered from a resolved
 symbol graph the indexer builds (cross-file, alias- and re-export-aware), not
-from text matching. Covers **Python, TS/JS incl. TSX, and C/C++**; for other
-languages fall back to `grep`/`search`.
+from text matching. Covers **Python, TS/JS incl. TSX, C/C++, C#, and Rust**;
+for other languages fall back to `grep`/`search`.
 
 ```bash
 ccx defs QueryService                        # definitions of the base name
@@ -190,20 +192,22 @@ ccx refs src/db.py Repo.find                 # uses of EXACTLY this definition (
 ccx refs QueryService --role call            # only calls (roles: call, import, type_use, …)
 ```
 
-The canonical flow is **defs → refs**, a copy-paste. Each `ccx defs` row ends
-with a `target: …` pair; paste it verbatim after `ccx refs `:
+The canonical flow is **defs → refs**, a copy-paste. Each `ccx defs` row's detail
+line ends with a paste-ready command — `uses: ccx refs PATH ENTITY_ID` (carrying
+`--repo`/`--git-ref` when you scoped explicitly); run it verbatim, adding
+`--role` and friends as needed:
 
 ```
 $ ccx defs find
-src/db.py:42:4 [method] db.Repo.find
-  lang=python  target: src/db.py Repo.find
+src/db.py:42:4 [method] python:db.Repo.find
+  lang=python  uses: ccx refs src/db.py Repo.find
 
 $ ccx refs src/db.py Repo.find --role call
 ```
 
-Copy the pair — don't compose the second token yourself: the headline's dotted
-name (`db.Repo.find`, module-qualified) is **not** the target token
-(`Repo.find`, file-relative). A bare `ccx refs NAME` is the broad alternative
+Run the printed command — don't compose the second token yourself: the
+headline's pack-tagged dotted name (`python:db.Repo.find`, module-qualified) is
+**not** the entity id (`Repo.find`, file-relative). A bare `ccx refs NAME` is the broad alternative
 (every definition with that unqualified name, plus unresolved mentions). If a
 single argument looks like half of a forgotten pair (a path, or a dotted /
 `#`-suffixed id), `refs` errors with the fix instead of running a broad query
@@ -300,15 +304,16 @@ Note the two different senses of "ref": `ccx git-refs` lists **git** refs
 - **`No definitions.` / `No references.`** — first read the stderr coverage
   note (index not built / ref skipped / partial parse / snapshot lag →
   absence proves nothing); then check the language is covered (Python,
-  TS/JS/TSX, C/C++). A `defs` miss on a dotted name usually means
+  TS/JS/TSX, C/C++, C#, Rust). A `defs` miss on a dotted name usually means
   `--qualified-name` was needed (or vice versa — drop it to match the base
   name); a `refs` miss on an exact target may be a stale `entity_id` — re-run
   `ccx defs`.
 - **Unknown/unindexed ref** — the error lists the indexed refs; pick one or drop
   `--git-ref` to use the default.
 
-Server/transport failures — `HTTP 503` "index not built yet", `HTTP 401` auth, a
-connection error, or `ccx` not installed — are the user's environment, not something
+Server/transport failures — `HTTP 503` "index not built yet", `HTTP 401` auth, an
+expired login (the error says `Run ccx login`), a connection error, or `ccx` not
+installed — are the user's environment, not something
 to work around: **never invent a server URL or token**; surface the missing piece to
 the user and see [references/management.md](references/management.md) for setup +
 troubleshooting.

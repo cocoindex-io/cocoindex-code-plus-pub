@@ -129,9 +129,12 @@ node. **Include the full qualifier** (`std::make_unique<\X>(\*)`) or capture it
 To require something in the body, use containment: `for \X in \Y \{{ … \}}`.
 
 Use this deliberately to control how much the output *shows*: extend the pattern to
-cover what you want to read. `def parse_config(\*):` prints only the header;
-`def parse_config(\*): \*` covers — and prints — the whole function including its body
-(often saving a follow-up `read-file`).
+cover what you want to read. `def parse_config(\*) \*:` prints only the header;
+`def parse_config(\*) \*: \*` covers — and prints — the whole function including its
+body (often saving a follow-up `read-file`). The `\*` between `)` and `:` matters: a
+return annotation `-> T` is two sibling nodes there, so `def parse_config(\*):` matches
+only an **un-annotated** def — in a typed codebase that is **0** hits, silently
+(`\?` does not cover it either: it spans one node, the annotation is two).
 
 ### 4. A literal closer after a metavar must structurally follow it
 `if \C { \X = \Y }` → **0** on `if c { x = 1; }`, because the source has `x = 1` **`;`**
@@ -178,7 +181,7 @@ the fix is to *loosen the structure*, not abandon it:
 1. **Blank out what you're least sure of** — `\_` / `\*` / `\?` for varying parts, a
    regex metavar for a name you half-know (`\/get_.*/(\*)`).
 2. **Def vs. call unsure?** `X(\*)` matches both the def header and every call site —
-   the right probe when `def X(\*):` came back empty (maybe `X` is only *called* here).
+   the right probe when `def X(\*) \*:` came back empty (maybe `X` is only *called* here).
 3. **Check the scope** — a stderr note about a CWD-subtree `--path` means you searched
    part of the repo; `--path '*'` widens.
 4. **Still nothing** → the shape genuinely isn't in the corpus; pivot to `ccx search`
@@ -195,9 +198,9 @@ all structure).
 
 | Intent | Pattern |
 |---|---|
-| every function def (incl. `async`, decorated) | `def \_(\*):` |
-| the def of `X`, whatever its signature | `def X(\*):` |
-| the def of `X` *with its body shown* | `def X(\*): \*` |
+| every function def (incl. `async`, decorated, `-> T` annotated) | `def \_(\*) \*:` |
+| the def of `X`, whatever its signature | `def X(\*) \*:` |
+| the def of `X` *with its body shown* | `def X(\*) \*: \*` |
 | calls of `X` (also matches its def header) | `X(\*)` |
 | every class, with or without a base list | `class \_\?:` |
 | classes deriving from `Base` | `class \_(\*Base\*):` — or just `class \_(\*):` and read |
