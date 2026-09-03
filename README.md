@@ -34,6 +34,18 @@ endpoint.
   `defs`/`refs` navigation, file access, and cited `query` answers), with a full
   [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
 
+Install it user-level with the [skills CLI](https://skills.sh) — it detects the
+agents you have (Claude Code, Codex, Cursor, Gemini CLI, …) and links the skill
+into each:
+
+```bash
+npx skills add cocoindex-io/cocoindex-code-plus-pub -g
+```
+
+Update later with `npx skills update ccx -g`. Without the CLI, copy the
+self-contained `skills/ccx/` folder to `~/.claude/skills/ccx` (Claude Code) or
+your agent's skills directory.
+
 ## About
 
 CocoIndex Code Plus is built on [CocoIndex](https://cocoindex.io), the real-time

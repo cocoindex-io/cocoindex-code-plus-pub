@@ -30,6 +30,9 @@ upgrade — then carries on, since login often still works without it. An older
 CLI stays silent, which is why the 0.1.34 floor is still worth checking by
 hand when a login fails.
 
+Driving `ccx` from a coding agent? Install the **agent skill** too — see
+[For agents & automation](#for-agents--automation).
+
 ## Configure
 
 Run interactively, `ccx` asks for anything it's missing **once** and saves
@@ -306,6 +309,18 @@ has been checked against the repositories in question.
 
 ## For agents & automation
 
+- **Agent skill** — [`skills/ccx/SKILL.md`](../skills/ccx/SKILL.md) teaches a
+  coding agent when and how to drive `ccx` (search vs. structural grep vs.
+  symbol navigation, scoping, reading empty results). Install it user-level
+  with the [skills CLI](https://skills.sh), which detects Claude Code, Codex,
+  Cursor, Gemini CLI and others:
+
+  ```bash
+  npx skills add cocoindex-io/cocoindex-code-plus-pub -g
+  ```
+
+  (`npx skills update ccx -g` later; or copy the folder to
+  `~/.claude/skills/ccx`.)
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
