@@ -66,12 +66,11 @@ occurrence — `ccx defs` / `ccx refs` beat both.)
   commit, not your working tree — a `Using git ref …` note naming your own
   branch still means the commit the index holds for it. So when your checkout
   has uncommitted or unpushed changes, every path and line number can be stale,
-  and a symbol you just added is simply absent — that is not evidence it
+  and a symbol you added since that commit is absent — that is not evidence it
   doesn't exist. Read the note, and confirm a specific location in your working
-  tree before acting on it (`ccx git-refs` prints the commit sha behind each
-  ref, when you need to know exactly what answered). Keep querying on a dirty
-  checkout, though: locating existing code — the common case — survives a
-  line-number offset.
+  tree before acting on it; when you need the exact commit that answered,
+  `ccx git-refs` prints it per ref. Keep querying on a dirty checkout, though:
+  locating existing code — the common case — survives a line-number offset.
 - **CWD subtree scoping.** Run from a *subdirectory* of the checkout and
   `search`/`grep` default `--path` to that subtree (a stderr note names the
   glob). To cover the whole repo, run from the repo root or pass `--path '*'`.
