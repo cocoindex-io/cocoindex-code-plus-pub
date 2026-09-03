@@ -62,6 +62,16 @@ occurrence — `ccx defs` / `ccx refs` beat both.)
   name works (`main`, `v1.2`); the qualified `heads/<branch>` / `tags/<tag>`
   form is only needed when a branch and tag share a name. An unknown ref errors
   with the list of indexed refs.
+- **The indexed ref is a commit snapshot.** Results describe the code at that
+  commit, not your working tree — a `Using git ref …` note naming your own
+  branch still means the commit the index holds for it. So when your checkout
+  has uncommitted or unpushed changes, every path and line number can be stale,
+  and a symbol you just added is simply absent — that is not evidence it
+  doesn't exist. Read the note, and confirm a specific location in your working
+  tree before acting on it (`ccx git-refs` prints the commit sha behind each
+  ref, when you need to know exactly what answered). Keep querying on a dirty
+  checkout, though: locating existing code — the common case — survives a
+  line-number offset.
 - **CWD subtree scoping.** Run from a *subdirectory* of the checkout and
   `search`/`grep` default `--path` to that subtree (a stderr note names the
   glob). To cover the whole repo, run from the repo root or pass `--path '*'`.
@@ -287,8 +297,9 @@ Full usage: [references/remote-access.md](references/remote-access.md).
 ## Repo & ref metadata
 
 `ccx git-refs [<owner>/<repo>]` lists what's indexed — a repo's refs and their
-commit shas (`(default)` marks the default branch). Reach for it only to target a
-non-default ref; the ref default already handles the common case.
+commit shas (`(default)` marks the default branch). Reach for it to target a
+non-default ref, or to see which commit a ref is indexed at — not as a routine
+pre-flight; the ref default already handles the common case.
 
 Note the two different senses of "ref": `ccx git-refs` lists **git** refs
 (branches and tags), while `ccx refs` finds where a **symbol** is used.
