@@ -336,7 +336,9 @@ is one realm's configuration):
   makes everyone re-authenticate through your IdP at least monthly. Raising
   them does not weaken revocation: disabling the user is what revokes, and
   their last access token then expires within **Access Token Lifespan**
-  (keep it short — minutes).
+  (keep it short — minutes). A change reaches sessions created **after** it,
+  so verify with a fresh `ccx login` rather than a refresh, and expect
+  everyone already signed in to pick the new bound up at their next login.
 - Keycloak stamps `typ: JWT`, not `at+jwt` — leave `requireTypAtJwt: false`.
 
 **Helm values this produces:**
