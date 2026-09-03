@@ -50,12 +50,21 @@ deployment.
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
 export CCX_API_TOKEN=<your-token>               # token deployments only
-ccx status        # checks the server is reachable + healthy, and names the server it resolved
+ccx status        # server reachable + healthy (and which one), then the credential your next request would use
 ```
 
-`ccx status` checks **reachability only** — the server's `/health` is auth-exempt,
-so it passes even with a missing or wrong token. Your first `ccx search` is what
-confirms auth (a bad token returns `HTTP 401`; see [Troubleshooting](#troubleshooting)).
+`ccx status` reports two facts, separately. The server block — reachable and
+healthy, the URL it resolved and where that came from, version, uptime — is
+probed with no credential (`/health` is auth-exempt). The last line is the
+**credential** your next request would use: a cached login (`valid`, or
+`expired and could not be refreshed` with the fix named), `CCX_API_TOKEN`, or
+`none`. That line describes the credential; it does not test it — a token the
+server rejects is only caught by your first real request (`HTTP 401`; see
+[Troubleshooting](#troubleshooting)). The exit code follows the server fact:
+`0` whenever the server is healthy, even when the credential line is a warning,
+so scripts can keep waiting on `ccx status` for a server to come up. (CLIs
+before 0.1.41 print no credential line and fail `status` outright on an
+expired login.)
 
 **SSO deployments (OIDC).** If your platform team enabled company-IdP sign-in,
 skip `CCX_API_TOKEN` and sign in once:
@@ -283,7 +292,8 @@ has been checked against the repositories in question.
 
 | Symptom | Cause / fix |
 |---|---|
-| `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` won't catch this (`/health` is auth-exempt). |
+| `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` names the credential in use but does not validate it against the server. |
+| `login: expired and could not be refreshed` (in `ccx status`), or `Your login for … has expired and could not be refreshed` (from any other command) | Your cached SSO login aged out — the IdP's session lifetime, so an overnight gap can do it. The server itself is fine (`status` still reports it healthy). Run `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN`. |
 | `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
 | connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. Run `ccx config` to see the server it resolved and where that came from. |
 | talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
