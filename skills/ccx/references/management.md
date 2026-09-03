@@ -36,7 +36,7 @@ Two environment variables, or a `.env` found from the working directory upward
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com
 export CCX_API_TOKEN=<your-token>
-ccx status        # confirm reachable + healthy
+ccx status        # reachable + healthy, then the credential the next request would use
 ```
 
 `--server <url>` overrides `CCX_SERVER_URL` per command. There is no flag for the
@@ -49,15 +49,26 @@ automation is fine and stays valid for machines).
 ## Verifying / health
 
 ```bash
-ccx status        # server status, URL, version, uptime
+ccx status        # server status, URL, version, uptime — then the credential line
 ccx version       # just the CLI version
 ```
 
 Use `ccx status` when **diagnosing** — a query failed, or you're bringing up a new
 environment. It's not a pre-flight step for normal use (just run your query). It
-checks **reachability only**: the server's health endpoint is auth-exempt, so
-`status` passes even with a missing or wrong token — the first real query (e.g. a
-`ccx search`) is what confirms auth (a bad token returns `HTTP 401`).
+reports **two facts, separately**, and its exit code follows the first:
+
+- **Server** (`Query server: healthy`, url, version, uptime) — probed with no
+  credential, since the health endpoint is auth-exempt. Unreachable → exit 1.
+- **Credential** — the last line names what the next request would use:
+  `login: cached for <url>, valid (refreshes automatically)`, `login: expired
+  and could not be refreshed … — run ccx login`, `token: CCX_API_TOKEN set`, or
+  `credential: none — run ccx login or export CCX_API_TOKEN`. A warning here
+  still exits 0 — the server is up; the credential is the user's to fix.
+
+The credential line is **described, not tested**: a missing or wrong
+`CCX_API_TOKEN` still passes `status`, and the first real query (`ccx search …`)
+is what confirms auth (`HTTP 401`). CLIs before 0.1.41 print no credential line
+and fail `status` outright on an expired login.
 
 ## Troubleshooting
 
@@ -65,7 +76,8 @@ checks **reachability only**: the server's health endpoint is auth-exempt, so
 |---|---|---|
 | `command not found: ccx` | not installed / not on PATH | install (above); re-open the shell |
 | `Query server unreachable at <url>` | wrong/empty `CCX_SERVER_URL`, server down, network/port-forward dropped | check the URL; re-establish `kubectl port-forward`; confirm with the user |
-| `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` does **not** catch this — health is auth-exempt) | set a valid token (the server may accept several for rotation) |
+| `login: expired and could not be refreshed` in `ccx status`, or `Your login for <url> has expired and could not be refreshed` from any other command | the cached SSO login aged out (the IdP's session lifetime — an overnight gap can do it); the server itself is healthy | the user runs `ccx login` again (or `ccx logout` to fall back to `CCX_API_TOKEN`) — never guess a token |
+| `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` names the credential in use but does **not** validate it) | set a valid token (the server may accept several for rotation) |
 | `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx git-refs`) |
 | `No results.` / `No matches.` | query/pattern found nothing | for `search`, rephrase or raise `-k`/`--offset`; for `grep`, re-check [grep-syntax.md](grep-syntax.md) gotchas |
 | server version mismatch warning | CLI and server versions drifted | upgrade the CLI (or pin to the server's version) |
