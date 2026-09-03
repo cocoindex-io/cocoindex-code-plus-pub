@@ -31,7 +31,7 @@ endpoint.
 
 - **[skills/ccx/SKILL.md](skills/ccx/SKILL.md)** — a Claude Code / Agent skill that
   teaches an agent to drive the `ccx` CLI (semantic search, AST `grep`, symbol
-  `defs`/`refs` navigation, file access), with a full
+  `defs`/`refs` navigation, file access, and cited `query` answers), with a full
   [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
 
 ## About

@@ -223,7 +223,9 @@ Every command above returns *material* — hits, lines, symbol rows — and leav
 the reading to you. `ccx query` returns a **written answer with citations**: a
 server-side agent runs the investigation for you, searching, grepping, reading
 files, and following symbols, then writes up what it found. Each claim carries
-a `[repo:path#Lstart-Lend]` citation you can open to check it.
+a citation like `[s0:src/app.py#L40-L52]`: `s0` is one of the scopes the command
+lists on stderr (`s0: <owner>/<repo> @ <ref> (commit <sha>)`), and the line
+numbers are at that commit, so you can open exactly what the agent read.
 
 ```bash
 ccx query "how does the indexer decide what to re-embed?"
