@@ -90,7 +90,9 @@ per-provider sections below are this list in each vendor's vocabulary:
 4. **Refresh tokens** where sessions should outlive the ~1-hour access token:
    Okta and Entra issue them only when `offline_access` is requested — put it
    in `auth.oidc.advertisedScopes` so a bare `ccx login` requests it;
-   Keycloak refreshes from its own session without it.
+   Keycloak refreshes from its own session without it, which makes that
+   session's [idle and max lifetimes](#keycloak) the thing that bounds a
+   login.
 5. **Registrations for any interactive MCP clients.** There is no dynamic
    client registration (deliberately — selecting it in the chart config is
    refused at startup), so an MCP client that signs in interactively —
@@ -323,6 +325,20 @@ is one realm's configuration):
   wildcard, covering the server's advertised ports as-is), device grant
   optional. Refresh comes from the Keycloak session — no `offline_access`
   needed.
+- **Session lifetimes decide how long a login lasts.** Because refresh rides
+  the Keycloak session, the realm's **SSO Session Idle** and **SSO Session
+  Max** (*Realm settings → Sessions*) are what bound `ccx login`: Keycloak
+  stamps the refresh token's expiry at the **idle** bound, so an idle timeout
+  shorter than a night makes every morning a fresh login. Keycloak's
+  out-of-the-box values are sized for a web console, not for a CLI that sits
+  unused over a weekend. For a developer tool, **14 days idle / 30 days max**
+  is a sound starting point — the idle bound covers a vacation, the max bound
+  makes everyone re-authenticate through your IdP at least monthly. Raising
+  them does not weaken revocation: disabling the user is what revokes, and
+  their last access token then expires within **Access Token Lifespan**
+  (keep it short — minutes). A change reaches sessions created **after** it,
+  so verify with a fresh `ccx login` rather than a refresh, and expect
+  everyone already signed in to pick the new bound up at their next login.
 - Keycloak stamps `typ: JWT`, not `at+jwt` — leave `requireTypAtJwt: false`.
 
 **Helm values this produces:**
