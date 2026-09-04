@@ -93,7 +93,10 @@ ccx ui
 This serves the dashboard on a loopback port and opens it. The page reads the
 same API everything else does; your CLI proxies those reads with your stored
 token, so **the token never reaches the page** and the query server needs no
-browser-session or CORS surface.
+browser-session or CORS surface. The credential is looked up on every read,
+so a login that ages while the page is open is refreshed in place. If it
+expires outright, the page says so: run `ccx login` in any terminal and
+reload — the running `ccx ui` picks the new login up without a restart.
 
 The link `ccx ui` prints carries a one-time session secret — open that link
 rather than typing the bare address, and don't share it: it is what stops
