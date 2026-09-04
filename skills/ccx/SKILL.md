@@ -105,9 +105,10 @@ ccx search error handling retry logic
   Search ranks by resemblance to your words, so a doc, a default, a test, or an
   older or fallback implementation can outrank the code that actually does the
   work. "Where is X handled?" is settled by the hit itself — read it, stop if it
-  does X. "Which code actually does X?" is not: settle it by use — who calls the
-  hit, and how (`ccx refs`, or a caller already in the results) — before
-  answering.
+  does X. "Which code actually does X?" is settled by how the path *uses* the
+  hit — as the thing it calls, or only as a fallback or one registered option —
+  never by how well it reads. A caller already in the results may show it;
+  otherwise see *Settling what runs* below.
 
 ```bash
 ccx search "rate limiter" --repo acme/api --repo acme/worker
@@ -271,6 +272,17 @@ limits sit below coverage:
   portion the repo never imports absolutely stays unmerged, so a relative
   import across it shows as `~name`; treat such rows as real uses to verify
   by reading the file.
+
+**Settling what runs.** To confirm a candidate is the live path, look at its
+uses, not its text: `ccx refs <candidate>` lists them, and reading one gives the
+verdict. A plain call on the path confirms the candidate. `x or candidate()`
+means the path's value comes from `x`, so the candidate is only a fallback — the
+answer is upstream, in whatever supplies `x`; do not report the fallback as the
+decider. An entry in a registry or dispatch table means configuration picks, so
+name the key that selects it. Where `refs` can't see (string keys, dynamic
+dispatch, an uncovered language), `ccx grep` the call or registration shape
+instead; and when the question names an entry point, `ccx defs <entry>` and
+walking down reaches the live code without ever weighing the decoy.
 
 ## Ask a question, get a cited answer (`ccx query`)
 
