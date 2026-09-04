@@ -195,7 +195,13 @@ candidate as its own row, and `name_only` marks a mention whose target couldn't
 be resolved (e.g. an external import). Watch stderr for the **coverage note**:
 it tells you when the symbol index for the ref isn't built yet, skipped the ref
 as too large, parsed only part of it, or lags the ref's head — in all of those,
-a missing symbol may just be unindexed, so absence is not completeness.
+a missing symbol may just be unindexed, so absence is not completeness. A clean
+note is still not a proof: an exact target lists only *resolved* uses, and a use
+the resolver could not commit (an unknown receiver, an import across a Python
+source root the index could not infer — roots come from package markers and the
+repo's own absolute imports, never from build config) appears only as a
+`name_only` row of the broad `ccx refs NAME` form — check it before concluding
+a symbol has no callers.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
