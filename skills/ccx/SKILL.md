@@ -245,6 +245,21 @@ those, a missing symbol may simply be unindexed. Absence is not completeness.
 A stale exact target (definition renamed/removed since the `defs` call) errors
 with `target_not_found` — re-run `ccx defs` for a current target.
 
+**A clean coverage note still does not make "No references." a proof.** Two
+limits sit below coverage:
+
+- An **exact target** (`ccx refs PATH ENTITY_ID`) lists only *resolved* uses.
+  A use the resolver could not commit — an unknown receiver, a module two
+  source roots provide equally, an import across a source root the index
+  could not infer — is a `~name` (`name_only`) row, and only the broad form
+  `ccx refs NAME` shows it. Before concluding a symbol has no callers, run
+  `ccx refs NAME --role call` and read the `~name` rows as candidate uses.
+- Python **source roots are inferred** from the repo (package markers and
+  the repo's own absolute imports), never from build config. A namespace
+  portion the repo never imports absolutely stays unmerged, so a relative
+  import across it shows as `~name`; treat such rows as real uses to verify
+  by reading the file.
+
 ## Ask a question, get a cited answer (`ccx query`)
 
 Every command above returns *material* — hits, matches, symbol rows — for you to
