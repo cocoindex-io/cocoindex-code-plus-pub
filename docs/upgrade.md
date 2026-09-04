@@ -32,6 +32,76 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.41 — the symbol index finds more references, and Python names change shape
+
+Applies when upgrading from v0.1.40 or earlier.
+
+### What changed
+
+Two fixes to how `ccx defs` / `ccx refs` read Python and, for the second one,
+every supported language:
+
+- **Python source roots are now inferred from the repo.** Previously a
+  relative import only resolved inside the file's own directory and an
+  absolute import only from the repo root, so a package split across several
+  source roots — `python/*/src/<pkg>/`, the `src/` layout, one repo holding
+  several installable distributions — did not resolve across them. The
+  indexer now infers the roots from the tree and the repo's own imports
+  (package markers, and the directories an absolute import actually resolves
+  under). No configuration; nothing to set.
+- **Calls inside an unreadable receiver are indexed.** A call written inside
+  an expression the indexer cannot type — `(base_url or settings.url()).rstrip()`,
+  `items[0].run()`, `handlers[key]()` — was dropped entirely, so those call
+  sites appeared in **no** `ccx refs` output at all. They are now indexed in
+  Python, TypeScript/JavaScript, C/C++, and C#.
+
+The visible effect is that `ccx refs` returns call sites it used to miss, with
+nothing needed from you.
+
+**Python qualified names change spelling** where a package sits under a source
+root: `python:mypkg.settings.server_url` where the old index said
+`python:settings.server_url`. This affects `ccx defs --qualified-name` and
+`ccx refs <qualified-name>`. The two-token `PATH ENTITY_ID` target form that
+`ccx defs` prints under each row is **unaffected** — if you copy targets from
+`defs` output rather than composing names by hand, nothing changes for you.
+
+### Upgrade
+
+1. **Upgrade the release** with the command above, `--version 0.1.41`.
+
+2. **Let the indexer finish one full cycle.** This release re-extracts every
+   file and rebuilds every ref's symbol graph — that is what applies the fixes
+   to already-indexed repos, and it happens automatically on the first cycle.
+   Expect that cycle to take noticeably longer than a normal one, roughly in
+   proportion to how much code you index. Nothing else re-runs: file contents,
+   chunks, and embeddings are content-addressed and are reused untouched, so
+   there is no re-embedding cost and no new spend with your model provider.
+
+   Queries keep working throughout. Each ref's old symbol rows serve until its
+   new ones are ready, then swap.
+
+3. **Update saved qualified-name queries**, if you have any — scripts, agent
+   prompts, or bookmarks that pass `--qualified-name` for a Python symbol. Run
+   `ccx defs <base-name>` to read the current spelling.
+
+### Verify
+
+Once the indexer has completed a cycle, pick a Python symbol your code calls
+from inside a parenthesized or conditional expression and confirm the call
+site now appears:
+
+```bash
+ccx refs <function-name> --role call
+```
+
+Check stderr for the coverage note as usual. To confirm the new name shape:
+
+```bash
+ccx defs <function-name>
+```
+
+The headline's qualified name now carries the package's full import path.
+
 ## v0.1.39 — one owner per database schema
 
 Applies when upgrading from v0.1.38 or earlier.
