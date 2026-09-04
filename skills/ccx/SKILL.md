@@ -1,6 +1,7 @@
 ---
 name: ccx
-description: "This skill should be used when querying a codebase indexed by a remote CocoIndex Code Plus query server — semantic search, AST structural grep, symbol navigation (find a symbol's definitions and references), reading files/listing paths at an indexed git ref, or asking a natural-language question about the code and getting a written, citation-backed answer (`ccx query`). Use it to get codebase information whenever everyday local tools fall short: fuzzy/conceptual search with no exact term to grep, structure-oriented code queries (matching syntax, not text lines), resolved where-is-this-defined / who-calls-this lookups, or corpora that are large, not checked out locally, at another ref, or spread across repos. Also use it when the user asks about ccx, cocoindex-code-plus, or the query server / MCP endpoint. Trigger phrases include 'search the codebase', 'find code related to', 'grep for the pattern', 'where is X defined', 'find all references/usages/call sites', 'ask the codebase a question', 'ccx query', 'ccx', 'cocoindex-code-plus'."
+description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx query`, a written answer with citations. Use it proactively, before falling back to grep and file reads, whenever the user wants to understand or find code: how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; where something is implemented; where a symbol is defined and every place it is used or called; code matching a concept with no exact term to grep; code with a particular syntactic shape; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal one-token grep in a small checked-out repo, or for reading a file already at hand."
+when_to_use: "Trigger phrases: 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'where is X implemented/defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'search the codebase', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation)
@@ -13,8 +14,11 @@ no index and needs no license; it just talks to a server.
 
 ## When to reach for ccx
 
-Use ccx to get codebase information whenever the everyday local tools (`rg`,
-file reads, IDE search) fall short:
+Reach for ccx **first** — before grepping and reading files — whenever the task
+is to understand or find code. The server holds a resolved index of the whole
+repo (and of other refs and other repos), so it answers in one call what local
+tools reach only after a chain of greps, and it does not miss because a search
+term was guessed wrong:
 
 - **Fuzzy / conceptual search** — you don't know the exact term, so text grep
   has nothing to anchor on ("where is retry handled?", "how are embeddings
@@ -36,12 +40,13 @@ file reads, IDE search) fall short:
   in these two services"), or the question is too broad for one search or
   pattern → `ccx query` (slower; see below).
 
-The one query *not* to route through ccx: a plain literal-identifier lookup in a
-small repo you already have checked out — local `rg` answers that directly, and
-a `ccx grep` with no structure (a bare identifier, no metavariable) just floods
-unstructured hits. (But when the identifier question is really a *symbol*
-question — its definition, or its true use sites rather than every textual
-occurrence — `ccx defs` / `ccx refs` beat both.)
+Local tools stay the right choice for exactly two things: reading a file that
+is already at hand, and a plain literal-identifier lookup in a small repo you
+have checked out — local `rg` answers that directly, and a `ccx grep` with no
+structure (a bare identifier, no metavariable) just floods unstructured hits.
+(But when the identifier question is really a *symbol* question — its
+definition, or its true use sites rather than every textual occurrence —
+`ccx defs` / `ccx refs` beat both.)
 
 ## Repo & ref scoping (applies to every query command)
 
@@ -279,8 +284,10 @@ question is too broad to reduce to one search or pattern. When the deliverable
 is a **location or code to read** — which file to change, where a symbol lives,
 its call sites — stay with `search`/`grep`/`defs`/`refs`: they answer in a
 second or two, while `query` runs seconds to minutes. Run one `query` at a time
-(the server caps concurrent agentic queries); a question already answered — by
-anyone, even rephrased — may return instantly from the answer cache.
+(the server caps concurrent agentic queries), and do not wrap it in a shell
+`timeout` — the server enforces its own deadline (`deadline_exceeded` below),
+and macOS ships no `timeout` command. A question already answered — by anyone,
+even rephrased — may return instantly from the answer cache.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and

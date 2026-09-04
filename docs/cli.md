@@ -327,6 +327,39 @@ has been checked against the repositories in question.
 
   (`npx skills update ccx -g` later; or copy the folder to
   `~/.claude/skills/ccx`.)
+- **Getting an agent to reach for `ccx` unprompted** — an agent decides from
+  the skill's description whether a task needs it, and leans toward its
+  built-in grep and file reads for anything that looks doable locally. In
+  rising order of force:
+  1. **The skill alone.** Its description asks the agent to use `ccx` before
+     grep for understanding-and-finding tasks — how something works, a
+     walkthrough, where a symbol is defined and used, code matching a concept.
+     Requests phrased that way trigger it; a bare "grep for X" does not, by
+     design.
+  2. **The MCP endpoint** ([below](#mcp-integration)) — its tools sit in the
+     agent's tool list on every turn, carrying the same routing guidance from
+     the server, so there is nothing to trigger.
+  3. **One line in the repo's agent instructions** (`AGENTS.md` /
+     `CLAUDE.md`), for a team that wants `ccx` used on every task:
+
+     ```markdown
+     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / query) before grepping or reading files — see the `ccx` skill.
+     ```
+
+     Codex follows such a line at once; Claude Code treats it as a preference
+     and still greps first at times.
+  4. **A Claude Code hook**, when it must be enforced: a `UserPromptSubmit`
+     hook whose output is added to every prompt, in `.claude/settings.json`:
+
+     ```json
+     {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+       "command": "echo 'Before exploring code, check whether the ccx skill applies and invoke it if so.'"}]}]}}
+     ```
+- **Sandboxes must allow outbound network** — `ccx` talks to the query
+  server, so an agent sandbox that blocks connections (Codex's default
+  `read-only` and `workspace-write` modes) fails every command with a
+  refresh error; enable network access there (Codex:
+  `sandbox_workspace_write.network_access = true`).
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
