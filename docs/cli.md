@@ -355,11 +355,6 @@ has been checked against the repositories in question.
      {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
        "command": "echo 'Before exploring code, check whether the ccx skill applies and invoke it if so.'"}]}]}}
      ```
-- **Sandboxes must allow outbound network** — `ccx` talks to the query
-  server, so an agent sandbox that blocks connections (Codex's default
-  `read-only` and `workspace-write` modes) fails every command with a
-  refresh error; enable network access there (Codex:
-  `sandbox_workspace_write.network_access = true`).
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
