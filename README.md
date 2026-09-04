@@ -44,7 +44,9 @@ npx skills add cocoindex-io/cocoindex-code-plus-pub -g
 
 Update later with `npx skills update ccx -g`. Without the CLI, copy the
 self-contained `skills/ccx/` folder to `~/.claude/skills/ccx` (Claude Code) or
-your agent's skills directory.
+your agent's skills directory. If the agent keeps grepping instead of using
+it, [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation)
+lists the levers, from the MCP endpoint to a one-line repo rule and a hook.
 
 ## About
 
