@@ -101,6 +101,13 @@ ccx search error handling retry logic
   safe. `-k` / `--top-k <N>` returns more (default 5) and `--offset` paginates —
   raise `-k` only when every result still looks relevant (then there are likely
   more).
+- **A hit shows that code *talks about* your question, not that it *runs*.**
+  Search ranks by resemblance to your words, so a doc, a default, a test, or an
+  older or fallback implementation can outrank the code that actually does the
+  work. "Where is X handled?" is settled by the hit itself — read it, stop if it
+  does X. "Which code actually does X?" is not: settle it by use — who calls the
+  hit, and how (`ccx refs`, or a caller already in the results) — before
+  answering.
 
 ```bash
 ccx search "rate limiter" --repo acme/api --repo acme/worker
