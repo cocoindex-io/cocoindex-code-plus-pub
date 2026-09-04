@@ -335,6 +335,11 @@ has been checked against the repositories in question.
   job that keeps its token in a repo `.env` gets `401`s.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
+- **Sandboxes need network access** — `ccx` talks to the query server (and, on a
+  cached login, to your IdP), so an agent sandbox that blocks outbound network
+  blocks `ccx`. In the OpenAI Codex CLI, whose default sandbox does, set
+  `sandbox_workspace_write.network_access = true` (or run outside the sandbox);
+  the error names the failure as a connectivity one, not an expired login.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
   possible future add (track via the release docs).
 - **Structured output** — machine-readable (`--json`) output is planned so agents
