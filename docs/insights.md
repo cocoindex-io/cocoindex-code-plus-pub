@@ -1,7 +1,7 @@
 # ccx Insights — usage, cost and savings
 
 Insights answers three questions about a CocoIndex Code Plus deployment: who
-is using it, what it costs, and what the caching saved. It is **off by
+is using it, what its model calls cost, and what the caching saved. It is **off by
 default** and, when on, adds no new deployable component — the numbers are
 collected by the two services you already run and stored in one Postgres
 schema.
@@ -160,16 +160,21 @@ usageAnalytics:
     embedding_per_mtok: 0.13
     agent_input_per_mtok: 3.00
     agent_output_per_mtok: 15.00
-    vcpu_hour: 0.048
-    indexer_vcpus: 4
-    query_server_vcpus: 4     # TOTAL across replicas
-    storage_gb_month: 0.17
     tokens_per_chunk: 260     # drives embedding tokens from chunk counts
 ```
 
 Every key is optional; unset ones keep the built-in illustrative value. The
 sheet is validated at startup, so a typo or a non-positive number fails there
 rather than rendering a nonsense figure.
+
+Only consumption the product metered is priced — agent tokens and embedding
+work. **Compute and storage are your cloud bill** and have no keys here:
+
+- the server cannot count its own vCPUs or see a price, and a figure built
+  from guessed parameters would only bury the measured ones;
+- cost tiles are labelled for what they price (*model cost*, *embedding
+  cost*, *agent cost*), never as total cost of ownership;
+- the index footprint is shown in bytes.
 
 ## SQL views for BI and Grafana
 
@@ -258,6 +263,13 @@ settled:
   what serving from cache actually took. There is no productivity multiplier
   anywhere, and the figure is a lower bound by construction.
 - **Rates are labelled** as illustrative until you configure them.
+- **Cost means model cost.** Agent and embedding model calls at your rates;
+  compute and storage are not priced, they are on your cloud bill.
+- **Collection has a start date.** There is no backfill. A range that reaches
+  before the day analytics was enabled says *data since* that day, and the
+  daily charts begin there: earlier days are absent, not zero, while a quiet
+  day after it is a zero. The indexing view keys on the day the indexer's
+  half was enabled, which can differ.
 
 If a number looks wrong, `v_usage_status` reports how fresh the aggregates
 are and whether anything is still pending or was dropped under load.

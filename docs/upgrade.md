@@ -32,6 +32,46 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.44 — Insights prices model calls only
+
+Applies when upgrading from v0.1.43 or earlier, to every deployment with
+Insights enabled. The one step below is needed only if you configured a rate
+sheet (`usageAnalytics.rates`).
+
+### What changed
+
+- **Compute and storage are no longer priced.** Cost figures are now
+  **model cost** — agent and embedding model calls at your rates. The
+  illustrative defaults priced infrastructure too, so every deployment's cost
+  figures drop, rate sheet or not; the old figure was mostly a flat per-day
+  estimate built from parameters the server cannot verify.
+- **Tiles are named for what they price**: *Estimated model cost* on the
+  overview and per repository, *Estimated embedding cost* on the indexing
+  view, *Estimated agent cost* on the queries view. The index footprint is
+  still shown, in bytes.
+- **Daily charts start on the day analytics was enabled.** Every view says
+  *data since* that day when it falls inside the range, and a quiet day after
+  it is a zero, so charts over one window share an axis.
+- **Four rate-sheet keys are gone**: `vcpu_hour`, `indexer_vcpus`,
+  `query_server_vcpus`, and `storage_gb_month`. The server validates the sheet
+  at startup and refuses unknown keys, so a values file that still sets any of
+  them stops the query server from starting after the upgrade.
+
+### Upgrade
+
+1. **Remove those keys** from `usageAnalytics.rates` in your values file, if
+   present. The remaining keys are unchanged.
+2. **Upgrade the release** with the command above, `--version 0.1.44`.
+
+### Verify
+
+```bash
+ccx usage overview --range 30d
+```
+
+The tile reads *Estimated model cost*. If the range reaches before the day
+analytics was enabled, a *data since* note follows the window line.
+
 ## v0.1.41 — the symbol index finds more references, and Python names change shape
 
 Applies when upgrading from v0.1.40 or earlier.
