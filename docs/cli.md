@@ -315,7 +315,7 @@ has been checked against the repositories in question.
 
 ## For agents & automation
 
-- **Agent skill** — [`skills/ccx/SKILL.md`](../skills/ccx/SKILL.md) teaches a
+- **Agent skill** — [`skills/ccx-codebase-explorer/SKILL.md`](../skills/ccx-codebase-explorer/SKILL.md) teaches a
   coding agent when and how to drive `ccx` (search vs. structural grep vs.
   symbol navigation, scoping, reading empty results). Install it user-level
   with the [skills CLI](https://skills.sh), which detects Claude Code, Codex,
@@ -325,8 +325,9 @@ has been checked against the repositories in question.
   npx skills add cocoindex-io/cocoindex-code-plus-pub -g
   ```
 
-  (`npx skills update ccx -g` later; or copy the folder to
-  `~/.claude/skills/ccx`.)
+  (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
+  `~/.claude/skills/ccx-codebase-explorer`. Before 2026-09-05 the skill was named
+  `ccx`; delete that older install's folder when you add this one.)
 - **Getting an agent to reach for `ccx` unprompted** — an agent decides from
   the skill's description whether a task needs it, and leans toward its
   built-in grep and file reads for anything that looks doable locally. In
@@ -343,7 +344,7 @@ has been checked against the repositories in question.
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
      ```markdown
-     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / query) before grepping or reading files — see the `ccx` skill.
+     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / query) before grepping or reading files — see the `ccx-codebase-explorer` skill.
      ```
 
      Codex follows such a line at once; Claude Code treats it as a preference
@@ -353,7 +354,7 @@ has been checked against the repositories in question.
 
      ```json
      {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
-       "command": "echo 'Before exploring code, check whether the ccx skill applies and invoke it if so.'"}]}]}}
+       "command": "echo 'Before exploring code, check whether the ccx-codebase-explorer skill applies and invoke it if so.'"}]}]}}
      ```
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
