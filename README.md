@@ -45,10 +45,18 @@ npx skills add cocoindex-io/cocoindex-code-plus-pub -g
 Update later with `npx skills update ccx-codebase-explorer -g`. Without the CLI,
 copy the self-contained `skills/ccx-codebase-explorer/` folder to
 `~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your agent's skills
-directory. The skill was named `ccx` before 2026-09-05: an install from then
-is a separate entry, so delete its folder (`~/.agents/skills/ccx` and the
-`~/.claude/skills/ccx` link the skills CLI made, or wherever you copied it)
-when you add this one. If the agent keeps grepping instead of using
+directory.
+
+**Installed before 2026-09-05?** The skill was named `ccx` then, and the CLI
+treats it as a separate entry, so remove it first — this also cleans the links
+it made in every agent's skills directory:
+
+```bash
+npx skills remove ccx -g
+```
+
+(Copied by hand instead: delete the `ccx` folder from each agent's skills
+directory.) If the agent keeps grepping instead of using
 it, [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation)
 lists the levers, from the MCP endpoint to a one-line repo rule and a hook.
 
