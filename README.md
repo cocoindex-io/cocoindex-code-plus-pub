@@ -29,10 +29,10 @@ endpoint.
 
 ## Agent skill
 
-- **[skills/ccx/SKILL.md](skills/ccx/SKILL.md)** — a Claude Code / Agent skill that
+- **[skills/ccx-codebase-explorer/SKILL.md](skills/ccx-codebase-explorer/SKILL.md)** — a Claude Code / Agent skill that
   teaches an agent to drive the `ccx` CLI (semantic search, AST `grep`, symbol
   `defs`/`refs` navigation, file access, and cited `query` answers), with a full
-  [grep pattern-syntax reference](skills/ccx/references/grep-syntax.md).
+  [grep pattern-syntax reference](skills/ccx-codebase-explorer/references/grep-syntax.md).
 
 Install it user-level with the [skills CLI](https://skills.sh) — it detects the
 agents you have (Claude Code, Codex, Cursor, Gemini CLI, …) and links the skill
@@ -42,9 +42,13 @@ into each:
 npx skills add cocoindex-io/cocoindex-code-plus-pub -g
 ```
 
-Update later with `npx skills update ccx -g`. Without the CLI, copy the
-self-contained `skills/ccx/` folder to `~/.claude/skills/ccx` (Claude Code) or
-your agent's skills directory. If the agent keeps grepping instead of using
+Update later with `npx skills update ccx-codebase-explorer -g`. Without the CLI,
+copy the self-contained `skills/ccx-codebase-explorer/` folder to
+`~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your agent's skills
+directory. The skill was named `ccx` before 2026-09-05: an install from then
+is a separate entry, so delete its folder (`~/.agents/skills/ccx` and the
+`~/.claude/skills/ccx` link the skills CLI made, or wherever you copied it)
+when you add this one. If the agent keeps grepping instead of using
 it, [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation)
 lists the levers, from the MCP endpoint to a one-line repo rule and a hook.
 

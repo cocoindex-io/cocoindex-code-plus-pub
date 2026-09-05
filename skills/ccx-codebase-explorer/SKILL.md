@@ -1,5 +1,5 @@
 ---
-name: ccx
+name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx query`, a written answer with citations. Use it proactively, before falling back to grep and file reads, whenever the user wants to understand or find code: how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; where something is implemented; where a symbol is defined and every place it is used or called; code matching a concept with no exact term to grep; code with a particular syntactic shape; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal one-token grep in a small checked-out repo, or for reading a file already at hand."
 when_to_use: "Trigger phrases: 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'where is X implemented/defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'search the codebase', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 ---
