@@ -326,8 +326,14 @@ has been checked against the repositories in question.
   ```
 
   (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
-  `~/.claude/skills/ccx-codebase-explorer`. Before 2026-09-05 the skill was named
-  `ccx`; delete that older install's folder when you add this one.)
+  `~/.claude/skills/ccx-codebase-explorer`.) Installed before 2026-09-05? The
+  skill was named `ccx` then and counts as a separate entry — remove it first,
+  which also cleans its links in every agent's skills directory:
+
+  ```bash
+  npx skills remove ccx -g
+  ```
+
 - **Getting an agent to reach for `ccx` unprompted** — an agent decides from
   the skill's description whether a task needs it, and leans toward its
   built-in grep and file reads for anything that looks doable locally. In
