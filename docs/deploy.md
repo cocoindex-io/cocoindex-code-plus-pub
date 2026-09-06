@@ -1648,6 +1648,30 @@ the table, and **401** without a valid API token — both expected. The indexer 
 **singleton** indexer (`Recreate` — indexing pauses for the restart while the
 query server keeps serving), so pin `<X.Y.Z>` deliberately.
 
+### Logs and severity
+
+Both workloads write routine lines (INFO — the audit stream included) to
+**standard output**, and warnings, errors, and tracebacks to **standard
+error**. A log store that derives severity from the stream — Cloud Logging,
+and most Kubernetes log agents — therefore files the two apart, so a
+`severity>=ERROR` query selects the lines worth an operator's attention and
+nothing else:
+
+```bash
+gcloud logging read 'resource.labels.namespace_name="ccx" AND severity>=ERROR' --freshness=1d
+```
+
+That is the query behind the alert-worthy lines this guide names — the mapping
+tripwire, the mapping PAT expiry warning, `component build failed` — and the
+one to run against a correlation id the Insights error panel hands you
+([insights.md](insights.md)). The audit stream is INFO, so a SIEM ingesting it
+reads standard output; the parsing rule is in
+[security.md](security.md#where-the-stream-is).
+
+**Upgrading from v0.1.44 or earlier**, where everything but the access log went
+to standard error and collectors stamped the lot `ERROR`: see
+[upgrade.md](upgrade.md#v0145--log-severity-means-something).
+
 ### Rotating the API token
 
 `secrets.apiTokens.tokens` is a single string (not

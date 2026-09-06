@@ -1,11 +1,12 @@
 # CocoIndex Code Plus — Security & Deployment Guide
 
 For customer security and platform teams. Everything here is verifiable in
-the shipped artifacts. *Applies to CocoIndex Code Plus **v0.1.40 and later**.
+the shipped artifacts. *Applies to CocoIndex Code Plus **v0.1.45 and later**.
 Earlier releases predate parts of what follows: the disabled interactive-docs
 routes and the litellm egress pin (v0.1.8), the structured JSON audit stream
 (v0.1.14), agentic query (v0.1.24) and its answer cache (v0.1.29), usage
-analytics (v0.1.37), and the `reason` on audit denials (v0.1.40).*
+analytics (v0.1.37), the `reason` on audit denials (v0.1.40), and the log
+severity carried by the stream (v0.1.45).*
 
 ## Architecture & trust model
 
@@ -164,9 +165,23 @@ emits HTTP access logs (auth failures visible as 401s) and a **structured
 JSON audit stream** — REST and MCP alike — for your SIEM. There is no audit
 store we own or can read.
 
+### Severity is the stream
+
+Routine lines — INFO, the audit stream included — go to **standard output**;
+warnings, errors, and tracebacks go to **standard error**. Collectors that
+derive severity from the stream (Cloud Logging, and most Kubernetes log
+agents) therefore separate the two, so `severity>=ERROR` in your log store
+selects the lines worth an operator's attention and nothing else.
+
+*Before v0.1.45 everything but the HTTP access log went to standard error*,
+which those collectors stamped `ERROR` wholesale — including every successful
+request's audit event. If you built a filter, an alert, or an audit-ingestion
+rule around that, see
+[upgrade.md](upgrade.md#v0145--log-severity-means-something).
+
 ### Where the stream is
 
-On the query server's standard error, under the logger name
+On the query server's standard output, under the logger name
 `cocoindex_code_plus.audit`: one event per line, a single JSON object after
 the standard log prefix. Select the stream by logger name and parse from the
 first `{`:
