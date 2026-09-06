@@ -32,6 +32,53 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.45 — log severity means something
+
+Applies when upgrading from v0.1.44 or earlier, to every deployment. Nothing
+to do at upgrade time; read this if anything of yours reads the pod logs.
+
+### What changed
+
+- **Routine lines now go to standard output**, warnings and errors to standard
+  error. Everything but the HTTP access log used to go to standard error, and a
+  log collector that reads severity from the stream — Cloud Logging, most
+  Kubernetes log agents — stamped the lot `ERROR`: a successful request's audit
+  event arrived at the same severity as a crash, so `severity>=ERROR` matched
+  the whole log.
+- **The audit stream moved with it**, to standard output. Its content, logger
+  name (`cocoindex_code_plus.audit`), and one-JSON-object-per-line shape are
+  unchanged.
+- **The HTTP access log stays on standard output but changes shape**: it now
+  carries the same prefix as every other line — a timestamp, the level, and the
+  logger name (`<ts> INFO uvicorn.access: … "GET /health HTTP/1.1" 200`) —
+  where it read `INFO:     … "GET /health HTTP/1.1" 200 OK` before. It gains
+  the timestamp it never had, and loses the trailing status phrase.
+
+### What to do
+
+Check anything that consumes the logs, and adjust it once:
+
+1. **SIEM / audit ingestion** that selects the standard-error stream now finds
+   nothing; point it at standard output (selecting by the logger name keeps
+   working either way).
+2. **Alerts on `severity>=ERROR`** were matching every request and are worth
+   re-reading now that they mean what they say — a rule written to tolerate the
+   old volume (a high threshold, a mute) will hide real errors.
+3. **Log-based metrics or dashboards** built on the old access-line format need
+   their pattern updated.
+
+### Verify
+
+After the upgrade, in your log store:
+
+```bash
+gcloud logging read 'resource.labels.namespace_name="ccx" AND severity>=ERROR' --freshness=1h
+```
+
+A healthy deployment returns nothing, while a query for `severity=INFO` shows
+the audit events and access lines. Adjust the query to your log store; the
+principle is that a served request is no longer an error.
+
 ## v0.1.44 — Insights prices model calls only
 
 Applies when upgrading from v0.1.43 or earlier, to every deployment with
