@@ -91,7 +91,7 @@ them; all are defined in
 
 ### Agentic query runs inside the same authorization
 
-`ccx query` (and the MCP `query_codebase` tool) adds no authorization path of
+`ccx ask` (and the MCP `ask_codebase` tool) adds no authorization path of
 its own, under either mode:
 
 - The server resolves and authorizes the caller's **complete named repository
@@ -329,7 +329,7 @@ gives zero egress.
 
 ### Agentic query — off by default
 
-`ccx query`, the MCP `query_codebase` tool, and `POST /code/v0/query` run a
+`ccx ask`, the MCP `ask_codebase` tool, and `POST /code/v0/query` run a
 server-side agent that investigates your indexed code and returns a cited
 prose answer instead of raw hits. Turning it on (`agentQuery.enabled`, with a
 `model`) is an operator data-governance decision, because it sends source
