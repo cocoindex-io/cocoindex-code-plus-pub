@@ -108,10 +108,24 @@ repository, no entitlement needed), **Indexing** (cycles, freshness,
 footprint), and **Queries & agents** (operations, latency, agent reuse,
 errors).
 
+**Each detail view is a superset of the Overview for its subject**: the same
+headline figures, plus the day-by-day series and the breakdowns behind them.
+A number on the Overview can always be followed to the day it happened on —
+Queries & agents splits requests per day by operation and by client, agent
+queries into answered live and served from cache, wait time into spent and
+saved, and errors per day by code; Indexing splits the work into what was
+embedded and what reuse skipped.
+
+In **Repositories**, clicking a row opens that repository on its own: its
+figures, the operations it served, and its days — queries, agent queries live
+vs cached, chunks embedded. The address bar carries the selection, so a link
+to a repository's detail reopens it.
+
 ## The terminal (`ccx usage`)
 
 ```bash
 ccx usage                     # your repositories — no entitlement needed
+ccx usage repo <owner>/<repo> # one repository in detail — no entitlement needed
 ccx usage overview            # organization headline figures
 ccx usage indexing            # cycles, freshness, footprint
 ccx usage queries             # operations, latency, agent reuse, errors
@@ -120,6 +134,11 @@ ccx usage queries             # operations, latency, agent reuse, errors
 `--range 7d|30d|90d` picks the window (default `30d`). `--json` prints the API
 response verbatim, which is the supported shape for scripting — the table
 layout is not.
+
+`ccx usage repo` is the web UI's drill-down in a terminal: the repository's
+figures, the operations it served, then a row per day. It needs no
+entitlement, for the same reason the table does not — these are statistics
+about repositories you can already query.
 
 Running an organization-wide subcommand without the entitlement tells you so
 and points at the per-repository view, rather than failing opaquely.
@@ -131,7 +150,9 @@ ccx usage --report insights-q3.html --range 90d
 ```
 
 One self-contained HTML file: no network access when opened, no external
-assets, the data embedded. It renders with the same code as the web UI.
+assets, the data embedded. It renders with the same code as the web UI. It
+holds one window of figures, so its Repositories rows do not open — the
+drill-down is a live read, and the report says so where the click would be.
 
 **What a report deliberately does not contain**: principal labels (who ran
 what) and correlation ids (the handles for pulling one request's logs). A
