@@ -32,12 +32,30 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.45 — log severity means something
+## v0.1.45 — `ccx query` is now `ccx ask`; log severity means something
 
 Applies when upgrading from v0.1.44 or earlier, to every deployment. Nothing
-to do at upgrade time; read this if anything of yours reads the pod logs.
+to do at upgrade time; read the first part if anyone types or scripts the
+question command, the second if anything of yours reads the pod logs.
 
-### What changed
+### The question command is renamed
+
+- **`ccx query` is now `ccx ask`**, and the MCP tool `query_codebase` is now
+  `ask_codebase`. Flags, output, scoping, and the REST endpoint
+  (`POST /code/v0/query`) are unchanged, and there is no alias: the old
+  spellings are gone.
+- **Why**: coding agents choose between the subcommands on what the verbs
+  mean, and "query" reads as a synonym of "search" — so question-shaped
+  requests were being routed to `ccx search`. `ask` is the verb the
+  surrounding ecosystem already uses for question → answer.
+- **What to do**: update any script, alias, or agent instruction that types
+  `ccx query`, and reinstall the CLI (`uv tool install -U
+  cocoindex-code-plus`) so `ccx ask` exists. MCP clients rediscover the tool
+  list on connect and need no change, but a repo instruction line or prompt
+  that names `query_codebase` should be updated. An older CLI keeps working
+  against the new server — the REST contract did not change.
+
+### What changed in the logs
 
 - **Routine lines now go to standard output**, warnings and errors to standard
   error. Everything but the HTTP access log used to go to standard error, and a
@@ -54,7 +72,7 @@ to do at upgrade time; read this if anything of yours reads the pod logs.
   where it read `INFO:     … "GET /health HTTP/1.1" 200 OK` before. It gains
   the timestamp it never had, and loses the trailing status phrase.
 
-### What to do
+### What to do about the logs
 
 Check anything that consumes the logs, and adjust it once:
 

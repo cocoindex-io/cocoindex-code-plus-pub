@@ -93,8 +93,8 @@ and fail `status` outright on an expired login.
 | `login: expired and could not be refreshed` in `ccx status`, or `Your login for <url> has expired and could not be refreshed` from any other command | the cached SSO login aged out (the IdP's session lifetime — an overnight gap can do it); the server itself is healthy | the user runs `ccx login` again (or `ccx logout` to fall back to `CCX_API_TOKEN`) — never guess a token |
 | `HTTP 401` | missing/invalid `CCX_API_TOKEN` (`ccx status` names the credential in use but does **not** validate it) | set a valid token (the server may accept several for rotation) |
 | `HTTP 503` "index not built yet" | the server-side indexer hasn't populated this repo/ref yet | this is server state the CLI can't fix — retry later, or pick an indexed ref (`ccx git-refs`) |
-| `agent_query_unavailable` (from `ccx query`) | the deployment hasn't enabled agentic query — off by default, because answering sends code to a model provider | server config the CLI can't change: answer with `search`/`grep`/`defs`/`refs` instead, and tell the user their platform team decides |
-| `agent_query_busy` / `deadline_exceeded` (from `ccx query`) | the server is at its concurrent agentic-query cap, or the investigation outran the server's deadline | fall back to the other commands for this question; one later retry of a `busy` is fine, a retry loop is not |
+| `agent_query_unavailable` (from `ccx ask`) | the deployment hasn't enabled agentic query — off by default, because answering sends code to a model provider | server config the CLI can't change: answer with `search`/`grep`/`defs`/`refs` instead, and tell the user their platform team decides |
+| `agent_query_busy` / `deadline_exceeded` (from `ccx ask`) | the server is at its concurrent agentic-query cap, or the investigation outran the server's deadline | fall back to the other commands for this question; one later retry of a `busy` is fine, a retry loop is not |
 | `No results.` / `No matches.` | query/pattern found nothing | for `search`, rephrase or raise `-k`/`--offset`; for `grep`, re-check [grep-syntax.md](grep-syntax.md) gotchas |
 | server version mismatch warning | CLI and server versions drifted | `uv tool upgrade cocoindex-code-plus` (or pin to the server's version) |
 
@@ -108,8 +108,8 @@ refs (and commit SHAs) are currently indexed.
 The same query server exposes an **MCP** (Model Context Protocol) endpoint at
 `<CCX_SERVER_URL>/mcp` (Streamable HTTP), with tools kept at **parity** with the CLI
 (`code_search`, `code_grep`, `find_definitions`, `find_references`, `read_file`,
-`find_files`, `list_git_refs`, `list_repos`, and `query_codebase` — the MCP form of
-`ccx query`, always advertised but failing with `agent_query_unavailable` unless
+`find_files`, `list_git_refs`, `list_repos`, and `ask_codebase` — the MCP form of
+`ccx ask`, always advertised but failing with `agent_query_unavailable` unless
 the deployment enables it. `git_ref` is optional everywhere and takes bare
 branch/tag names, resolved to the repo's default like the CLI). For MCP-capable
 agents this is the preferred path — native tool calls, no CLI install, no output

@@ -183,7 +183,7 @@ component holds it. The bottom four apply only if you enable that feature.
 | **Embedding-provider key** | your model provider | indexer + query server → the provider | computing embeddings |
 | **Code-host credential** — GitHub App id + PEM, or GitLab token | you create it at your code host | indexer → code host | reading the repos you index |
 | **Postgres URLs** (passwords inline) — a writer and an internal DSN, plus an optional read-only one for the query server | you | both workloads → your database | the index store |
-| *(agentic query)* **Completion-model key** | your model provider | **query server only** → the provider | `ccx query` |
+| *(agentic query)* **Completion-model key** | your model provider | **query server only** → the provider | `ccx ask` |
 | *(`oidc`)* **IdP registrations** — an API/resource id and a public CLI client id | your IdP admin — recipes in [sso.md](sso.md) | `ccx login` → your IdP → query server | engineers signing in |
 | *(`codeHostMirrored`)* **Permission-check credential** | you create it at your code host | **query server** → code host | checking each caller's repo access |
 | *(`codeHostMirrored`, some topologies)* **Identity-mapping credential** — an enterprise PAT, or a GitLab admin token | you create it at your code host | **query server** → code host | joining an IdP identity to a code-host account |
@@ -488,7 +488,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx query` / MCP `query_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 ### Secrets: inline or existingSecret
 
@@ -751,7 +751,7 @@ notes:
 
 ### Agentic query
 
-`ccx query "<question>"` (and the MCP `query_codebase` tool) answers a
+`ccx ask "<question>"` (and the MCP `ask_codebase` tool) answers a
 natural-language question about your code with a cited prose answer, instead of
 returning raw search hits. A server-side agent runs the investigation: it
 searches, greps, reads files, and follows symbols using **the same authorized
@@ -874,7 +874,7 @@ Three consequences to know before you turn it on.
 split — `cost_spent` (what the request actually consumed, model calls and
 tokens included) and `cost_reused` (what it would have cost to recompute the
 work served from the cache) — so fleet-level savings aggregate straight from
-the audit log. Per request, `ccx query --stats` prints the same numbers as
+the audit log. Per request, `ccx ask --stats` prints the same numbers as
 one line (see [cli.md](cli.md)); the counters never show unless asked, and
 the MCP tool omits them unless called with `include_stats`.
 
@@ -1472,7 +1472,7 @@ the server:
   nothing auto-derives it.
 - **The ccx CLI needs no retuning.** Its timeouts are deliberately not
   coordinated with the server: connects fail on a fixed 10 s bound, and the
-  read ceiling is a generous fixed 600 s (1200 s for `ccx query`) that only
+  read ceiling is a generous fixed 600 s (1200 s for `ccx ask`) that only
   catches a dead network path or a wedged server — the server's own error
   always arrives first. A custom REST/MCP client must still keep its own
   timeout above the chain.

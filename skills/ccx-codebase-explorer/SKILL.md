@@ -1,6 +1,6 @@
 ---
 name: ccx-codebase-explorer
-description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx query`, a written answer with citations. Use it proactively, before falling back to grep and file reads, whenever the user wants to understand or find code: how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; where something is implemented; where a symbol is defined and every place it is used or called; code matching a concept with no exact term to grep; code with a particular syntactic shape; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal one-token grep in a small checked-out repo, or for reading a file already at hand."
+description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it proactively, before falling back to grep and file reads, whenever the user wants to understand or find code: how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; where something is implemented; where a symbol is defined and every place it is used or called; code matching a concept with no exact term to grep; code with a particular syntactic shape; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal one-token grep in a small checked-out repo, or for reading a file already at hand."
 when_to_use: "Trigger phrases: 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'where is X implemented/defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'search the codebase', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 ---
 
@@ -33,12 +33,12 @@ term was guessed wrong:
   C#, and Rust.
 - **Large / remote / multi-repo corpus** — the repo isn't checked out locally,
   you need a branch or tag other than your checkout, or the question spans
-  several indexed repos (`--repo`, repeatable for `search` and `query`;
+  several indexed repos (`--repo`, repeatable for `search` and `ask`;
   `--git-ref`).
 - **A question, not a lookup** — the deliverable is a written, cited
   explanation ("how does re-embedding get decided, end to end?", "compare auth
   in these two services"), or the question is too broad for one search or
-  pattern → `ccx query` (slower; see below).
+  pattern → `ccx ask` (see below).
 
 Local tools stay the right choice for exactly two things: reading a file that
 is already at hand, and a plain literal-identifier lookup in a small repo you
@@ -53,7 +53,7 @@ definition, or its true use sites rather than every textual occurrence —
 - **Repo auto-detection.** Commands auto-scope to the repo of the current git
   checkout, detected from its `origin` GitHub/GitLab remote (resolved to an
   `<owner>/<repo>` name). Override with `--repo <owner>/<repo>` (repeatable for
-  `search` and `query`, up to the server's per-search cap). Without such an
+  `search` and `ask`, up to the server's per-search cap). Without such an
   origin the command **errors** with guidance rather than guessing — pass
   `--repo`;
   `ccx repos` lists the indexed repos you can target. There is no global
@@ -284,29 +284,32 @@ dispatch, an uncovered language), `ccx grep` the call or registration shape
 instead; and when the question names an entry point, `ccx defs <entry>` and
 walking down reaches the live code without ever weighing the decoy.
 
-## Ask a question, get a cited answer (`ccx query`)
+## Ask a question, get a cited answer (`ccx ask`)
 
-Every command above returns *material* — hits, matches, symbol rows — for you to
-read. `ccx query` returns a **written answer with citations**: a server-side
-agent does the searching, grepping, and reading for you and writes up what it
-found. Scoping is the same as `search`: the current checkout by default,
+**Ask first when the deliverable is an explanation** rather than a location:
+one `ccx ask` call replaces a chain of searches. Every command above returns
+*material* — hits, matches, symbol rows — for you to read; `ccx ask` returns a
+**written answer with citations**, because a server-side agent runs that chain
+for you, searching, grepping, reading files and following symbols, then writes
+up what it found. Reach for it on "how does X work end to end?", "why does Y
+happen?", "walk me through the release flow", "compare A and B" (above all
+across repos), and on any question too broad to reduce to one search or
+pattern. Scoping is the same as `search`: the current checkout by default,
 `--repo` repeatable, `--git-ref` for a single repo.
 
 ```bash
-ccx query "how does the indexer decide what to re-embed?"
-ccx query "compare how these two services authenticate" --repo acme/a --repo acme/b
+ccx ask "how does the indexer decide what to re-embed?"
+ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b
 ```
 
-Reach for it when the deliverable is an **explanation** ("how does X work end to
-end?", "why does Y happen?", "compare A and B" — above all across repos), or the
-question is too broad to reduce to one search or pattern. When the deliverable
-is a **location or code to read** — which file to change, where a symbol lives,
-its call sites — stay with `search`/`grep`/`defs`/`refs`: they answer in a
-second or two, while `query` runs seconds to minutes. Run one `query` at a time
-(the server caps concurrent agentic queries), and do not wrap it in a shell
-`timeout` — the server enforces its own deadline (`deadline_exceeded` below),
-and macOS ships no `timeout` command. A question already answered — by anyone,
-even rephrased — may return instantly from the answer cache.
+What it costs: `ask` runs seconds to minutes, where `search`, `grep`, `defs`
+and `refs` answer in a second or two — so when the deliverable is a **location
+or code to read** (which file to change, where a symbol lives, its call
+sites), stay with those. Run one `ask` at a time (the server caps concurrent
+agentic requests), and do not wrap it in a shell `timeout` — the server
+enforces its own deadline (`deadline_exceeded` below), and macOS ships no
+`timeout` command. A question already answered — by anyone, even rephrased — may return
+instantly from the answer cache.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and
@@ -374,6 +377,6 @@ troubleshooting.
 Everything is non-interactive and env-driven, so an agent or CI job can run `ccx`
 directly: errors exit non-zero, notes go to stderr, results to stdout. The query
 server also exposes an **MCP** endpoint (`<CCX_SERVER_URL>/mcp`) with the same
-tools at parity (`ccx query` is the `query_codebase` tool) — the preferred path
+tools at parity (`ccx ask` is the `ask_codebase` tool) — the preferred path
 for MCP-capable agents (no CLI install, no output parsing). See
 [references/management.md](references/management.md#mcp).

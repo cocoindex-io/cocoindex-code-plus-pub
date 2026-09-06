@@ -48,7 +48,7 @@ deployment.
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`). Optional interactively: prompted once and saved as your default; a one-off `--server` overrides without changing the default |
 | `CCX_API_TOKEN` | your API token — your platform team issues it: a token shared across the deployment, or your own `ccxk_…` key. Both go in this one variable, sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
-| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; **debug override** of the client's read ceiling — default **600 s** (**1200 s** for [`ccx query`](#ccx-query--ask-a-question-get-an-answer)), with connects failing on their own fixed 10 s bound. The server enforces and reports its own deadline (`deadline_exceeded`), so the ceiling is deliberately generous and uncoordinated: it only catches a dead network path or a wedged server, and your platform team raising the server deadline needs **no** change here |
+| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; **debug override** of the client's read ceiling — default **600 s** (**1200 s** for [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer)), with connects failing on their own fixed 10 s bound. The server enforces and reports its own deadline (`deadline_exceeded`), so the ceiling is deliberately generous and uncoordinated: it only catches a dead network path or a wedged server, and your platform team raising the server deadline needs **no** change here |
 
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
@@ -158,9 +158,9 @@ ccx git-refs                                     # the current repo's indexed re
 ccx git-refs cocoindex-io/cocoindex              # a specific repo ("(default)" marks the default branch)
 
 # Ask a question and get an answer (if your deployment enables it — see below)
-ccx query "how does the indexer decide what to re-embed?"
-ccx query "compare auth in these two services" --repo acme/a --repo acme/b
-ccx query "what changed in the release flow" --git-ref v1.2 --json
+ccx ask "how does the indexer decide what to re-embed?"
+ccx ask "compare auth in these two services" --repo acme/a --repo acme/b
+ccx ask "what changed in the release flow" --git-ref v1.2 --json
 ```
 
 `ccx git-refs` lists **git** refs (branches and tags) — not to be confused with
@@ -235,10 +235,10 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
-### `ccx query` — ask a question, get an answer
+### `ccx ask` — ask a question, get an answer
 
 Every command above returns *material* — hits, lines, symbol rows — and leaves
-the reading to you. `ccx query` returns a **written answer with citations**: a
+the reading to you. `ccx ask` returns a **written answer with citations**: a
 server-side agent runs the investigation for you, searching, grepping, reading
 files, and following symbols, then writes up what it found. Each claim carries
 a citation like `[s0:src/app.py#L40-L52]`: `s0` is one of the scopes the command
@@ -246,10 +246,10 @@ lists on stderr (`s0: <owner>/<repo> @ <ref> (commit <sha>)`), and the line
 numbers are at that commit, so you can open exactly what the agent read.
 
 ```bash
-ccx query "how does the indexer decide what to re-embed?"
-ccx query "compare how these two services authenticate" --repo acme/a --repo acme/b
-ccx query "walk me through the release flow" --git-ref v1.2
-ccx query "what are the main components?" --json    # exact response model
+ccx ask "how does the indexer decide what to re-embed?"
+ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b
+ccx ask "walk me through the release flow" --git-ref v1.2
+ccx ask "what are the main components?" --json    # exact response model
 ```
 
 Scoping works exactly like `ccx search`: the current checkout by default,
@@ -261,7 +261,7 @@ Two things to expect:
 - **It is slower.** The agent runs many reads before answering — seconds to a
   couple of minutes for a broad question, up to the server's agentic deadline
   (10 min by default). Reach for `ccx search`/`grep` when you know what you're
-  looking for, and `ccx query` when you don't.
+  looking for, and `ccx ask` when you don't.
 - **It may be turned off.** It is off unless your deployment enables it,
   because answering requires sending your question and the code the agent
   reads to a model provider. When it's off the command exits non-zero with
@@ -350,7 +350,7 @@ has been checked against the repositories in question.
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
      ```markdown
-     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / query) before grepping or reading files — see the `ccx-codebase-explorer` skill.
+     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / ask) before grepping or reading files — see the `ccx-codebase-explorer` skill.
      ```
 
      Codex follows such a line at once; Claude Code treats it as a preference
@@ -415,9 +415,9 @@ and REST API closely (same capabilities, same scoping).
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
-  - `query_codebase(question, repos, include_stats?)` → a written,
+  - `ask_codebase(question, repos, include_stats?)` → a written,
     citation-backed answer to a natural-language question — the MCP form of
-    [`ccx query`](#ccx-query--ask-a-question-get-an-answer).
+    [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer).
     A server-side agent investigates with the tools above under the caller's
     own permissions and returns a Markdown answer.
     The tool is always advertised, but **fails with `agent_query_unavailable`
