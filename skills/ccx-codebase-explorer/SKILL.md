@@ -269,9 +269,11 @@ limits sit below coverage:
   `ccx refs NAME --role call` and read the `~name` rows as candidate uses.
 - Python **source roots are inferred** from the repo (package markers and
   the repo's own absolute imports), never from build config. A namespace
-  portion the repo never imports absolutely stays unmerged, so a relative
-  import across it shows as `~name`; treat such rows as real uses to verify
-  by reading the file.
+  portion the repo never imports absolutely merges only when the directory
+  holding it has the same name as one the imports resolve under
+  (`python/cli/src/pkg/` beside `python/common/src/pkg/`, not `tools/pkg/`);
+  otherwise it stays unmerged, so a relative import across it shows as
+  `~name`. Treat such rows as real uses to verify by reading the file.
 
 **Settling what runs.** To confirm a candidate is the live path, look at its
 uses, not its text: `ccx refs <candidate>` lists them, and reading one gives the
