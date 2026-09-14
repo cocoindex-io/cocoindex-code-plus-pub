@@ -32,6 +32,74 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.48 — Python qualified names lose a stray directory prefix
+
+Applies when upgrading from v0.1.47 or earlier. It matters if you use
+`ccx defs` / `ccx refs` on Python code; nothing is needed before the upgrade.
+
+### What changed
+
+v0.1.41 gave Python qualified names their package's full import path, and in
+some repositories it overshot: a name could open with a directory that is not
+part of the import path, most often `src.`. A function in
+`python/common/src/mypkg/settings.py`, imported as `mypkg.settings`, was named
+`python:src.mypkg.settings.load_env` instead of
+`python:mypkg.settings.load_env`.
+
+The trigger was an import through a directory without an `__init__.py`,
+typically a test fixture doing `from src.app import …`. The indexer then took
+every directory holding a `src/` for a source root. It now does so only for a
+directory with the same name as the one holding the fixture's `src/`.
+
+- **Names are corrected** where the triggering import names a module inside
+  the directory: `from src.app import …`, `import src.app`. An import of the
+  directory itself — `from src import app`, `import src` — still adds the
+  prefix in this release.
+- **Pieces of one package without an `__init__.py`, under differently named
+  directories** (`tools/mypkg/` beside `src/mypkg/`), are joined only when some
+  file imports the package itself: `import mypkg` or `from mypkg import …`.
+  Where the repository imports only modules inside one piece
+  (`from mypkg.settings import …`), the other piece is no longer joined:
+  - its qualified names lose the package part (`python:mypkg.tool.run`
+    becomes `python:tool.run`);
+  - a relative import between the pieces is no longer resolved, so exact
+    targets (`PATH ENTITY_ID` or a qualified name) stop listing that use, and
+    only `ccx refs <function-name>` shows it, as a `~name` row.
+- As in v0.1.41, the two-token `PATH ENTITY_ID` target that `ccx defs` prints
+  under each row keeps its spelling.
+
+### Upgrade
+
+1. **Upgrade the release** with the command above, `--version 0.1.48`.
+
+2. **Let the indexer finish one full cycle.** It re-resolves the symbol
+   references of every indexed branch and tag, which is what applies the fix
+   to already-indexed repos. No file is parsed again and nothing is
+   re-embedded, so the cycle is shorter than v0.1.41's and costs nothing with
+   your model provider. Queries keep working while it runs; until a branch or
+   tag has been re-resolved, `ccx defs` and `ccx refs` can still show its old
+   spellings.
+
+3. **Update saved qualified-name queries**, if you have any — scripts, agent
+   prompts, or bookmarks that pass a Python qualified name to
+   `ccx defs --qualified-name` or `ccx refs <qualified-name>`. Both changes
+   above can rename a symbol; run `ccx defs <base-name>` to read the current
+   spelling.
+
+### Verify
+
+Once the indexer has completed a cycle, pick a Python function in a package
+under a `src/` directory, one your code imports as `mypkg.…`, and check its
+headline:
+
+```bash
+ccx defs <function-name>
+```
+
+The qualified name starts `python:mypkg.`. A module your code imports through
+`src` itself, such as a fixture imported as `src.app`, keeps `src.`: that is
+its import path.
+
 ## v0.1.45 — `ccx query` is now `ccx ask`; log severity means something
 
 Applies when upgrading from v0.1.44 or earlier, to every deployment. Nothing
