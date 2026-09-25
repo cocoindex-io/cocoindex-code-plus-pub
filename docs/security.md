@@ -136,7 +136,8 @@ default), or point it at a tool-calling model you host.
   package), and — under `oidc` —
   `/.well-known/oauth-protected-resource/mcp`, which a client reads
   precisely because it has no credential yet. Swagger/ReDoc are not
-  served. Never run `CCX_AUTH_MODE=none` outside local development (it
+  served. Never run `auth.mode: none` (env `CCX_AUTH_MODE=none`) outside
+  local development (it
   warns loudly). Modes and key records:
   [Access](deploy.md#access-authentication--authorization); rotation:
   [Operate](deploy.md#operate).
@@ -177,7 +178,7 @@ selects the lines worth an operator's attention and nothing else.
 which those collectors stamped `ERROR` wholesale — including every successful
 request's audit event. If you built a filter, an alert, or an audit-ingestion
 rule around that, see
-[upgrade.md](upgrade.md#v0145--log-severity-means-something).
+[upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
 
 ### Where the stream is
 
