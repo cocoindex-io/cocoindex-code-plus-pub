@@ -1235,9 +1235,10 @@ other against the SAML NameID.
 | Linkage | Extra values | Extra credential |
 |---|---|---|
 | GitHub org-level SAML (common case) | — (the block above) | none extra — the App itself reads the org's `externalIdentities`, so it must hold **Organization → Members: read + Administration: read** ([App permissions](#app-permissions)) |
-| GitHub enterprise-level SAML / EMU | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
-| **GHES, usernames managed by your IdP** (the GHES default — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
-| **GHES with SCIM provisioning** ([below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` (GHES 3.16+; `admin:enterprise` on 3.13–3.15) |
+| GitHub enterprise-level SAML / EMU (github.com) | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
+| **GHES via the enterprise lookup** (the recommended GHES lookup — [below](#ghes-instance-wide-saml)) | the same pair: `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
+| **GHES, usernames managed by your IdP** ([below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
+| **GHES with SCIM provisioning** (fallback — [below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` (GHES 3.16+; `admin:enterprise` on 3.13–3.15) |
 | GitLab | `externProvider: <extern-provider>` (the `extern_uid` provider, e.g. `saml`); `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
 | **No linkage to mirror** (personal accounts, no SSO) | `identityMapping: publicOnly` — public repos serve everyone, private ones no one | none |
 
@@ -1245,26 +1246,43 @@ There is no `identityMapping` value named after a code host: the value is
 `codeHostLookup` (the code host stores the linkage; we look it up), `claim`
 (the token carries the code-host identity), or `publicOnly`. Which *lookup*
 runs under `codeHostLookup` follows from the instance — its provider, whether
-its host is github.com, and whether you mounted a mapping credential.
+its host is github.com, whether you mounted a mapping credential, and whether
+`enterpriseSlug` is set (on GHES it selects the enterprise lookup over SCIM).
 
 ##### GHES: instance-wide SAML
 
 GHES authenticates at the instance level, so `organization.samlIdentityProvider`
 — the field the github.com route reads — is always `null` there, whatever your
-SSO looks like. Two routes work instead, and **which one you can use depends on
-whether SCIM provisioning is enabled on the instance**; find that out first,
-because it decides both the credential and which claim your tokens must carry.
+SSO looks like. Three routes work instead; **the enterprise lookup is the
+recommended one** wherever a read-only enterprise-owner PAT is obtainable,
+because it has no attestation, no provisioning-capable credential, and no
+assumptions about how your IdP spells identities.
 
-- **Without SCIM — the GHES default.** `identityMapping: claim` with
+- **The enterprise lookup — recommended.** `identityMapping: codeHostLookup`
+  with `enterpriseSlug` and `identityMappingCredential.patSecret`; the
+  credential is an **enterprise-owner classic PAT with `read:enterprise`**
+  only — read-only, no attestation. GHES runs SAML and SCIM at the
+  enterprise scope, so this is the same `enterprise(slug: …) …
+  externalIdentities` lookup the github.com enterprise row uses, pointed at
+  the instance's single enterprise (the slug shows in the enterprise
+  settings URL, `https://<ghes-host>/enterprises/<slug>`). The server-side
+  join accepts **either** stored linkage field byte-for-byte — the SAML
+  `NameID` **or** the SCIM `userName` — so it works whether your IdP
+  provisions the login or the work email as the identity. Startup probes
+  the PAT with a one-identity read and warns ahead of its expiry
+  ([Behavior to expect](#behavior-to-expect)).
+- **Without SCIM — the no-credential default.** `identityMapping: claim` with
   `identityClaimType: username`, plus the `ghesManagedUsernames` attestation.
   The claim must carry the **GHES login**, and the attestation is your
   statement that logins are IdP-derived and users cannot rename themselves
   (otherwise a username is a pointer someone else can re-point). No extra
   credential: the login is resolved to the immutable numeric user id and
   everything keys on that.
-- **With SCIM — the attested exception.** `identityMapping: codeHostLookup`
-  plus `identityMappingCredential.patSecret` and the `ghesScimPatAccepted`
-  attestation. The credential is an **enterprise-owner classic PAT with
+- **With SCIM — the attested fallback.** `identityMapping: codeHostLookup`
+  plus `identityMappingCredential.patSecret` (no `enterpriseSlug` — its
+  presence selects the enterprise lookup above) and the
+  `ghesScimPatAccepted` attestation. The credential is an
+  **enterprise-owner classic PAT with
   `scim:enterprise`** — GHES's instance SCIM API does not accept GitHub App
   callers or fine-grained tokens. The scope name changed in GHES 3.16: older
   instances (3.13–3.15) take `admin:enterprise` instead, which is also what
@@ -1283,6 +1301,16 @@ because it decides both the credential and which claim your tokens must carry.
   case-variant is treated as no match, i.e. unmapped. (`mappingNormalization:
   lowercaseEmail` lowercases the *claim* side only, so it helps only where the
   stored `userName` is already lowercase.)
+
+  **This route completes only where the provisioned `userName` is the GHES
+  login.** The SCIM record exposes no login, so the server resolves the
+  `userName` itself via the Users API — and where your IdP provisions the
+  work email as `userName` (Okta commonly does), GHES derives a different
+  login (`jane.doe@corp.com` becomes `jane-doe`), that resolution 404s, and
+  **every caller unmaps** even though the SCIM filter matches. That estate
+  uses the enterprise lookup above, which joins on the SCIM `userName`
+  directly. The [pre-flight check](#pre-flight-check) below covers both
+  halves of the chain.
 
 `codeHostLookup` **without** a mapping credential is the org-level route and is
 rejected at startup on a GHES instance, naming these alternatives — it would
@@ -1381,6 +1409,20 @@ gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProv
 
 `nameId` must byte-match your `mappingClaim` values (typically the SSO email). A `null` `samlIdentityProvider` means this **org-scoped** query sees no org-level SAML linkage. On github.com with org-level SAML that is the thing to fix before going further. But `null` is also what the query returns when the linkage legitimately lives somewhere this query cannot see — use the matching check instead:
 
+**Enterprise lookup** (github.com enterprise-level, and GHES with
+`enterpriseSlug` — the `read:enterprise` PAT):
+
+```bash
+gh api graphql -f query='query { enterprise(slug: "<slug>") { ownerInfo { samlIdentityProvider { externalIdentities(first: 3, userName: "<claim-value>", membersOnly: true) { nodes { samlIdentity { nameId } scimIdentity { username } user { login databaseId } } } } } } }'
+```
+
+(Against GHES, point `gh` at the instance with `GH_HOST=<ghes-host>`.) A pass
+is one node whose `samlIdentity.nameId` **or** `scimIdentity.username` equals
+your claim value byte-for-byte **and** whose `user` is non-null — an unlinked
+identity or a node matching on neither field means that engineer would be
+unmapped. A `null` `ownerInfo` or an error names the fixes: the slug, SAML not
+configured, or a PAT that is not an enterprise owner's with `read:enterprise`.
+
 **GHES with SCIM** (the `scim:enterprise` PAT), which is instance-scoped, so the
 org query above always returns `null` regardless of your SSO:
 
@@ -1388,16 +1430,25 @@ org query above always returns `null` regardless of your SSO:
 curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/scim/v2/Users?filter=userName%20eq%20%22<claim-value>%22'
 ```
 
-One `active` result whose `userName` equals your claim value byte-for-byte is a
-pass; an empty `Resources` list means that engineer would be unmapped. A `404`
-or `403` on this path usually means SCIM provisioning is not enabled on the
-instance — in which case this route is unavailable and the username route
-applies.
+One `active` result whose `userName` equals your claim value byte-for-byte is
+the first half. The chain has a second half the server also runs — the
+`userName` must **be** the GHES login:
 
-**GHES without SCIM**, and **enterprise-level SAML / EMU**: there is no
-server-readable linkage query to run. Verify by decoding a test user's token
-and confirming the claim you named carries exactly their GHES login (or, for
-enterprise SAML, their linked identity) — [sso.md → Verifying before
+```bash
+curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/users/<that-userName>'
+```
+
+A `200` whose `login` echoes it back is a pass. A `404` here — typical where
+the provisioned `userName` is the work email and GHES derived the login —
+means every caller on this route unmaps: switch to the enterprise lookup
+above. An empty `Resources` list on the first call means that engineer would
+be unmapped; a `404` or `403` there usually means SCIM provisioning is not
+enabled on the instance — in which case this route is unavailable and the
+username route applies.
+
+**GHES without SCIM**: there is no server-readable linkage query to run.
+Verify by decoding a test user's token and confirming the claim you named
+carries exactly their GHES login — [sso.md → Verifying before
 rollout](sso.md#verifying-before-rollout).
 
 #### Verifying a rollout

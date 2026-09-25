@@ -32,6 +32,49 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.49 — GHES mirrored mapping: the enterprise lookup route
+
+Applies if a GHES instance runs `codeHostMirrored`. Nothing is required —
+existing routes behave exactly as before; this release adds a route.
+
+### What changed
+
+A GHES `authz.codeHosts` entry can now set `enterpriseSlug` next to its
+`identityMappingCredential`, selecting the **enterprise lookup** (the same
+`enterprise(slug:) … externalIdentities` query the github.com enterprise row
+uses — GHES runs SAML/SCIM at the enterprise scope) instead of the SCIM
+route. Its PAT needs **`read:enterprise` only** — read-only, no
+`ghesScimPatAccepted` attestation — and its join accepts either stored
+linkage field (`samlIdentity.nameId` or `scimIdentity.username`)
+byte-for-byte.
+
+One skew note: `enterpriseSlug` on a GHES entry was previously accepted
+but never read — if yours already carries it, this upgrade activates the
+enterprise route on that instance (checked at startup by the mapping
+probe); remove the field to stay on SCIM.
+
+Do this if you use the SCIM route and your IdP provisions the SCIM
+`userName` as the work email: that route resolves the `userName` as the
+GHES login, which 404s there, and every caller unmaps ([deploy.md → GHES:
+instance-wide SAML](deploy.md#ghes-instance-wide-saml) has the full
+explanation and the two-step pre-flight that now catches it).
+
+### What to do (optional — only to adopt the route)
+
+1. Mint an enterprise-owner classic PAT with `read:enterprise` and put it in
+   the mapping-credential Secret (replacing the `scim:enterprise` one).
+2. On the GHES entry: add `enterpriseSlug: <slug>` (the enterprise settings
+   URL carries it) and drop `attestations.ghesScimPatAccepted` if no other
+   instance still uses the SCIM route.
+3. Run the enterprise pre-flight query
+   ([deploy.md → Pre-flight check](deploy.md#pre-flight-check)) for a
+   test user, then upgrade and watch the mapping probe line at startup.
+
+### How to verify
+
+`ccx repos` as a mapped engineer lists their private repos; the audit
+stream's `reason: unmapped` entries for known-linked engineers disappear.
+
 ## v0.1.48 — Python qualified names lose a stray directory prefix
 
 Applies when upgrading from v0.1.47 or earlier. It matters if you use
