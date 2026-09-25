@@ -98,9 +98,14 @@ per-provider sections below are this list in each vendor's vocabulary:
    refused at startup), so an MCP client that signs in interactively —
    rather than presenting an API-key record — needs its own pre-registered
    client id.
-6. *(Mirrored deployments only)* the access token must carry the claim your
-   `authz` `mappingClaim` names (typically `email`), **byte-identical to the
-   code-host SSO NameID** — see [Verifying before rollout](#verifying-before-rollout).
+6. *(Mirrored deployments only —
+   [deploy.md → Code-host-mirrored authorization](deploy.md#code-host-mirrored-authorization))*
+   the access token must carry the claim your `authz` `mappingClaim` names
+   (typically `email`), **byte-identical to the linkage value your code host
+   stores** — the SAML `NameID`, or on SCIM-provisioned enterprise estates
+   the SCIM `userName`; which value your topology compares is in
+   [deploy.md → Identity-mapping topologies](deploy.md#identity-mapping-topologies).
+   See [Verifying before rollout](#verifying-before-rollout).
 
 For a self-managed provider with a private CA, also hand the platform team
 the CA bundle (`auth.oidc.caBundleSecret` in the chart).
@@ -167,8 +172,9 @@ registrations):
    federated from another IdP with no Exchange Online mailboxes, exactly the
    estates the federated shape below serves. For those, add the **`upn`
    optional claim** instead and set the `authz` `mappingClaim` to `upn`; the
-   byte-identical requirement is unchanged, so the code-host SSO NameID must
-   then be the UPN.
+   byte-identical requirement is unchanged, so the stored linkage value —
+   the SSO NameID or, on SCIM-provisioned enterprise estates, the SCIM
+   `userName` — must then be the UPN.
 
 **Reply to the platform team with:** the tenant ID, the API registration's
 **client ID (a GUID)**, the App ID URI (`api://ccx`), and the CLI
@@ -231,7 +237,8 @@ role, the values block, the MCP-sign-in limitation. The deltas:
   deployments, the `mappingClaim` value. `email` works here only if the
   tenant's `mail` attributes are populated; federated tenants often have them
   empty (step 6's caveat), making `upn` the working choice. Either way the
-  value must match the code-host SSO NameID byte-for-byte.
+  value must byte-match the linkage value your code host stores
+  ([deploy.md → Identity-mapping topologies](deploy.md#identity-mapping-topologies)).
 
 ## Okta (with API Access Management)
 
@@ -387,9 +394,11 @@ your IdP.
 - **SAML-only IdPs** — the same shape, as a SAML broker.
 
 *(Mirrored deployments)*: the access token must carry the claim your
-`mappingClaim` names (typically `email`) **byte-identical to the code-host
-SSO NameID** — make the broker import that attribute from the IdP (Keycloak
-imports email by default; verify on a decoded token before rollout).
+`mappingClaim` names (typically `email`) **byte-identical to your code
+host's stored linkage value** (the SSO NameID, or the SCIM `userName` on
+SCIM-provisioned enterprise estates) — make the broker import that
+attribute from the IdP (Keycloak imports email by default; verify on a
+decoded token before rollout).
 
 ## Any OIDC authorization server
 
@@ -420,7 +429,9 @@ run `ccx login` and decode the cached token) and check:
    never results).
 4. *(Mirrored deployments)* the `mappingClaim` value (typically `email`; on
    Entra, `upn` where `mail` attributes are empty — recipe step 6) is present
-   and byte-identical to the user's code-host SSO NameID. On Entra, an
+   and byte-identical to the linkage value the code host stores for that
+   user (SAML estates: the SSO `NameID`; SCIM-provisioned enterprise
+   estates: the SCIM `userName`). On Entra, an
    `email` claim that never appears means the account's `mail` attribute is
    empty — switch to `upn` rather than re-registering the claim.
 

@@ -69,7 +69,7 @@ as a `sha256:` hash rather than the secret. Humans get the same per-person
 properties from SSO instead — plus offboarding that happens in your IdP — so a
 production deployment uses records only for machines; the no-IdP row presses
 them into per-person duty as a stopgap until SSO. The chart never mixes the two
-static kinds: configure anything beyond the plain shared token and a non-empty
+static kinds: configure anything beyond the shared token and a non-empty
 `secrets.apiTokens` becomes a rendering error (the lane rule below has the
 exact trigger list).
 
@@ -105,6 +105,13 @@ how you supply caller credentials:
   rendering fails otherwise — and `auth.apiKeys` records replace it. (The
   per-instance `codeHosts.<instance>.rateLimit` is an unrelated setting, a
   code-host API budget, and does **not** switch lanes.)
+- **File-lane consequence — rate limiting must know your ingress.** The chart
+  derives the client-IP extraction strategy from
+  `queryServer.ingress.className`: automatic for `gce` (including the trusted
+  GCLB ranges); `gce-internal` and `nginx` require
+  `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress
+  peer CIDRs); any other class needs `rateLimit.clientIpStrategy` set
+  explicitly, or rendering fails.
 
 The shared API token is therefore the **default, not a requirement** — every
 decision-table shape except the shared-token row runs without one.
@@ -186,7 +193,7 @@ component holds it. The bottom four apply only if you enable that feature.
 | *(agentic query)* **Completion-model key** | your model provider | **query server only** → the provider | `ccx ask` |
 | *(`oidc`)* **IdP registrations** — an API/resource id and a public CLI client id | your IdP admin — recipes in [sso.md](sso.md) | `ccx login` → your IdP → query server | engineers signing in |
 | *(`codeHostMirrored`)* **Permission-check credential** | you create it at your code host | **query server** → code host | checking each caller's repo access |
-| *(`codeHostMirrored`, some topologies)* **Identity-mapping credential** — an enterprise PAT, or a GitLab admin token | you create it at your code host | **query server** → code host | joining an IdP identity to a code-host account |
+| *(`codeHostMirrored`, some topologies)* **Identity-mapping credential** — an enterprise PAT on the GitHub topologies that need one; on GitLab the admin `permissionCredential` token doubles for the lookup | you create it at your code host | **query server** → code host | joining an IdP identity to a code-host account |
 
 Two that are genuinely easy to conflate:
 
@@ -218,7 +225,7 @@ startup and indexes nothing until it lists repos.
 
 This path takes the chart's default access model, `apiKey` + `indexScope`
 ([Access](#access-authentication--authorization)): `secrets.apiTokens` below is a
-shared bearer token **you invent here**, your engineers put it in `CCX_API_TOKEN`
+shared API token **you invent here**, your engineers put it in `CCX_API_TOKEN`
 ([cli.md](cli.md)), and anyone holding it can search **everything you index**.
 For company-IdP sign-in instead, read
 [SSO login (OIDC)](#sso-login-oidc) before writing values.
@@ -475,7 +482,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 |---|---|---|---|
 | **License** | `secrets.cocoindexPlus.{licenseKey,existingSecret}` | **yes** | runtime license, wired to both workloads — see [License key](#license-key) |
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
-| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **env lane only** | the shared bearer token the server accepts and the CLI sends. Required on the **env lane** (`auth.mode: apiKey` with nothing richer set) — empty there means every request is rejected. **Must be empty on the file lane** (`mode: oidc`, `auth.oidc`, any `auth.apiKeys` record, any top-level `authz`/`audit`/`rateLimit` value), where rendering fails otherwise and `auth.apiKeys` records replace it. See [Access](#access-authentication--authorization) |
+| **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **env lane only** | the shared API token the server accepts and the CLI sends. Required on the **env lane** (`auth.mode: apiKey` with nothing richer set) — empty there means every request is rejected. **Must be empty on the file lane** ([The lane rule](#the-lane-rule)), where rendering fails otherwise and `auth.apiKeys` records replace it. See [Access](#access-authentication--authorization) |
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo) (optional if a [central config repo](#central-config-repo) declares this instance's repos; `scope: central` marks the central one); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
@@ -1082,14 +1089,9 @@ provider's recipe in [sso.md](sso.md) states — each recipe ends in the
 complete `auth.oidc` block.
 
 What your IdP admin registers — and the checklist of what they send back —
-lives per provider in **[sso.md](sso.md)**:
-
-| Provider | Recipe |
-|---|---|
-| Entra ID | [sso.md → Entra ID](sso.md#entra-id) *(read its third-party-MCP limitation first)* |
-| Okta with API Access Management | [sso.md → Okta](sso.md#okta-with-api-access-management) |
-| Keycloak — direct, or fronting Google Workspace / SKU-less Okta / SAML-only IdPs | [sso.md → Keycloak](sso.md#keycloak) |
-| Auth0, Ping, another OIDC AS | [sso.md → Any OIDC authorization server](sso.md#any-oidc-authorization-server) |
+lives per provider in **[sso.md](sso.md)** — start from its matrix,
+[Which recipe applies to you](sso.md#which-recipe-applies-to-you) (it also
+flags Entra's MCP-sign-in limitation).
 
 Two knobs on the operator side pair with those registrations. **Callback
 ports**: the server advertises `auth.oidc.cli.redirectPorts` (default
@@ -1099,10 +1101,7 @@ list, change the registration with it, or logins fail with an IdP-side
 redirect-URI error. **Private CA**: for a self-managed IdP, add
 `auth.oidc.caBundleSecret: { name: <secret> }`.
 
-Anything beyond the plain shared token — `oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value (`helm show values` documents them) — moves the whole auth configuration into one server-side config file the chart renders. Note `authz:` is a trigger too, so even `authz: { mode: indexScope }` (the default, set explicitly) flips the lane. Two consequences:
-
-- **`secrets.apiTokens` must then be empty** (the chart refuses to render otherwise): shared bare tokens are replaced by `auth.apiKeys` **records** — each carries only a `sha256:` hash of its secret (safe to keep in values), and the presented token becomes `ccxk_<id>_<secret>`. Records are attributable and individually revocable; rotation is editing the list + `helm upgrade`.
-- **Rate limiting needs to know your ingress**: the chart derives the client-IP extraction strategy from `queryServer.ingress.className` automatically for `gce` (including the trusted GCLB ranges), and for `gce-internal` / `nginx` requires `rateLimit.trustedProxyCidrs` (your proxy-only subnet / the actual ingress peer CIDRs). Any other ingress class: set `rateLimit.clientIpStrategy` explicitly or rendering fails.
+Anything beyond the shared token — `oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value — moves the whole auth configuration onto the **file lane** ([The lane rule](#the-lane-rule) has the exact trigger list and consequences; note even `authz: { mode: indexScope }`, the default set explicitly, flips it). In short: `secrets.apiTokens` must then be empty, and `auth.apiKeys` **records** replace shared tokens — each carries only a `sha256:` hash of its secret (safe to keep in values), the presented token becomes `ccxk_<id>_<secret>`, and rotation is editing the list + `helm upgrade`.
 
 ### API-key records
 
@@ -1151,7 +1150,9 @@ repos.
 ### Code-host-mirrored authorization
 
 > The IdP-side half of this mode — making the access token carry your
-> `mappingClaim` byte-identical to the code-host SSO NameID — is in
+> `mappingClaim` byte-identical to the code host's stored linkage value
+> ([Identity-mapping topologies](#identity-mapping-topologies) names the
+> value per route) — is in
 > [sso.md → Verifying before rollout](sso.md#verifying-before-rollout).
 
 By default every authenticated caller can search everything indexed (`authz.mode: indexScope` — the index config repo is the access authority, by governing what gets indexed). With **`codeHostMirrored`**, results instead mirror each signed-in engineer's **real code-host permissions**: public repos serve any authenticated user; a private repo serves only callers whose IdP identity maps to a code-host account with read access — and to everyone else it is **indistinguishable from a repo that doesn't exist** (the same 404, no name, no counts). Requires `auth.mode: oidc`. API-key records are deliberately *not* mirrored — a key has no code-host identity; its own `scope` governs it, so CI and agents keep working.
@@ -1198,7 +1199,24 @@ credential; naming one is rejected at startup rather than sitting inert.
 
 #### App permissions
 
-Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant. Org-level SAML mapping additionally needs **Organization → Members: Read-only** and **Organization → Administration: Read-only** — GitHub's docs suggest members-read suffices for `externalIdentities`, but in practice the parent `samlIdentityProvider` field errors `Resource not accessible by integration` until administration-read is also approved on the installation. Note the [pre-flight check](#pre-flight-check) below runs with an org-owner token, so it cannot confirm the App's own grant — a missing grant surfaces at rollout as the mapping probe failing loud: private-repo checks on that instance answer `503` until the permission lands. A **dedicated, metadata-only authz App** is the hardening option when you want the internet-facing query server to hold no content-capable key, a separate API rate budget, or App-level audit attribution — the values shape is identical, just a different `appId` and key Secret. Find the ids: `orgId` from `GET /orgs/<org>` (`.id`); `installationId` from the App installation page's URL.
+Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant.
+
+- **Org-level SAML mapping needs two org permissions** — **Organization →
+  Members: Read-only** and **Organization → Administration: Read-only**.
+  GitHub's docs suggest members-read suffices for `externalIdentities`, but
+  in practice the parent `samlIdentityProvider` field errors `Resource not
+  accessible by integration` until administration-read is also approved on
+  the installation.
+- **The [pre-flight check](#pre-flight-check) cannot confirm the App's own
+  grant** — it runs with an org-owner token. A missing grant surfaces at
+  rollout as the mapping probe failing loud: private-repo checks on that
+  instance answer `503` until the permission lands.
+- **A dedicated, metadata-only authz App** is the hardening option when you
+  want the internet-facing query server to hold no content-capable key, a
+  separate API rate budget, or App-level audit attribution — the values
+  shape is identical, just a different `appId` and key Secret.
+- **Find the ids:** `orgId` from `GET /orgs/<org>` (`.id`); `installationId`
+  from the App installation page's URL.
 
 #### Installation scope
 
@@ -1236,8 +1254,8 @@ other against the SAML NameID.
 |---|---|---|
 | GitHub org-level SAML (common case) | — (the block above) | none extra — the App itself reads the org's `externalIdentities`, so it must hold **Organization → Members: read + Administration: read** ([App permissions](#app-permissions)) |
 | GitHub enterprise-level SAML / EMU (github.com) | `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
-| **GHES via the enterprise lookup** (the recommended GHES lookup — [below](#ghes-instance-wide-saml)) | the same pair: `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
-| **GHES, usernames managed by your IdP** ([below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
+| **GHES via the enterprise lookup** (recommended — [below](#ghes-instance-wide-saml)) | the same pair: `enterpriseSlug: <slug>` + `identityMappingCredential: { patSecret: { name: … } }` | enterprise-owner classic PAT, `read:enterprise` only |
+| **GHES via the username route** (usernames managed by your IdP — [below](#ghes-instance-wide-saml)) | `identityMapping: claim` + `identityClaim: <claim>` (the claim carrying the GHES login) + `identityClaimType: username`; attest `ghesManagedUsernames` | none |
 | **GHES with SCIM provisioning** (fallback — [below](#ghes-instance-wide-saml)) | `identityMappingCredential: { patSecret: { name: … } }`; attest `ghesScimPatAccepted` | enterprise-owner classic PAT, `scim:enterprise` (GHES 3.16+; `admin:enterprise` on 3.13–3.15) |
 | GitLab | `externProvider: <extern-provider>` (the `extern_uid` provider, e.g. `saml`); `permissionCredential: { tokenSecret: { name: … } }` | GitLab admin token (the identity lookup requires it) |
 | **No linkage to mirror** (personal accounts, no SSO) | `identityMapping: publicOnly` — public repos serve everyone, private ones no one | none |
@@ -1271,7 +1289,7 @@ assumptions about how your IdP spells identities.
   provisions the login or the work email as the identity. Startup probes
   the PAT with a one-identity read and warns ahead of its expiry
   ([Behavior to expect](#behavior-to-expect)).
-- **Without SCIM — the no-credential default.** `identityMapping: claim` with
+- **The username route — the no-credential default.** `identityMapping: claim` with
   `identityClaimType: username`, plus the `ghesManagedUsernames` attestation.
   The claim must carry the **GHES login**, and the attestation is your
   statement that logins are IdP-derived and users cannot rename themselves
@@ -1318,8 +1336,10 @@ otherwise start cleanly and fail every private-repo check with a `503`.
 
 Nothing requires the IdP minting your tokens to be the IdP your code host
 federates to: a deployment can take tokens from Entra ID while GHES takes SAML
-from Okta. What must line up is the *value* — the claim you name must equal the
-stored `userName` (or login) byte-for-byte, so pick the claim that carries it
+from Okta. What must line up is the *value* — the claim you name must equal
+your route's stored linkage value byte-for-byte: the `NameID` or SCIM
+`userName` on the enterprise lookup, the `userName` on the SCIM route, the
+login on the username route. Pick the claim that carries it
 ([sso.md](sso.md) covers what each IdP can emit).
 
 #### Attestations
@@ -1339,7 +1359,7 @@ controls usernames and self-rename is off). Startup names the missing one.
 
 #### Behavior to expect
 
-An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission, an **expired or revoked mapping credential** (the enterprise-level or GHES SCIM PAT) — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
+An engineer who has never signed into GitHub through your SSO has no linkage row and sees public repos only; the self-service fix is one visit to `https://github.com/orgs/<org>/sso`. A check the server *cannot* complete — code-host outage, rate limiting, a missing App permission, an **expired or revoked mapping credential** (an enterprise-lookup or GHES SCIM PAT) — fails closed as `503`, never a silent grant and never a silent public-only downgrade.
 
 Two consequences worth planning for:
 
@@ -1358,7 +1378,8 @@ Two consequences worth planning for:
   where teams rename repositories often, expect this until the reindex.
 
 **A mapping PAT's expiry is announced ahead of time and checked at startup.**
-The two PAT routes (enterprise-level SAML / EMU, GHES SCIM) hold a classic
+The PAT routes — the enterprise lookup (github.com or GHES) and the GHES
+SCIM route — hold a classic
 PAT that expires on a date you chose when issuing it, and that GitHub states
 on every response the PAT authenticates. You do not have to track that date by
 hand; the query server acts on it three ways:
@@ -1366,9 +1387,11 @@ hand; the query server acts on it three ways:
 - **A daily `WARNING` from `authz.credentialExpiryWarningDays` (default 14)
   days out** — `mapping PAT expires …` — read off every call the PAT makes.
   Alert on it and rotate before the date.
-- **A startup probe of the PAT itself**, with one cheap read (a one-identity
-  SCIM list on GHES; the enterprise `externalIdentities` on github.com). A
-  PAT that is expired, revoked, or missing its scope — or a GHES instance
+- **A startup probe of the PAT itself**, with the route's own cheapest read
+  (a one-identity enterprise `externalIdentities` read on the enterprise
+  lookup; a one-identity SCIM list on the SCIM route). A
+  PAT that is expired, revoked, or missing its scope — or, on the SCIM
+  route, a GHES instance
   without SCIM provisioning — latches the instance nonconformant at rollout,
   and **every request on that instance answers `503`, public repos
   included**, until a rollout carries a working PAT. That is deliberate:
@@ -1721,7 +1744,7 @@ reads standard output; the parsing rule is in
 
 **Upgrading from v0.1.44 or earlier**, where everything but the access log went
 to standard error and collectors stamped the lot `ERROR`: see
-[upgrade.md](upgrade.md#v0145--log-severity-means-something).
+[upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
 
 ### Rotating the API token
 

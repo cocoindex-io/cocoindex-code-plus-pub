@@ -50,7 +50,7 @@ byte-for-byte.
 
 One skew note: `enterpriseSlug` on a GHES entry was previously accepted
 but never read — if yours already carries it, this upgrade activates the
-enterprise route on that instance (checked at startup by the mapping
+enterprise lookup on that instance (checked at startup by the mapping
 probe); remove the field to stay on SCIM.
 
 Do this if you use the SCIM route and your IdP provisions the SCIM
