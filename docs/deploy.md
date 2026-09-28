@@ -1436,7 +1436,7 @@ gh api graphql -f query='query { organization(login: "<org>") { samlIdentityProv
 `enterpriseSlug` — the `read:enterprise` PAT):
 
 ```bash
-gh api graphql -f query='query { enterprise(slug: "<slug>") { ownerInfo { samlIdentityProvider { externalIdentities(first: 3, userName: "<claim-value>", membersOnly: true) { nodes { samlIdentity { nameId } scimIdentity { username } user { login databaseId } } } } } } }'
+gh api graphql -f query='query { enterprise(slug: "<slug>") { ownerInfo { samlIdentityProvider { externalIdentities(first: 3, userName: "<claim-value>") { nodes { samlIdentity { nameId } scimIdentity { username } user { login databaseId } } } } } } }'
 ```
 
 (Against GHES, point `gh` at the instance with `GH_HOST=<ghes-host>`.) A pass
@@ -1445,6 +1445,10 @@ your claim value byte-for-byte **and** whose `user` is non-null — an unlinked
 identity or a node matching on neither field means that engineer would be
 unmapped. A `null` `ownerInfo` or an error names the fixes: the slug, SAML not
 configured, or a PAT that is not an enterprise owner's with `read:enterprise`.
+Don't add `membersOnly: true` here — the server's lookup doesn't send it
+either: at the enterprise scope the flag does not mean org membership (on
+GHES it filters to enterprise *administrators*), so it empties the result
+for ordinary engineers.
 
 **GHES with SCIM** (the `scim:enterprise` PAT), which is instance-scoped, so the
 org query above always returns `null` regardless of your SSO:

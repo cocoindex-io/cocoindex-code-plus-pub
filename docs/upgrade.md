@@ -32,6 +32,37 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.50 — enterprise lookup: `membersOnly` dropped
+
+Applies if any instance maps identities through the **enterprise lookup**
+(github.com enterprise-level, or GHES with `enterpriseSlug`). Nothing is
+required — upgrade normally.
+
+### What changed
+
+The enterprise lookup's `externalIdentities` query no longer sends
+`membersOnly: true`. At the enterprise scope that flag does not mean "has
+org membership": on GHES it filters to enterprise **administrators**
+(observed on a 3.21 instance: 7 of 3,448 identities survived it), so with
+0.1.49 every ordinary engineer on such an instance resolved as unmapped —
+public repos only — while the startup probe, which never sent the flag,
+passed. Matching is as strict as before: the byte-exact join on
+`samlIdentity.nameId` **or** `scimIdentity.username`, plus the linked-user
+requirement — and per-repo permission checks still gate all access, so
+dropping the flag grants nothing by itself. The **org-level** SAML lookup
+is unchanged (its `membersOnly` has the documented org-membership meaning
+and is field-verified).
+
+The [enterprise pre-flight query](deploy.md#pre-flight-check) is updated to
+match; if you saved a copy that carries `membersOnly: true`, re-run it
+without the flag.
+
+### How to verify
+
+A linked engineer's private-repo search returns results, and the audit
+stream's `denied_by_reason` no longer counts the whole population under
+`unmapped` on the enterprise-lookup instance.
+
 ## v0.1.49 — GHES mirrored mapping: the enterprise lookup route
 
 Applies if a GHES instance runs `codeHostMirrored`. Nothing is required —
