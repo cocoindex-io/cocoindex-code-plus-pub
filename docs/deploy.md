@@ -1415,9 +1415,12 @@ calls on the GHES SCIM route). A public repo settles in 2. Within the decision
 TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
 worst case is ~40 calls fully cold and zero warm; `ccx repos` checks each
 indexed repo once per TTL window, at most `authz.listReposCheckConcurrency`
-(default 10) in flight. Size the envelope as active engineers × indexed repos
-per TTL window. On GHES the ceiling is your instance's own rate-limit setting
-(often disabled by default) rather than a per-installation hourly quota.
+(default 10) in flight. It looks up its private and internal repos in
+batches, one GraphQL request per approved org per batch, so each of those
+costs a single call there (its collaborator permission); public repos keep
+their 2. Size the envelope as active engineers × indexed repos per TTL
+window. On GHES the ceiling is your instance's own rate-limit setting (often
+disabled by default) rather than a per-installation hourly quota.
 
 #### Pre-flight check
 
