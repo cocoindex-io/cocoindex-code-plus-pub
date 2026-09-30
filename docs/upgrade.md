@@ -36,8 +36,9 @@ and the symptoms of a CLI that is too old).
 
 Nothing is required — upgrade normally. Read on if you pointed MCP clients
 at `/mcp/` to work around a redirect, if a proxy on the query-server pod's
-own loopback (a service-mesh sidecar) receives its traffic, or if requests
-still fail while pods roll.
+own loopback (a service-mesh sidecar) receives its traffic, if requests
+still fail while pods roll, or if you run agentic query with the answer
+cache.
 
 ### What changed
 
@@ -66,6 +67,26 @@ still fail while pods roll.
   restarts. If the license check cannot reach `api.keygen.sh`, the pod takes
   up to about 5 s longer to start, instead of every request stalling for
   that long at the first grep.
+- **The first requests after a restart no longer fail with `503
+  authn_unavailable`.** A request that arrived while the server was fetching
+  the IdP's signing keys was judged against the empty key cache instead of
+  waiting for the fetch; the same race could answer `401` during a key
+  rotation. Requests now wait for the fetch in flight.
+- **The answer cache serves answers made under turn pressure.** An answer
+  whose investigation ran into its last few turns — or used a helper
+  sub-investigation that did — was stored but could never be served, so
+  repeating a deep question reran it in full every time. Answers stored
+  before the upgrade stay unused; the next ask of each question stores a
+  servable one.
+- **Each answer says whether it was stored.** `ccx ask --stats` ends with
+  `answer stored` or `answer not stored (<reasons>)`, and `--json` and the
+  audit event carry `result_stored` and `not_stored_reasons` —
+  [deploy.md → Answer cache](deploy.md#answer-cache-optional) lists the
+  reasons. `ccx ask` from this release needs a server from this release.
+- **`agentQuery.maxTurns`** sets the main agent's turn budget (default 30;
+  helper sub-investigations get half). The query server also logs a startup
+  warning when LiteLLM will drop your `agentQuery.reasoningEffort` for the
+  configured model.
 
 ### What to do (optional)
 
@@ -76,6 +97,10 @@ still fail while pods roll.
   client shares the sidecar's rate-limit bucket.
 - **Requests still fail or stall while pods roll:** your load balancer needs
   longer to drop a pod. Raise `queryServer.shutdownDelaySeconds` and re-check.
+- **Answers keep reporting `answer not stored (unattested_read)`:** they
+  overlapped an indexer pass. See
+  [deploy.md → Answer cache](deploy.md#answer-cache-optional) for how to read
+  your pass time and when a longer `indexer.cycleSeconds` helps.
 
 ### How to verify
 

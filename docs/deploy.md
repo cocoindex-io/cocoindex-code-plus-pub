@@ -796,15 +796,23 @@ agentQuery:
 - **`reasoningEffort` is not cosmetic.** Some models refuse function tools
   entirely unless it is set — `gpt-5.6-terra` rejects the request outright at
   any other value, so the feature cannot work without `reasoningEffort: none`.
-  Check your model before rolling out.
+  Check your model before rolling out. If the LiteLLM bundled with the images
+  does not list reasoning support for your model, it drops the value on every
+  call; the query server then logs a warning at startup naming the model, and
+  the provider's default reasoning applies.
 - **Raise your ingress timeout.** An agentic query runs far longer than a
   low-level one (`agentQuery.requestDeadlineSeconds`, default **600 s**), and a
   single backend timeout covers every route. The chart **refuses to render** if
   `queryServer.ingress.timeoutSeconds` does not clear it — see
   [Timeout chain](#timeout-chain).
-- **Cost is bounded per request, not per knob.** One query is capped at 30
-  model turns for the main agent plus at most 8 helper sub-investigations of 15
-  turns each; there is no unbounded loop to configure around.
+- **Cost is bounded per request.** One query is capped at
+  `agentQuery.maxTurns` model turns for the main agent (default 30) plus at
+  most 8 helper sub-investigations of half as many turns each; there is no
+  unbounded loop. Raise `maxTurns` when your model needs more turns to answer
+  well. Each turn resends the conversation so far, so cost and latency grow
+  faster than the limit does, and `requestDeadlineSeconds` still applies.
+  With the answer cache on, an answer made under the old limit is
+  recomputed once at the new one.
 - **Capacity.** `agentQuery.maxConcurrentRequests` (default 4 per pod) admits
   agentic queries; over-capacity callers get an immediate retryable `503` while
   low-level search is unaffected. Each principal may hold 2 at a time.
@@ -884,6 +892,34 @@ work served from the cache) — so fleet-level savings aggregate straight from
 the audit log. Per request, `ccx ask --stats` prints the same numbers as
 one line (see [cli.md](cli.md)); the counters never show unless asked, and
 the MCP tool omits them unless called with `include_stats`.
+
+**When an answer isn't stored.** An answer is stored only if every read
+behind it, its helper sub-investigations' included, came from an index the
+indexer has confirmed complete. Each response says whether it was stored:
+`ccx ask --stats` shows `answer stored` or `answer not stored (<reasons>)`,
+`--json` carries `usage.result_stored` and `usage.not_stored_reasons`, and the
+audit event carries the same two fields.
+
+| Reason | Meaning |
+|---|---|
+| `unattested_read` | a read ran while the indexer had not confirmed its ref complete: during an indexer pass, before the ref's first pass finished, or with live indexing (`indexer.cycleSeconds: 0`) |
+| `symbols_not_current` | a symbol lookup used a symbol graph that was partial or built for another commit; `ccx defs` prints a coverage note on stderr when it is |
+| `feature_unavailable` | a tool's index was unavailable |
+| `subquery_failed` | a helper sub-investigation failed |
+| `budget_exhausted` | the question asked for more than 8 helper sub-investigations |
+| `publish_fenced` | a repository purge ran at the same time |
+| `publish_failed`, `cache_bypassed`, `provenance_conflict` | a database or internal error; the query server log has the detail |
+| `cache_disabled` | the answer cache is off |
+
+The usual one is `unattested_read`. The indexer withdraws its confirmation
+for the whole of each pass, so an investigation that overlaps a pass is
+answered but not stored. The chance of overlap is roughly (investigation
+time + pass time) ÷ `indexer.cycleSeconds`: 150-second investigations against
+30-second passes every 300 s are stored only about four times in ten. The
+indexer's `Cycle finished; attested N ref(s). Next cycle in X s.` log line
+gives the pass time, about `cycleSeconds` − X. A longer
+`indexer.cycleSeconds` stores more long answers, at the cost of index
+freshness.
 
 If you change `CCX_EMBED_MODEL`, the server refuses to start until the cache's
 compatibility epoch is bumped in the same release — searching behaves
