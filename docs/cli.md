@@ -388,7 +388,7 @@ no CLI install, no output parsing. This is the recommended path for agents; the
 CLI remains the path for humans and shell scripts. The MCP tools track the CLI
 and REST API closely (same capabilities, same scoping).
 
-- **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP).
+- **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP; `/mcp/` is the same endpoint).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):

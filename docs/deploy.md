@@ -490,7 +490,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc`, operator attestations, and **an `authz.codeHosts` block for every registry instance** (`identityMapping: publicOnly` declares one with no linkage to mirror). The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}`, `database.provisioning.adminExistingSecret` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod, with a one-time role setup you run once or hand to the chart via `provisioning.adminExistingSecret` — see [Production Postgres](#production-postgres-cloud-sql--external) |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
-| **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules |
+| **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
@@ -1575,6 +1575,33 @@ the server:
   (retryable) while `/health` stays green — scale `replicaCount` if you see
   sustained capacity 503s.
 
+### Rollouts and pod shutdown
+
+A rollout, a scale-down, or a node drain replaces query-server pods while
+clients keep calling. Two things keep those requests from failing:
+
+- **A shutdown delay.** When Kubernetes marks a pod for deletion, the pod
+  keeps serving for `queryServer.shutdownDelaySeconds` (default **10 s**)
+  before the server is told to stop, so your ingress stops routing to it
+  first. Without the delay the server stops listening at once while the
+  ingress still sends it traffic for a few seconds, and requests fail or
+  stall on every rollout. `0` disables the delay.
+- **In-flight requests finish.** Once told to stop, the server accepts no new
+  connections and completes every request already running. The pod's
+  `terminationGracePeriodSeconds` is derived to allow for that — the delay,
+  plus the longest request deadline, plus 10 s: **80 s** by default, and
+  **600 s** with [Agentic query](#agentic-query) enabled — the chart caps it
+  there, GKE Autopilot's maximum. You don't set it.
+
+10 s is enough for ingress-nginx. A cloud load balancer that programs its
+endpoints from outside the cluster can take longer to stop sending traffic to
+a removed pod. To check yours, poll `/health` through the public URL a few
+times per second while you run
+`kubectl -n ccx rollout restart deploy/ccx-cocoindex-code-plus-query-server`
+(the quickstart's release and namespace; substitute yours). Every probe
+should answer `200` quickly; if some fail or stall, raise
+`shutdownDelaySeconds`.
+
 ### GKE notes
 
 - **Autopilot** requires CPU/memory **requests** on every container — set
@@ -1638,6 +1665,12 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/code/v0/semantic_search \
 export CCX_SERVER_URL=$URL CCX_API_TOKEN=<your-token>
 ccx repos                              # lists your indexed repos once built
 ccx search --repo <owner>/<repo> "some phrase from that codebase"
+
+# 4. MCP answers at the documented URL, in place — expect 200, never a 3xx:
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $URL/mcp \
+  -H "Authorization: Bearer $CCX_API_TOKEN" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify","version":"0"}}}'
 ```
 
 **Wiring up your own callers?** The server publishes its OpenAPI description at
@@ -1672,6 +1705,9 @@ Notes on reading the results:
 - If step 3 works over `port-forward` but not through your ingress URL, the
   problem is the ingress/TLS layer, not the deployment — recheck
   [Exposing the query server](#exposing-the-query-server).
+- Run step 4 **without** `-L`. When the ingress sends HSTS, curl turns an
+  `http://` redirect into `https` on its own, so a server that redirects
+  passes a `curl -L` check while MCP clients fail.
 
 ## Air-gapped / relocate images
 

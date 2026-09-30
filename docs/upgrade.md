@@ -32,6 +32,60 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.51 — `/mcp` answers in place; rollouts stop failing requests
+
+Nothing is required — upgrade normally. Read on if you pointed MCP clients
+at `/mcp/` to work around a redirect, if a proxy on the query-server pod's
+own loopback (a service-mesh sidecar) receives its traffic, or if requests
+still fail while pods roll.
+
+### What changed
+
+- **`/mcp` no longer redirects.** 0.1.50 answered `<publicUrl>/mcp` with a
+  `307` to `http://<host>/mcp/`: behind a TLS-terminating ingress the
+  server sees plain HTTP and built the redirect from that. A client that
+  followed it either dropped its bearer token and got `401`, or sent the
+  token over plain HTTP. Now `/mcp` and `/mcp/` are the same endpoint,
+  answered in place, so clients pointed at `/mcp/` keep working. No route
+  redirects any more: a stray trailing slash on a REST path is a `404`.
+  In Insights, the redirect used to count as a separate MCP request; it no
+  longer does.
+- **Rollouts no longer fail requests.** A query-server pod keeps serving for
+  `queryServer.shutdownDelaySeconds` (default 10) after it is marked for
+  deletion, so the ingress stops routing to it first, and its termination
+  grace period now lets every in-flight request finish — see
+  [Rollouts and pod shutdown](deploy.md#rollouts-and-pod-shutdown).
+- **Forwarded headers never rewrite a request.** The server takes a
+  request's client address and scheme from the connection itself. Before, a
+  request arriving from the pod's loopback had both rewritten from
+  `X-Forwarded-For` / `X-Forwarded-Proto` ahead of your
+  `rateLimit.clientIpStrategy`.
+- **The grep matcher loads when the pod starts.** A missing or rejected
+  license key is logged as a warning at startup instead of at the first
+  `ccx grep`, and grep keeps answering `503` with that reason until the pod
+  restarts. If the license check cannot reach `api.keygen.sh`, the pod takes
+  up to about 5 s longer to start, instead of every request stalling for
+  that long at the first grep.
+
+### What to do (optional)
+
+- **A service-mesh sidecar receives the query server's traffic** (requests
+  arrive from the pod's loopback): the sidecar is now the peer the server
+  sees. Set `rateLimit.clientIpStrategy: trustedChain` and add the address
+  the sidecar connects from to `rateLimit.trustedProxyCidrs`; otherwise every
+  client shares the sidecar's rate-limit bucket.
+- **Requests still fail or stall while pods roll:** your load balancer needs
+  longer to drop a pod. Raise `queryServer.shutdownDelaySeconds` and re-check.
+
+### How to verify
+
+- MCP answers in place: step 4 of [Verify the install](deploy.md#verify-the-install)
+  prints `200`.
+- The pod has the delay and the grace period:
+  `kubectl -n ccx get deploy ccx-cocoindex-code-plus-query-server -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}'`
+  prints `80` (`600` with agentic query enabled). The quickstart's release
+  and namespace; substitute yours.
+
 ## v0.1.50 — enterprise lookup: `membersOnly` dropped
 
 Applies if any instance maps identities through the **enterprise lookup**
