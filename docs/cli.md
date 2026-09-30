@@ -271,9 +271,9 @@ Two things to expect:
   the answer cache, asking something already answered — by you or by a
   colleague — returns the stored answer without re-running the investigation,
   and a rephrasing of the same question counts as the same question. A stored
-  answer is only reused while the code it was derived from is unchanged; edit
-  the files it cited and the next ask investigates again. `--json` reports
-  which happened, under `usage.result_cache_hit`.
+  answer is reused only while the repository's files are unchanged; after a
+  change the next ask investigates again, reusing the steps that still apply.
+  `--json` reports which happened, under `usage.result_cache_hit`.
 
 By default the command prints the answer and nothing else. Pass `--stats` to
 also see what the request cost and how much of that the cache covered — per
@@ -282,8 +282,14 @@ metric, the no-cache total and the share served from storage:
 ```text
 stats: queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
 input tokens 238142 (reused 105992 / 45%), output tokens 14554
-(reused 6610 / 45%), tool calls 73 (reused 38 / 52%), 47.8s
+(reused 6610 / 45%), tool calls 73 (reused 38 / 52%), answer stored, 47.8s
 ```
+
+The segment before the wall time says whether the answer is now stored for
+the next identical question: `answer stored`, or `answer not stored
+(<reasons>)` — [deploy.md → Answer cache](deploy.md#answer-cache-optional)
+lists the reasons. `--json` carries the same under `usage.result_stored` and
+`usage.not_stored_reasons`.
 
 A metric with nothing reused shows just its total. The reuse can be partial:
 an investigation reuses whatever stored work still applies — whole
