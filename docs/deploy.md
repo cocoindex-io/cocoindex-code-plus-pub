@@ -493,6 +493,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
+| **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 | **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
@@ -705,6 +706,57 @@ seconds. Rules of thumb:
   database run `CREATE EXTENSION pg_prewarm;` once as the provisioning user
   (the query server itself never runs DDL, and just skips prewarm with a log
   hint when the extension is absent).
+
+### Indexer memory sizing
+
+The indexer needs the most memory during a repository's **first pass** — the
+initial build, and the one-time re-walk that some upgrades trigger (their
+[upgrade](upgrade.md) entry says so). Later passes read only what changed,
+except for the symbol step below.
+
+A first pass has two peaks. Set `indexer.resources.limits.memory` to the
+larger of the two, or above:
+
+- **The walk: about 512 MiB plus 8 times the source size of the repositories
+  whose first pass runs at the same time.** On a fresh deployment, that is
+  every configured repository. Measured: a repository of 20,000 files and
+  170 MiB of source peaked at 1.4 GiB, one of 8,900 files and 80 MiB at
+  0.9 GiB.
+- **The symbol step, with the symbol index on (the default).** A repository's
+  pass ends by resolving its symbol graph, which holds all of that
+  repository's symbols at once. For a large repository this step sets the
+  peak: the 8,900-file TypeScript repository above reached 4.4 GiB there.
+  Plan on roughly half a MiB per source file of your largest repository; the
+  ratio varies with the language and the code. Resolution is whole-ref
+  ([Symbol index](#symbol-index)), so a pass that changes a repository's
+  source runs this step again: budget for it in steady state, not only for
+  the first pass.
+
+Where the walk's memory goes:
+
+- **Files read but not yet finished.** The walk reads a repository's files
+  far faster than their chunks are embedded, so early in the pass nearly
+  every file is waiting its turn, holding its contents. This is the part that
+  grows with the repository.
+- **Files in progress.** At most `indexer.maxFilesInFlight` files (default
+  256) are parsed and waiting on their embeddings at once, each holding about
+  7 times its own size. For typical source files that is tens of MiB.
+- **When to lower `indexer.maxFilesInFlight`.** When a repository holds many
+  large files — generated code or data near the
+  [file size limit](#file-size-limits) — the files in progress can reach
+  gigabytes (256 files of 1 MiB hold about 1.75 GiB). Lowering it to 64 cuts
+  that part fourfold.
+
+To keep the symbol step small, set `indexer.symbolIndex.maxFilesPerGitRef`
+below the file count of your largest repositories: a ref past it gets no
+symbol graph, and `ccx defs` / `ccx refs` say so, while search and grep are
+unaffected ([Symbol index](#symbol-index)).
+
+If the indexer is OOM-killed during a first pass, raise the limit to the
+budget above: the embeddings the killed pass finished are kept, so the next
+pass redoes little. Alternatively, add the largest repositories to the
+[index config](#index-config-repo) first and the rest once their first pass
+is done.
 
 ### Symbol index
 
@@ -1648,7 +1700,10 @@ should answer `200` quickly; if some fail or stall, raise
   Starter values (see `values-gcp.yaml`): query server `requests {cpu: 250m,
   memory: 512Mi}` / `limits {cpu: 1, memory: 1Gi}`; indexer `requests {cpu: 250m,
   memory: 512Mi}` / `limits {cpu: 1, memory: 2Gi}` (embedding + chunking is the
-  heavier path). Size Postgres to your corpus.
+  heavier path). With the symbol index off, the 2Gi limit covers first passes
+  of up to about 190 MiB of source at once; with it on, size for the symbol
+  step too — see [Indexer memory sizing](#indexer-memory-sizing). Size
+  Postgres to your corpus.
 - If an **org policy forbids external node IPs** (`compute.vmExternalIpAccess`),
   create the cluster with **private nodes** + a **Cloud NAT** for egress, and grant
   the node service account `roles/artifactregistry.reader` if pulling from
@@ -1820,6 +1875,17 @@ one to run against a correlation id the Insights error panel hands you
 ([insights.md](insights.md)). The audit stream is INFO, so a SIEM ingesting it
 reads standard output; the parsing rule is in
 [security.md](security.md#where-the-stream-is).
+
+One WARNING is worth watching for: the indexer's `No file has finished
+processing for …`, logged when a pass has made no progress for 10 minutes.
+It names the oldest files in progress and each one's stage:
+
+- `preparing` — stuck in parsing or extraction. The same file stalls again
+  after a restart: exclude it with `excluded_patterns` and report it.
+- `mounting` — waiting on embeddings or database writes. It usually clears
+  once the embedding provider or the database recovers.
+
+Search keeps serving the last completed index meanwhile.
 
 **Upgrading from v0.1.44 or earlier**, where everything but the access log went
 to standard error and collectors stamped the lot `ERROR`: see

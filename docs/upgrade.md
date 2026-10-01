@@ -32,13 +32,15 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.51 — `/mcp` answers in place; rollouts stop failing requests
+## v0.1.51 — `/mcp` answers in place; rollouts stop failing requests; large first passes fit in memory
 
 Nothing is required — upgrade normally. Read on if you pointed MCP clients
 at `/mcp/` to work around a redirect, if a proxy on the query-server pod's
 own loopback (a service-mesh sidecar) receives its traffic, if requests
-still fail while pods roll, or if you run agentic query with the answer
-cache.
+still fail while pods roll, if you run agentic query with the answer cache,
+or if you raised the indexer's memory or excluded files to get a large
+repository indexed. The first indexer pass after the upgrade re-reads every
+repository once (nothing is re-embedded); see *What changed*.
 
 ### What changed
 
@@ -87,6 +89,37 @@ cache.
   helper sub-investigations get half). The query server also logs a startup
   warning when LiteLLM will drop your `agentQuery.reasoningEffort` for the
   configured model.
+- **A large repository's first pass fits in memory.** The indexer works on
+  at most `indexer.maxFilesInFlight` files at once (new; default 256) and
+  frees each file's parse before it waits on its embeddings. Before, every
+  file of the repository was in progress at once: with the symbol index off,
+  a repository with 80 MiB of source peaked above 5 GiB, and now peaks at
+  0.9 GiB. With it on, the symbol step at the end of the pass can need more;
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) has both budgets.
+- **A long token no longer fails the whole ref.** Grep indexes a file's
+  identifiers and words, and a few constructs are indexed as one token: a
+  shell heredoc body, a C macro body, JSX text. A token that did not compress
+  under Postgres's 2,704-byte index limit failed its file, its folder and the
+  whole ref on every pass, logging `index row size … exceeds btree version 4
+  maximum 2704`. Tokens over 512 bytes are now left out of the grep index.
+- **The indexer reports a stalled pass.** When files are in progress and none
+  has finished for 10 minutes, the indexer logs a WARNING,
+  `No file has finished processing for …`, naming the oldest files in
+  progress and what each is waiting on. It repeats every 10 minutes while
+  the stall lasts.
+- **Symbol extraction no longer hangs on long call chains, and deep nesting
+  no longer crashes the indexer.** In TypeScript/JavaScript, C/C++ and C#,
+  each call of a chain like `a.b().c()` is walked once: before, extraction
+  time doubled with every call, and a chain of 30 calls took minutes. A file
+  nested more than 2,000 levels deep, or one whose extraction would exceed a
+  fixed work budget, now gets no symbols (search and grep still cover it)
+  instead of stalling or crashing the indexer. TypeScript/JavaScript and C#
+  results also lose spurious entries: duplicate definitions inside chained
+  callbacks and stray member-access entries in C# initializers.
+- **The first indexer pass after the upgrade re-reads every repository.**
+  Symbol extraction changed, so every file is extracted again; nothing is
+  re-embedded. That pass takes longer than a normal one and has first-pass
+  memory needs, each repository's symbol step included.
 
 ### What to do (optional)
 
@@ -101,6 +134,14 @@ cache.
   overlapped an indexer pass. See
   [deploy.md → Answer cache](deploy.md#answer-cache-optional) for how to read
   your pass time and when a longer `indexer.cycleSeconds` helps.
+- **You excluded files to get a repository indexed**, such as shell scripts
+  whose heredocs failed with the `index row size` error: remove those
+  `excluded_patterns` entries. The files index now.
+- **Check the indexer's memory limit against
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) before upgrading.**
+  The first pass after the upgrade re-reads every repository and ends with
+  each one's symbol step. If you raised the limit to get a large repository
+  through an earlier first pass, keep it until you have compared.
 
 ### How to verify
 
@@ -110,6 +151,8 @@ cache.
   `kubectl -n ccx get deploy ccx-cocoindex-code-plus-query-server -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}'`
   prints `80` (`600` with agentic query enabled). The quickstart's release
   and namespace; substitute yours.
+- After the first pass that follows the upgrade, the indexer log has no
+  `exceeds btree version 4 maximum 2704` error.
 
 ## v0.1.50 — enterprise lookup: `membersOnly` dropped
 
