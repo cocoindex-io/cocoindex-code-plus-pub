@@ -816,9 +816,11 @@ notes:
   `No module has finished resolving for … in the symbol step of …` (or
   `No rows have been declared for …`), every 10 minutes while it lasts.
 - **One ref's resolve is bounded; it cannot hold the other repositories.** A
-  resolve still running at `resolveTimeoutSeconds` is cancelled once the
-  modules it is resolving finish (a module cannot be interrupted midway), and
-  that ref's pass fails with a `component build failed` ERROR saying
+  resolve still running `resolveTimeoutSeconds` after it starts is cancelled
+  once the modules it is resolving finish (a module cannot be interrupted
+  midway). Large resolves take the indexer's CPUs one at a time, and the
+  time a ref waits for another repository's resolve does not count. That ref's
+  pass fails with a `component build failed` ERROR saying
   `symbol resolution was cancelled at the 30-minute bound
   (CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS)`. The ref keeps answering search,
   grep and `ccx defs` / `ccx refs` from its last completed pass, and the
@@ -1960,10 +1962,11 @@ It names the oldest files in progress and each one's stage:
   once the embedding provider or the database recovers.
 
 `No module has finished resolving for … in the symbol step of …` names a ref
-whose symbol resolution has not advanced for 10 minutes. The resolve is
-cancelled at `indexer.symbolIndex.resolveTimeoutSeconds` once the modules it
-is resolving finish ([Symbol index](#symbol-index)); report the repository
-either way.
+whose symbol resolution has not advanced for 10 minutes. With `0 of …
+modules resolved` it has not started, usually because another repository's
+resolve is still running. Otherwise the resolve is cancelled at
+`indexer.symbolIndex.resolveTimeoutSeconds` once the modules it is resolving
+finish ([Symbol index](#symbol-index)); report the repository either way.
 
 Search keeps serving the last completed index meanwhile.
 

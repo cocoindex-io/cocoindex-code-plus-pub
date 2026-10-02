@@ -43,8 +43,9 @@ repository's symbol step has run for hours, or if you lowered
 ### What changed
 
 - **One ref's symbol step can no longer hold every repository.** A ref's
-  symbol resolve still running at `indexer.symbolIndex.resolveTimeoutSeconds`
-  (new; default 1800, 30 minutes) is cancelled. That ref's pass fails with a
+  symbol resolve still running `indexer.symbolIndex.resolveTimeoutSeconds`
+  (new; default 1800, 30 minutes) after it starts is cancelled; time spent
+  waiting behind another repository's resolve does not count. That ref's pass fails with a
   `component build failed` ERROR saying `symbol resolution was cancelled at
   the 30-minute bound (CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS)`, keeps answering
   from its last completed pass, and is retried on the next one. Before, such
