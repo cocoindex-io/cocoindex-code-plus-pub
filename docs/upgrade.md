@@ -32,6 +32,84 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.52 — the symbol step reports progress and is bounded; C/C++ symbols resolve in seconds
+
+Nothing is required — upgrade normally. The first indexer pass after the
+upgrade extracts symbols again from every Python, TypeScript/JavaScript and
+C/C++ file and resolves every ref again; nothing is re-embedded. Read on if a
+repository's symbol step has run for hours, or if you lowered
+`indexer.symbolIndex.maxFilesPerGitRef` to get past one.
+
+### What changed
+
+- **One ref's symbol step can no longer hold every repository.** A ref's
+  symbol resolve still running `indexer.symbolIndex.resolveTimeoutSeconds`
+  (new; default 1800, 30 minutes) after it starts is cancelled; time spent
+  waiting behind another repository's resolve does not count. That ref's pass fails with a
+  `component build failed` ERROR saying `symbol resolution was cancelled at
+  the 30-minute bound (CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS)`, keeps answering
+  from its last completed pass, and is retried on the next one. Before, such
+  a ref held the whole pass for as long as its resolve ran, hours on some
+  C/C++ code, and no other repository updated meanwhile. See
+  [Symbol index](deploy.md#symbol-index).
+- **A long symbol step reports its progress.** Each ref's symbol step logs
+  when its tree is read and how many modules it will resolve, a line a minute
+  while it runs, and its totals. When it stops advancing for 10 minutes, the
+  indexer logs a WARNING, `No module has finished resolving for … in the
+  symbol step of …`, every 10 minutes while that lasts.
+- **C/C++ symbols resolve in seconds, not hours.** Resolution scanned a
+  namespace's members and a scope's entries again for every reference. In
+  the library's benchmarks, LLVM's `llvm/lib` (3,954 files) resolved in 15 s
+  instead of 205 s, and code shaped like the reports that ran for hours
+  finished in seconds.
+- **Symbol resolution uses every CPU.** A ref's modules resolve in parallel,
+  on as many threads as the indexer's CPU limit allows.
+- **Large deletions no longer stall a pass.** A pass deletes superseded rows
+  in batches of thousands, and Postgres took about a minute to plan each
+  batch, so a pass deleting a large repository's grep index ran for over an
+  hour. Each batch now plans in under a second.
+- **The symbol step needs less memory.** The indexer keeps the symbol rows
+  it has resolved in a compact form until it writes them. In the library's
+  measurement, the first pass over an 8,900-file TypeScript repository peaked
+  at 3.1 GiB instead of 4.5 GiB;
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) keeps the older,
+  larger figures until they are re-measured.
+- **`ccx defs` and `ccx refs` resolve more names.** Among them: names
+  re-exported through `from .x import *` and `export * from` barrels; names
+  qualified with a C++ namespace that many files reopen (every `llvm::` name
+  in LLVM was unresolved); every signature of a large overload set; and
+  TypeScript/JavaScript object-literal shorthand properties. A bare name in a
+  method no longer resolves to a member of its own class, which Python and
+  TypeScript/JavaScript do not do either.
+- **The first indexer pass after the upgrade re-walks every repository.**
+  Symbol extraction changed for Python, TypeScript/JavaScript and C/C++, so
+  every such file is extracted again and every ref resolved again; nothing is
+  re-embedded. That pass takes longer than a normal one and has first-pass
+  memory needs, each repository's symbol step included.
+
+### What to do (optional)
+
+- **Check the indexer's memory limit against
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) before upgrading.**
+  The first pass after the upgrade re-walks every repository. If you raised
+  the limit to get a large repository through an earlier first pass, keep it
+  for this one.
+- **You lowered `indexer.symbolIndex.maxFilesPerGitRef` to get past a symbol
+  step that never finished:** C/C++ resolution is now fast, so consider
+  raising it back. A ref still past the cap has no symbol graph.
+- **A ref's pass fails at the bound every pass** (the `cancelled at the …
+  bound` error): its search, grep and symbols stay at its last completed
+  pass. Raise `resolveTimeoutSeconds`, or set `maxFilesPerGitRef` below that
+  repository's file count to skip its symbol graph, and report it — a
+  healthy resolve takes seconds to minutes.
+
+### How to verify
+
+- The indexer log shows, for each ref the first pass resolves,
+  `symbol graph: <repo-uid> <ref> read … parsed_module rows in … rounds in
+  …; resolving … modules`, and later `symbol graph: <repo-uid> <ref>
+  resolved … modules → …`.
+
 ## v0.1.51 — `/mcp` answers in place; rollouts stop failing requests; large first passes fit in memory
 
 Nothing is required — upgrade normally. Read on if you pointed MCP clients

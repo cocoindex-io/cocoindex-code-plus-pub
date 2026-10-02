@@ -496,7 +496,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
-| **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef}` | default (on; 50 000 files / 1 GiB per ref) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
+| **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 | **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
@@ -779,11 +779,12 @@ notes:
       enabled: true          # false turns symbol indexing off — see the warning below
       maxFilesPerGitRef: 50000       # default; eligible source files per ref
       maxIrBytesPerGitRef: 1073741824 # default 1 GiB of extracted symbol data per ref
+      resolveTimeoutSeconds: 1800    # default 30 min; how long one ref's resolve may run
   ```
 
   (They map to `CCX_SYMBOL_INDEX_ENABLED`,
-  `CCX_SYMBOL_MAX_FILES_PER_GIT_REF`, `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF`
-  should you set the env directly.)
+  `CCX_SYMBOL_MAX_FILES_PER_GIT_REF`, `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF`,
+  `CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS` should you set the env directly.)
 - **Turning it off reclaims storage — it is not a pause.** `enabled: false`
   changes what the indexer's incremental state is keyed on, so the next pass
   re-runs without symbols and the symbol rows (plus their shared parsed-module
@@ -801,6 +802,36 @@ notes:
   carries a coverage status saying so (as do refs that are still building, or
   where some files failed to parse) — clients are told absence is not
   completeness rather than shown silently empty results.
+- **A long symbol step reports its progress.** Each ref's step logs when its
+  tree is read and how many modules it will resolve, then a line a minute
+  while it runs, then its totals:
+
+  ```
+  symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; resolving 3954 modules
+  symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows declared, 1 min
+  symbol graph: github:github.com:4242 heads/main resolved 3954 modules → 101532 definitions, 912345 references in 96.0s (...)
+  ```
+
+  When neither count has moved for 10 minutes, the indexer logs a WARNING,
+  `No module has finished resolving for … in the symbol step of …` (or
+  `No rows have been declared for …`), every 10 minutes while it lasts.
+- **One ref's resolve is bounded; it cannot hold the other repositories.** A
+  resolve still running `resolveTimeoutSeconds` after it starts is cancelled
+  once the modules it is resolving finish (a module cannot be interrupted
+  midway). Large resolves take the indexer's CPUs one at a time, and the
+  time a ref waits for another repository's resolve does not count. That ref's
+  pass fails with a `component build failed` ERROR saying
+  `symbol resolution was cancelled at the 30-minute bound
+  (CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS)`. The ref keeps answering search,
+  grep and `ccx defs` / `ccx refs` from its last completed pass, and the
+  content its new commit superseded waits for a completed pass
+  ([Interrupted passes](#interrupted-passes-and-cleanup)). Every other
+  repository keeps updating, and the next pass retries the ref.
+  - **A ref that hits the bound every pass** stays at its last completed
+    commit. Raise `resolveTimeoutSeconds`, or set `maxFilesPerGitRef` below
+    that repository's file count, which skips its symbol graph so its passes
+    complete. Report it either way: a healthy resolve takes seconds to
+    minutes.
 - **Changing a cap redoes no indexing.** The caps are checked after the walk,
   so a change never re-walks, re-extracts or re-embeds anything: a ref that
   crosses a cap only loses or regains its symbol rows on the next pass
@@ -812,8 +843,9 @@ notes:
   [vector-index memory budget](#postgres-memory-sizing).
 - **Compute** — symbol resolution is whole-ref: any change on a ref re-resolves
   that whole ref on the next indexer pass (incremental symbol indexing is
-  planned). On large, busy repos this shows up as indexer CPU, not query-side
-  latency.
+  planned). A ref's modules resolve in parallel, on as many threads as the
+  indexer's CPU limit (`indexer.resources.limits.cpu`) allows. On large, busy
+  repos this shows up as indexer CPU, not query-side latency.
 
 ### What a settings change redoes
 
@@ -830,6 +862,7 @@ that does the same says so in its [upgrade.md](upgrade.md) entry.
 | `indexer.symbolIndex.enabled: true`, after `false` | re-walks every repo, re-extracts symbols from every file, resolves every ref | nothing |
 | An upgrade that adds or changes language packs | re-walks every repo and re-extracts symbols from every file | nothing |
 | `indexer.symbolIndex.maxFilesPerGitRef` or `maxIrBytesPerGitRef` | no re-walk: a ref that crosses the cap loses or regains its symbol rows | nothing |
+| `indexer.symbolIndex.resolveTimeoutSeconds` | nothing: it only decides how long a ref's resolve may run | nothing |
 
 The two symbol caps act on each ref's symbol graph after the walk:
 
@@ -1919,14 +1952,21 @@ one to run against a correlation id the Insights error panel hands you
 reads standard output; the parsing rule is in
 [security.md](security.md#where-the-stream-is).
 
-One WARNING is worth watching for: the indexer's `No file has finished
-processing for …`, logged when a pass has made no progress for 10 minutes.
+Two WARNINGs are worth watching for. The indexer's `No file has finished
+processing for …` is logged when a pass has made no progress for 10 minutes.
 It names the oldest files in progress and each one's stage:
 
 - `preparing` — stuck in parsing or extraction. The same file stalls again
   after a restart: exclude it with `excluded_patterns` and report it.
 - `mounting` — waiting on embeddings or database writes. It usually clears
   once the embedding provider or the database recovers.
+
+`No module has finished resolving for … in the symbol step of …` names a ref
+whose symbol resolution has not advanced for 10 minutes. With `0 of …
+modules resolved` it has not started, usually because another repository's
+resolve is still running. Otherwise the resolve is cancelled at
+`indexer.symbolIndex.resolveTimeoutSeconds` once the modules it is resolving
+finish ([Symbol index](#symbol-index)); report the repository either way.
 
 Search keeps serving the last completed index meanwhile.
 
@@ -1939,8 +1979,10 @@ to standard error and collectors stamped the lot `ERROR`: see
 The indexer deletes a ref's superseded content only when a pass over that ref
 completes, which is when both its walk and its symbol step have finished. A
 pass killed before then (OOM-killed, or restarted by a rollout or
-`helm upgrade`) keeps what it finished and deletes nothing. The next pass that
-completes does all of the cleanup at once.
+`helm upgrade`) keeps what it finished and deletes nothing, and so does a
+ref's pass whose symbol step fails, at the
+[resolve bound](#symbol-index) for instance. The next pass that completes
+does all of the cleanup at once.
 
 On a large repository the symbol step is the longest part of a pass. A
 restart during it leaves the pass incomplete even though the walk finished.
