@@ -400,8 +400,10 @@ Two behaviors worth knowing, shared with `included_patterns` /
   these limits and your include/exclude patterns first.
 - **Changing the limit takes effect on the next poll.** Lowering it drops the
   now-oversized files' contents from the index; raising it indexes them. No
-  reindex or restart is needed, but the repo is re-walked, so the next cycle
-  after the change does more work than a steady-state one.
+  reindex or restart is needed, but the repo is re-walked: the next pass reads
+  and parses every file again, and embeds only the files the new limit admits.
+  Changing `indexer.maxFileSizeBytes` re-walks every repo that doesn't set its
+  own limit. See [What a settings change redoes](#what-a-settings-change-redoes).
 
 Binary files are never indexed, at any size.
 
@@ -754,9 +756,10 @@ unaffected ([Symbol index](#symbol-index)).
 
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
-pass redoes little. Alternatively, add the largest repositories to the
-[index config](#index-config-repo) first and the rest once their first pass
-is done.
+pass redoes little ([Interrupted passes](#interrupted-passes-and-cleanup)
+says what a killed pass keeps and what it leaves for later). Alternatively,
+add the largest repositories to the [index config](#index-config-repo) first
+and the rest once their first pass is done.
 
 ### Symbol index
 
@@ -798,6 +801,10 @@ notes:
   carries a coverage status saying so (as do refs that are still building, or
   where some files failed to parse) — clients are told absence is not
   completeness rather than shown silently empty results.
+- **Changing a cap redoes no indexing.** The caps are checked after the walk,
+  so a change never re-walks, re-extracts or re-embeds anything: a ref that
+  crosses a cap only loses or regains its symbol rows on the next pass
+  ([What a settings change redoes](#what-a-settings-change-redoes)).
 - **Storage** — four additional tables (`symbol_module_roots`,
   `symbol_definition`, `symbol_reference`, plus content-addressed
   `parsed_module` data shared across refs), `repo_key`-partitioned like the
@@ -807,6 +814,42 @@ notes:
   that whole ref on the next indexer pass (incremental symbol indexing is
   planned). On large, busy repos this shows up as indexer CPU, not query-side
   latency.
+
+### What a settings change redoes
+
+None of these settings needs a reindex. A repo's `max_file_size` takes effect
+on the next poll, and a chart value on the `helm upgrade` that sets it. Some
+of them make the next pass redo work across whole repositories. An upgrade
+that does the same says so in its [upgrade.md](upgrade.md) entry.
+
+| Change | What the next pass redoes | What it embeds |
+|---|---|---|
+| A repo's `max_file_size` | re-walks that repo: reads and parses every file again | only the files the new limit admits |
+| `indexer.maxFileSizeBytes` | re-walks every repo that doesn't set its own `max_file_size` | only the files the new limit admits |
+| `indexer.symbolIndex.enabled: false` | re-walks every repo, and deletes every symbol row and all extracted symbol data | nothing |
+| `indexer.symbolIndex.enabled: true`, after `false` | re-walks every repo, re-extracts symbols from every file, resolves every ref | nothing |
+| An upgrade that adds or changes language packs | re-walks every repo and re-extracts symbols from every file | nothing |
+| `indexer.symbolIndex.maxFilesPerGitRef` or `maxIrBytesPerGitRef` | no re-walk: a ref that crosses the cap loses or regains its symbol rows | nothing |
+
+The two symbol caps act on each ref's symbol graph after the walk:
+
+- **A ref that goes over a cap** has its symbol rows deleted on the next pass,
+  and `ccx defs` / `ccx refs` report it as skipped. For a large ref that
+  delete is a long step of its own.
+- **A ref that comes back under a cap** resolves its symbol graph on the next
+  pass, from the symbol data the walk already extracted: the cost of one
+  symbol step ([Indexer memory sizing](#indexer-memory-sizing)), not of a
+  first pass.
+- **Moving a cap that no ref crosses** changes no symbol rows.
+- **Lowering a cap keeps the extracted symbol data**, which the walk stores
+  for every ref; only `enabled: false` reclaims it.
+
+A pass that deletes a lot right after you change a setting is usually not
+acting on the setting. It is more often the first pass to complete after
+interrupted ones, collecting what they left behind. The `helm upgrade` that
+applies a chart value is itself one such interruption: it restarts the
+indexer and cuts short the pass that was running. See
+[Interrupted passes](#interrupted-passes-and-cleanup).
 
 ### Agentic query
 
@@ -1890,6 +1933,54 @@ Search keeps serving the last completed index meanwhile.
 **Upgrading from v0.1.44 or earlier**, where everything but the access log went
 to standard error and collectors stamped the lot `ERROR`: see
 [upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
+
+### Interrupted passes and cleanup
+
+The indexer deletes a ref's superseded content only when a pass over that ref
+completes, which is when both its walk and its symbol step have finished. A
+pass killed before then (OOM-killed, or restarted by a rollout or
+`helm upgrade`) keeps what it finished and deletes nothing. The next pass that
+completes does all of the cleanup at once.
+
+On a large repository the symbol step is the longest part of a pass. A
+restart during it leaves the pass incomplete even though the walk finished.
+
+What a killed pass leaves:
+
+- **The work it finished.** Embeddings, file bodies and the other content it
+  stored for the new commit stay in the index, so the next pass doesn't redo
+  them.
+- **The previous answers.** Search, grep and `ccx defs` / `ccx refs` keep
+  answering from the commit the last completed pass indexed. A ref whose
+  first pass has not completed is not searchable yet.
+- **The previous content.** Content of the old commit that the new commit no
+  longer contains is not deleted. While a repository keeps moving and its
+  passes keep getting killed, its storage grows with every pass.
+
+What the first completed pass does:
+
+- **It cleans up after every killed pass.** It deletes whatever the last
+  completed pass and the killed passes since then stored that the current
+  commit no longer contains: embeddings, file bodies, grep terms, directory
+  listings and extracted symbols.
+- **Deleting is work.** The pass reports it as `deleted` counts in its
+  progress lines (`kubectl logs`). A backlog of days, or a large ref's symbol
+  rows after you lower a symbol cap, can keep a pass busy for an hour or
+  more.
+
+**A large deletion right after a settings change** is usually this cleanup,
+not the setting. Check whether the passes before it completed:
+
+- an OOM kill restarts the container, and
+  `kubectl -n ccx describe pod -l app.kubernetes.io/component=indexer` shows
+  its last state as `OOMKilled`;
+- a rollout or `helm upgrade` replaces the pod, which cuts short whatever pass
+  was running;
+- in cycle mode each completed pass logs `Cycle finished; attested N ref(s)`,
+  so restarts with no such line between them mean no pass completed.
+
+The settings that do delete content are listed in
+[What a settings change redoes](#what-a-settings-change-redoes).
 
 ### Rotating the API token
 
