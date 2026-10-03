@@ -364,7 +364,7 @@ erroring.
 | Field | Req? | Meaning |
 |---|---|---|
 | `repo_owner` | **yes** | org / user (GitLab: full subgroup namespace, `/` kept) |
-| `repo_name` | **yes** | repository name |
+| `repo_name` | **yes** | repository name. Any case works for owner and name: users reach the repo whichever case their clone or `--repo` uses, and the spelling here is the one `ccx repos` shows |
 | `branches` / `tags` | **one required** | **regex** ([`re.fullmatch`](https://docs.python.org/3/library/re.html#re.fullmatch)) selecting refs to index — a plain `"main"` matches exactly that ref; the repo is indexed at every matched ref |
 | `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
 | `max_file_size` | default: `indexer.maxFileSizeBytes`, else 1 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 1 MiB** — a larger value is rejected at parse time (see below) |

@@ -209,6 +209,9 @@ a symbol has no callers.
 git repo, or a non-GitHub/GitLab origin) the command **errors** with guidance:
 pass `--repo` (repeatable for `search`, up to the server's per-search cap) —
 `ccx repos` lists what's indexed. There is no global "search everything" mode.
+Repo names match case-insensitively, as they do on the code host: a clone of
+`Acme/Proj`, or `--repo Acme/Proj`, finds the repo `ccx repos` lists as
+`acme/proj`.
 With several `--repo`s, each repo is searched at its own server-side default
 ref (a stderr note names each resolved ref); `--git-ref` applies to a single
 repo scope.
