@@ -32,6 +32,88 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.53 — symbol rows are written per file, in one step; the symbol tables are rebuilt
+
+Nothing is required — upgrade normally. The first indexer pass after the
+upgrade builds every ref's symbol graph again, into new tables; nothing is
+re-extracted or re-embedded. Until a ref's symbol step has run in that pass,
+`ccx defs` and `ccx refs` note that the ref's symbol index isn't built yet.
+Read on if a large repository's symbol step ran out of memory or held a pass
+for long, or if anything of yours reads the symbol tables by name.
+
+### What changed
+
+- **A pass writes the symbol rows of the files that changed, and no
+  others.** A ref's symbol graph is still resolved whole after any change to
+  the ref. The pass then writes only the files whose symbol rows came out
+  different; before, every symbol row of the ref went through the indexer's
+  bookkeeping again, changed or not. Measured on an 8,900-file TypeScript
+  repository holding 800,000 symbol rows: the pass after a one-file commit
+  took 9 s instead of 59 s, and peaked at 1.2 GiB instead of 1.7 GiB.
+- **A ref's symbol graph changes in one step.** Everything a pass changes
+  for a ref is written in one transaction. `ccx defs` and `ccx refs` never
+  answer from a half-written graph, and a killed pass leaves the previous
+  graph or the new one, whole
+  ([Interrupted passes](deploy.md#interrupted-passes-and-cleanup)).
+- **A first pass needs less memory for the symbol graph.** On the same
+  repository the first pass peaked at 1.5 GiB instead of 2.4 GiB, and its
+  symbol step, write included, took 1 minute instead of 2.
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) has the new
+  figures.
+- **Deleting a ref's symbol rows is one quick step.** A ref that goes over a
+  symbol cap, a ref removed from the index config, and every ref once the
+  symbol index is turned off lose their symbol rows in one transaction:
+  about a second for the 800,000 rows above. Before, the indexer cleared its
+  bookkeeping for them row by row, which ran for hours on millions of rows.
+- **The symbol tables have new names.** `symbol_module_roots`,
+  `symbol_definition`, `symbol_reference` and `symbol_name_sites` are now
+  `symbol_coverage`, `symbol_definitions`, `symbol_references` and
+  `symbol_name_only_sites`; `symbol_units` is new. The first pass after the
+  upgrade creates the new tables and drops the old ones.
+- **The symbol step's log lines changed.** `rows declared` reads `rows
+  compared`, and two lines follow the step's totals: how many files changed,
+  and what was written ([Symbol index](deploy.md#symbol-index)). A write
+  that stops advancing for 10 minutes logs a WARNING, `No rows have been
+  written for … in the symbol write of …`.
+
+### The first pass after the upgrade
+
+- **It resolves every ref's symbol graph again and writes it to the new
+  tables.** The cost is one symbol step per ref
+  ([Indexer memory sizing](deploy.md#indexer-memory-sizing)); the walk,
+  extraction and embeddings are not redone.
+- **It drops the old tables and clears the indexer's bookkeeping for their
+  rows.** For the repository above the whole pass took 48 s: 8 s to write
+  the 800,000 rows to the new tables, most of the rest to clear the
+  bookkeeping of the old ones.
+- **`ccx defs` and `ccx refs` follow it ref by ref.** A ref's symbol index
+  reads as not built until its symbol step has run, and answers from its full
+  graph after that. For a few seconds while the two workloads roll, the two
+  commands can answer `503`. Search, grep and file reads are unaffected
+  throughout.
+- **`helm rollback` works, and rebuilds again.** The previous release drops
+  the new tables and builds the old ones from scratch, the way this upgrade
+  builds the new ones.
+
+### What to do (optional)
+
+- **You set `indexer.symbolIndex.maxFilesPerGitRef` low to get a large
+  repository's symbol step through:** check that repository against
+  [Indexer memory sizing](deploy.md#indexer-memory-sizing) and consider
+  raising the cap back. A ref past the cap has no symbol graph.
+- **You read the symbol tables by name** (a dashboard, a grant, a backup
+  filter): switch to the new names. Nothing in the chart, the CLI or the API
+  refers to them.
+
+### How to verify
+
+- The indexer log shows, for each ref the first pass resolves, `symbol
+  graph: <repo-uid> <ref>: N of N modules changed (… rows to write), 0
+  removed; replacing every stored row of the ref`, then `symbol graph:
+  <repo-uid> <ref> wrote N of its modules …`.
+- `ccx defs <function-name>`, for a function you know in that repository,
+  answers once the repository's `wrote` line is logged.
+
 ## v0.1.52 — the symbol step reports progress and is bounded; C/C++ symbols resolve in seconds
 
 Nothing is required — upgrade normally. The first indexer pass after the
