@@ -1998,9 +1998,11 @@ What a killed pass leaves:
 - **The work it finished.** Embeddings, file bodies and the other content it
   stored for the new commit stay in the index, so the next pass doesn't redo
   them.
-- **The previous answers.** Search, grep and `ccx defs` / `ccx refs` keep
-  answering from the commit the last completed pass indexed. A ref whose
-  first pass has not completed is not searchable yet.
+- **The previous answers.** Search, grep and file reads keep answering from
+  the commit the last completed pass indexed. So do `ccx defs` / `ccx refs`,
+  unless the kill came after the ref's symbol step finished: they then answer
+  from the new commit, and their stderr coverage note names both commits. A
+  ref whose first pass has not completed is not searchable yet.
 - **The previous content.** Content of the old commit that the new commit no
   longer contains is not deleted. While a repository keeps moving and its
   passes keep getting killed, its storage grows with every pass.

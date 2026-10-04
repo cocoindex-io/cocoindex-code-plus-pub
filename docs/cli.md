@@ -194,9 +194,10 @@ pair — the headline's qualified name is *not* the second token. Reference rows
 candidate as its own row, and `name_only` marks a mention whose target couldn't
 be resolved (e.g. an external import). Watch stderr for the **coverage note**:
 it tells you when the symbol index for the ref isn't built yet, skipped the ref
-as too large, parsed only part of it, or lags the ref's head — in all of those,
-a missing symbol may just be unindexed, so absence is not completeness. A clean
-note is still not a proof: an exact target lists only *resolved* uses, and a use
+as too large, parsed only part of it, or was built at another commit than the
+ref's indexed head (the note names both) — in all of those, a missing symbol may
+just be unindexed, so absence is not completeness. A clean note is still not a
+proof: an exact target lists only *resolved* uses, and a use
 the resolver could not commit (an unknown receiver, an import across a Python
 source root the index could not infer — roots come from package markers and the
 repo's own absolute imports, never from build config) appears only as a
