@@ -809,8 +809,14 @@ notes:
   ```
   symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; resolving 3954 modules
   symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows declared, 1 min
-  symbol graph: github:github.com:4242 heads/main resolved 3954 modules → 101532 definitions, 912345 references in 96.0s (...)
+  symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; declaring rows, 450000 declared, 2 min
+  symbol graph: github:github.com:4242 heads/main resolved 3954 modules → 101532 definitions, 912345 references in 96.0s (read 2.3s, resolve 71.4s, rows 22.3s; ...)
   ```
+
+  The last line splits the step's time into its phases: `read` is reading the
+  ref's files back from the index, `resolve` is the symbol resolution itself
+  (including any wait behind another ref's resolve), and `rows` is handing
+  the resulting rows to the index. Include that line when you report a slow symbol step.
 
   When neither count has moved for 10 minutes, the indexer logs a WARNING,
   `No module has finished resolving for … in the symbol step of …` (or
