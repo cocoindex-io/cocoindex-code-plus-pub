@@ -253,8 +253,9 @@ Reading `refs` output — each row carries:
 
 **Check the stderr coverage note before trusting absence.** It reports when the
 symbol index for this ref is *not built*, *skipped* (ref too large to resolve),
-*partial* (some files failed to parse), or *lags the ref head* — in every one of
-those, a missing symbol may simply be unindexed. Absence is not completeness.
+*partial* (some files failed to parse), or *at another commit than the ref's
+indexed head* — in every one of those, a missing symbol may simply be
+unindexed. Absence is not completeness.
 A stale exact target (definition renamed/removed since the `defs` call) errors
 with `target_not_found` — re-run `ccx defs` for a current target.
 
@@ -358,8 +359,8 @@ Note the two different senses of "ref": `ccx git-refs` lists **git** refs
   concluding the code isn't there. Also check stderr: a CWD-subtree note means
   you searched only part of the repo (`--path '*'` widens).
 - **`No definitions.` / `No references.`** — first read the stderr coverage
-  note (index not built / ref skipped / partial parse / snapshot lag →
-  absence proves nothing); then check the language is covered (Python,
+  note (index not built / ref skipped / partial parse / snapshot at another
+  commit → absence proves nothing); then check the language is covered (Python,
   TS/JS/TSX, C/C++, C#, Rust). A `defs` miss on a dotted name usually means
   `--qualified-name` was needed (or vice versa — drop it to match the base
   name); a `refs` miss on an exact target may be a stale `entity_id` — re-run
