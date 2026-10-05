@@ -32,7 +32,7 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.54 — symbol rows are written per file, in one step; the symbol tables are rebuilt
+## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt
 
 Nothing is required — upgrade normally. The first indexer pass after the
 upgrade builds every ref's symbol graph again, into new tables; nothing is
@@ -43,13 +43,23 @@ for long, or if anything of yours reads the symbol tables by name.
 
 ### What changed
 
-- **A pass writes the symbol rows of the files that changed, and no
-  others.** A ref's symbol graph is still resolved whole after any change to
-  the ref. The pass then writes only the files whose symbol rows came out
-  different; before, every symbol row of the ref went through the indexer's
-  bookkeeping again, changed or not. Measured on an 8,900-file TypeScript
-  repository holding 800,000 symbol rows: the pass after a one-file commit
-  took 10 s instead of 40 s, and peaked at 1.3 GiB instead of 1.7 GiB.
+- **A pass resolves and writes only the files whose symbols may have
+  changed.** After a change, the indexer resolves the changed files and the
+  files whose symbols depend on them, reuses the rest, and writes only the
+  files whose symbol rows came out different. Before, every pass after a
+  change resolved the ref's whole symbol graph, and every symbol row of the
+  ref went through the indexer's bookkeeping again, changed or not.
+  Measured on an 8,900-file TypeScript repository holding 800,000 symbol
+  rows: after a one-commit change the pass resolved 5 files, took 12 s and
+  peaked at 0.8 GiB; a pass like it used to take about 40 s and peak at
+  1.7 GiB. After 25 commits it resolved 886 files.
+- **Reused symbols are checked once a day.** A file whose symbols have been
+  reused for a day is resolved again on the next pass after a change to its
+  repository. If its symbols come out different, the indexer logs an ERROR
+  naming the files and writes the right ones; please report it. The
+  optional `indexer.symbolIndex.reuseMaxAgeSeconds` (default `86400`) sets
+  the interval, and `0` turns reuse off
+  ([Symbol index](deploy.md#symbol-index)).
 - **A ref's symbol graph changes in one step.** Everything a pass changes
   for a ref is written in one transaction. `ccx defs` and `ccx refs` never
   answer from a half-written graph, and a killed pass leaves the previous
@@ -70,11 +80,14 @@ for long, or if anything of yours reads the symbol tables by name.
   `symbol_coverage`, `symbol_definitions`, `symbol_references` and
   `symbol_name_only_sites`. The first pass after the upgrade creates the new
   tables and drops the old ones.
-- **The symbol step's log lines changed.** `rows declared` reads `rows
-  compared`, and a `wrote` line follows the step's totals when a file's
-  symbol rows changed ([Symbol index](deploy.md#symbol-index)). A write
-  that stops advancing for 10 minutes logs a WARNING, `No rows have been
-  written for … in the symbol write of …`.
+- **The symbol step's log lines changed.** The step logs `checking N
+  modules`, then `resolving K of N modules (…), reusing M`, or `reused all
+  N modules` when it resolves none. Its totals line gains a `check` phase,
+  `rows declared` reads `rows compared`, and a `wrote` line follows the
+  totals when a file's symbol rows changed
+  ([Symbol index](deploy.md#symbol-index)). A write that stops advancing
+  for 10 minutes logs a WARNING, `No rows have been written for … in the
+  symbol write of …`.
 
 ### The first pass after the upgrade
 
@@ -112,6 +125,9 @@ for long, or if anything of yours reads the symbol tables by name.
   the ref's source files.
 - `ccx defs <function-name>`, for a function you know in that repository,
   answers once the repository's `wrote` line is logged.
+- On the passes after it, a repository's step logs `resolving K of N
+  modules (…), reusing M`, with K the files that changed and the files
+  whose symbols depend on them.
 
 ## v0.1.53 — removing a large component commits in seconds; symbol names are corrected
 
