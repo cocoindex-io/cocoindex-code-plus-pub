@@ -727,13 +727,13 @@ larger of the two, or above:
 - **The symbol step, with the symbol index on (the default).** A repository's
   pass ends by resolving its symbol graph, which holds all of that
   repository's symbols at once. For a large repository this step sets the
-  peak: the 8,900-file TypeScript repository above reached 1.5 GiB there.
+  peak: the 8,900-file TypeScript repository above reached 1.6 GiB there.
   Plan on roughly 0.2 MiB per source file of your largest repository; the
   ratio varies with the language and the code. Resolution is whole-ref
   ([Symbol index](#symbol-index)), so a pass that changes a repository's
   source runs this step again: budget for it in steady state, not only for
   the first pass. Such a pass keeps only the changed files' symbol rows for
-  writing, so its peak is lower: 1.2 GiB for the same repository.
+  writing, so its peak is lower: 1.3 GiB for the same repository.
 
 Where the walk's memory goes:
 
@@ -805,23 +805,23 @@ notes:
   completeness rather than shown silently empty results.
 - **A long symbol step reports its progress.** Each ref's step logs when its
   tree is read and how many modules it will resolve, then a line a minute
-  while it runs, then its totals, what changed, and what it wrote:
+  while it runs, then its totals, and what it wrote:
 
   ```
   symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; resolving 3954 modules
   symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows compared, 1 min
   symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; comparing rows, 450000 compared, 2 min
   symbol graph: github:github.com:4242 heads/main resolved 3954 modules → 101532 definitions, 912345 references in 96.0s (read 2.3s, resolve 71.4s, rows 22.3s; ...)
-  symbol graph: github:github.com:4242 heads/main: 12 of 3954 modules changed (3180 rows to write), 1 removed
-  symbol graph: github:github.com:4242 heads/main wrote 12 of its modules (402 definitions, 1911 references, 867 name-site rows) and removed 1 in 0.2s
+  symbol graph: github:github.com:4242 heads/main wrote 12 modules (402 definitions, 1911 references, 867 name-site rows) and removed 1 in 0.2s
   ```
 
   The totals line splits the step's time into its phases: `read` is reading
   the ref's files back from the index, `resolve` is the symbol resolution
   itself (including any wait behind another ref's resolve), and `rows` is
-  comparing the resolved rows with the stored ones and preparing those that
-  changed. Include that line when you report a slow symbol step. A module is
-  one source file. The `wrote` line is absent when nothing changed.
+  checking each file's resolved rows against what is stored and preparing
+  those that changed. Include that line when you report a slow symbol step.
+  A module is one source file. The `wrote` line is absent when no file's
+  rows changed.
 
   When neither count has moved for 10 minutes, the indexer logs a WARNING,
   `No module has finished resolving for … in the symbol step of …` (or
@@ -850,10 +850,10 @@ notes:
   so a change never re-walks, re-extracts or re-embeds anything: a ref that
   crosses a cap only loses or regains its symbol rows on the next pass
   ([What a settings change redoes](#what-a-settings-change-redoes)).
-- **Storage** — eight additional tables: per ref, `symbol_coverage`,
-  `symbol_definitions`, `symbol_references`, `symbol_name_only_sites` and
-  `symbol_units`; per repository, the `symbol_paths` and `symbol_entities`
-  name dictionaries; plus content-addressed `parsed_module` data shared
+- **Storage** — seven additional tables: per ref, `symbol_coverage`,
+  `symbol_definitions`, `symbol_references` and `symbol_name_only_sites`;
+  per repository, the `symbol_paths` and `symbol_entities` name
+  dictionaries; plus content-addressed `parsed_module` data shared
   across refs. All are `repo_key`-partitioned like the rest. Plain B-tree
   rows; they don't compete with the
   [vector-index memory budget](#postgres-memory-sizing).
@@ -2046,6 +2046,22 @@ not the setting. Check whether the passes before it completed:
 
 The settings that do delete content are listed in
 [What a settings change redoes](#what-a-settings-change-redoes).
+
+**A symbol step that fails with `the stored symbol rows of <file> are in
+doubt`** follows a symbol write that was cut short or failed, when a later
+commit puts that file back to its earlier content. The indexer can no longer
+tell which version of the file's symbol rows is stored, and it has nothing
+to rewrite them from:
+
+- the ref's pass fails with a `component build failed` ERROR that names the
+  file, on every pass, until the file's symbols change again;
+- to clear it, set `indexer.symbolIndex.maxFilesPerGitRef` below that
+  repository's file count for one pass, then restore it. The ref's symbol
+  rows are deleted and rebuilt; nothing is re-extracted or re-embedded.
+  Other refs above the lowered cap are rebuilt the same way.
+
+Report it if you see it: it takes an interruption and a revert in a narrow
+order.
 
 ### Rotating the API token
 
