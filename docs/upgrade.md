@@ -32,6 +32,41 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.53 — removing a large component commits in seconds; symbol names are corrected
+
+Nothing is required — upgrade normally. The first indexer pass after the
+upgrade resolves every ref's symbols again; no file is walked, extracted or
+embedded again. Read on if the indexer sat in a long `idle in transaction`
+commit after you lowered `indexer.symbolIndex.maxFilesPerGitRef`.
+
+### What changed
+
+- **A commit that removes a large component no longer takes hours.**
+  Lowering `indexer.symbolIndex.maxFilesPerGitRef` below a ref's size skips
+  that ref's symbol step, and the pass then removes the symbol rows it had
+  declared. The Postgres commit checked each of those rows with its own
+  query inside one transaction: about 600 a second, so a million rows took
+  nearly 18 minutes and seven million would take about 3 hours, and a restart rolled
+  all of it back. The commit now reads them in bulk. In the library's
+  measurements a million rows take 7 s and seven million take 52 s.
+- **Symbol resolution is corrected in two cases.** In TypeScript and
+  JavaScript, a binding made inside an arrow function or IIFE
+  (`const { X } = require("./b")`) no longer replaces the module's own `X`
+  for `export { X } from "./a"` or for the module's other mentions of `X`;
+  it applies inside the function only. In a repository mixing languages, a
+  lookup stays inside the looking-up file's language: a C++ and a C#
+  `namespace app` are no longer one namespace, and a `.ts` file in a Python
+  namespace package no longer turns `pkg.mod.f()` into a name-only match.
+
+### What to do
+
+- **Stuck commit:** upgrade and restart the indexer. A commit already
+  running does not speed up, and the restart rolls it back; the next pass
+  removes the component in bulk.
+- **Expected after the upgrade:** the first pass re-resolves every ref, so
+  its symbol step runs once more over every repository with symbols enabled.
+  Rows for the cases above change; everything else is identical.
+
 ## v0.1.52 — the symbol step reports progress and is bounded; C/C++ symbols resolve in seconds
 
 Nothing is required — upgrade normally. The first indexer pass after the
