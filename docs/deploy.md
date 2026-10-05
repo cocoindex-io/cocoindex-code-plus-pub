@@ -727,12 +727,13 @@ larger of the two, or above:
 - **The symbol step, with the symbol index on (the default).** A repository's
   pass ends by resolving its symbol graph, which holds all of that
   repository's symbols at once. For a large repository this step sets the
-  peak: the 8,900-file TypeScript repository above reached 4.4 GiB there.
-  Plan on roughly half a MiB per source file of your largest repository; the
+  peak: the 8,900-file TypeScript repository above reached 1.6 GiB there.
+  Plan on roughly 0.2 MiB per source file of your largest repository; the
   ratio varies with the language and the code. Resolution is whole-ref
   ([Symbol index](#symbol-index)), so a pass that changes a repository's
   source runs this step again: budget for it in steady state, not only for
-  the first pass.
+  the first pass. Such a pass keeps only the changed files' symbol rows for
+  writing, so its peak is lower: 1.3 GiB for the same repository.
 
 Where the walk's memory goes:
 
@@ -804,23 +805,30 @@ notes:
   completeness rather than shown silently empty results.
 - **A long symbol step reports its progress.** Each ref's step logs when its
   tree is read and how many modules it will resolve, then a line a minute
-  while it runs, then its totals:
+  while it runs, then its totals, and what it wrote:
 
   ```
   symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; resolving 3954 modules
-  symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows declared, 1 min
-  symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; declaring rows, 450000 declared, 2 min
+  symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows compared, 1 min
+  symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; comparing rows, 450000 compared, 2 min
   symbol graph: github:github.com:4242 heads/main resolved 3954 modules → 101532 definitions, 912345 references in 96.0s (read 2.3s, resolve 71.4s, rows 22.3s; ...)
+  symbol graph: github:github.com:4242 heads/main wrote 12 modules (402 definitions, 1911 references, 867 name-site rows) and removed 1 in 0.2s
   ```
 
-  The last line splits the step's time into its phases: `read` is reading the
-  ref's files back from the index, `resolve` is the symbol resolution itself
-  (including any wait behind another ref's resolve), and `rows` is handing
-  the resulting rows to the index. Include that line when you report a slow symbol step.
+  The totals line splits the step's time into its phases: `read` is reading
+  the ref's files back from the index, `resolve` is the symbol resolution
+  itself (including any wait behind another ref's resolve), and `rows` is
+  checking each file's resolved rows against what is stored and preparing
+  those that changed. Include that line when you report a slow symbol step.
+  A module is one source file. The `wrote` line is absent when no file's
+  rows changed.
 
   When neither count has moved for 10 minutes, the indexer logs a WARNING,
   `No module has finished resolving for … in the symbol step of …` (or
-  `No rows have been declared for …`), every 10 minutes while it lasts.
+  `No rows have been compared for …`), every 10 minutes while it lasts. A
+  write that runs over a minute logs `writing rows, … of … written` once a
+  minute, and `No rows have been written for …` when it stops advancing for
+  10 minutes.
 - **One ref's resolve is bounded; it cannot hold the other repositories.** A
   resolve still running `resolveTimeoutSeconds` after it starts is cancelled
   once the modules it is resolving finish (a module cannot be interrupted
@@ -842,16 +850,21 @@ notes:
   so a change never re-walks, re-extracts or re-embeds anything: a ref that
   crosses a cap only loses or regains its symbol rows on the next pass
   ([What a settings change redoes](#what-a-settings-change-redoes)).
-- **Storage** — four additional tables (`symbol_module_roots`,
-  `symbol_definition`, `symbol_reference`, plus content-addressed
-  `parsed_module` data shared across refs), `repo_key`-partitioned like the
-  rest. Plain B-tree rows; they don't compete with the
+- **Storage** — seven additional tables: per ref, `symbol_coverage`,
+  `symbol_definitions`, `symbol_references` and `symbol_name_only_sites`;
+  per repository, the `symbol_paths` and `symbol_entities` name
+  dictionaries; plus content-addressed `parsed_module` data shared
+  across refs. All are `repo_key`-partitioned like the rest. Plain B-tree
+  rows; they don't compete with the
   [vector-index memory budget](#postgres-memory-sizing).
 - **Compute** — symbol resolution is whole-ref: any change on a ref re-resolves
-  that whole ref on the next indexer pass (incremental symbol indexing is
+  that whole ref on the next indexer pass (incremental symbol resolution is
   planned). A ref's modules resolve in parallel, on as many threads as the
   indexer's CPU limit (`indexer.resources.limits.cpu`) allows. On large, busy
   repos this shows up as indexer CPU, not query-side latency.
+- **Writes** — only the files whose symbol rows changed are rewritten, and
+  everything a pass changes for a ref lands in one transaction, so `ccx defs`
+  and `ccx refs` never see a ref half-updated.
 
 ### What a settings change redoes
 
@@ -873,8 +886,7 @@ that does the same says so in its [upgrade.md](upgrade.md) entry.
 The two symbol caps act on each ref's symbol graph after the walk:
 
 - **A ref that goes over a cap** has its symbol rows deleted on the next pass,
-  and `ccx defs` / `ccx refs` report it as skipped. For a large ref that
-  delete is a long step of its own.
+  and `ccx defs` / `ccx refs` report it as skipped.
 - **A ref that comes back under a cap** resolves its symbol graph on the next
   pass, from the symbol data the walk already extracted: the cost of one
   symbol step ([Indexer memory sizing](#indexer-memory-sizing)), not of a
@@ -2003,6 +2015,10 @@ What a killed pass leaves:
   unless the kill came after the ref's symbol step finished: they then answer
   from the new commit, and their stderr coverage note names both commits. A
   ref whose first pass has not completed is not searchable yet.
+- **A whole symbol graph, old or new.** A ref's symbol changes are written in
+  one step, at the end of its symbol step. A pass killed before that step
+  leaves the previous symbol graph, and a pass killed after it leaves the new
+  one.
 - **The previous content.** Content of the old commit that the new commit no
   longer contains is not deleted. While a repository keeps moving and its
   passes keep getting killed, its storage grows with every pass.
@@ -2014,9 +2030,8 @@ What the first completed pass does:
   commit no longer contains: embeddings, file bodies, grep terms, directory
   listings and extracted symbols.
 - **Deleting is work.** The pass reports it as `deleted` counts in its
-  progress lines (`kubectl logs`). A backlog of days, or a large ref's symbol
-  rows after you lower a symbol cap, can keep a pass busy for an hour or
-  more.
+  progress lines (`kubectl logs`). A backlog of days can keep a pass busy for
+  an hour or more.
 
 **A large deletion right after a settings change** is usually this cleanup,
 not the setting. Check whether the passes before it completed:
@@ -2031,6 +2046,22 @@ not the setting. Check whether the passes before it completed:
 
 The settings that do delete content are listed in
 [What a settings change redoes](#what-a-settings-change-redoes).
+
+**A symbol step that fails with `the stored symbol rows of <file> are in
+doubt`** follows a symbol write that was cut short or failed, when a later
+commit puts that file back to its earlier content. The indexer can no longer
+tell which version of the file's symbol rows is stored, and it has nothing
+to rewrite them from:
+
+- the ref's pass fails with a `component build failed` ERROR that names the
+  file, on every pass, until the file's symbols change again;
+- to clear it, set `indexer.symbolIndex.maxFilesPerGitRef` below that
+  repository's file count for one pass, then restore it. The ref's symbol
+  rows are deleted and rebuilt; nothing is re-extracted or re-embedded.
+  Other refs above the lowered cap are rebuilt the same way.
+
+Report it if you see it: it takes an interruption and a revert in a narrow
+order.
 
 ### Rotating the API token
 
