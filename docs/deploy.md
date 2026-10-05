@@ -2011,13 +2011,14 @@ What a killed pass leaves:
   stored for the new commit stay in the index, so the next pass doesn't redo
   them.
 - **The previous answers.** Search, grep and file reads keep answering from
-  the commit the last completed pass indexed. A ref whose first pass has not
-  completed is not searchable yet.
+  the commit the last completed pass indexed. So do `ccx defs` / `ccx refs`,
+  unless the kill came after the ref's symbol step finished: they then answer
+  from the new commit, and their stderr coverage note names both commits. A
+  ref whose first pass has not completed is not searchable yet.
 - **A whole symbol graph, old or new.** A ref's symbol changes are written in
   one step, at the end of its symbol step. A pass killed before that step
-  leaves the previous symbol graph. A pass killed after it leaves the new
-  one, ahead of search until a pass completes; `ccx defs` / `ccx refs` say
-  when their answer and the ref's indexed head are at different commits.
+  leaves the previous symbol graph, and a pass killed after it leaves the new
+  one.
 - **The previous content.** Content of the old commit that the new commit no
   longer contains is not deleted. While a repository keeps moving and its
   passes keep getting killed, its storage grows with every pass.
