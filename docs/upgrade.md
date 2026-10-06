@@ -32,14 +32,15 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt
+## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt; Git LFS files are skipped
 
 Nothing is required — upgrade normally. The first indexer pass after the
-upgrade builds every ref's symbol graph again, into new tables; nothing is
-re-extracted or re-embedded. Until a ref's symbol step has run in that pass,
-`ccx defs` and `ccx refs` note that the ref's symbol index isn't built yet.
-Read on if a large repository's symbol step ran out of memory or held a pass
-for long, or if anything of yours reads the symbol tables by name.
+upgrade walks every repository again and builds every ref's symbol graph
+again, into new tables; nothing is re-embedded. Until a ref's symbol step has
+run in that pass, `ccx defs` and `ccx refs` note that the ref's symbol index
+isn't built yet. Read on if a large repository's symbol step ran out of memory
+or held a pass for long, if anything of yours reads the symbol tables by name,
+or if you exclude file types to keep Git LFS pointers out of the index.
 
 ### What changed
 
@@ -80,6 +81,11 @@ for long, or if anything of yours reads the symbol tables by name.
   `symbol_coverage`, `symbol_definitions`, `symbol_references` and
   `symbol_name_only_sites`. The first pass after the upgrade creates the new
   tables and drops the old ones.
+- **Git LFS files are no longer indexed as their pointers.** The git blob of
+  an LFS-tracked file is a short text pointer, not the file. Earlier releases
+  stored and embedded that pointer as the file's contents; the indexer now
+  skips it, as it skips binary files
+  ([File size limits](deploy.md#file-size-limits)).
 - **The symbol step's log lines changed.** The step logs `checking N
   modules`, then `resolving K of N modules (…), reusing M`, or `reused all
   N modules` when it resolves none. Its totals line gains a `check` phase,
@@ -91,10 +97,14 @@ for long, or if anything of yours reads the symbol tables by name.
 
 ### The first pass after the upgrade
 
+- **It walks every repository again.** It reads every file from the code
+  host and parses it again, symbol extraction included, and drops the
+  contents of the LFS pointers it indexed before. Nothing is re-embedded. The
+  pass takes longer than a usual one and uses more code-host API quota
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes)).
 - **It resolves every ref's symbol graph again and writes it to the new
   tables.** The cost is one symbol step per ref
-  ([Indexer memory sizing](deploy.md#indexer-memory-sizing)); the walk,
-  extraction and embeddings are not redone.
+  ([Indexer memory sizing](deploy.md#indexer-memory-sizing)).
 - **It drops the old tables and clears the indexer's bookkeeping for their
   rows.** For the repository above this took 44 s: 11 s to write the
   800,000 rows to the new tables, most of the rest to clear the bookkeeping
@@ -117,6 +127,8 @@ for long, or if anything of yours reads the symbol tables by name.
 - **You read the symbol tables by name** (a dashboard, a grant, a backup
   filter): switch to the new names. Nothing in the chart, the CLI or the API
   refers to them.
+- **You exclude file types to keep Git LFS pointers out of the index:** you
+  can remove those `excluded_patterns`.
 
 ### How to verify
 
@@ -128,6 +140,8 @@ for long, or if anything of yours reads the symbol tables by name.
 - On the passes after it, a repository's step logs `resolving K of N
   modules (…), reusing M`, with K the files that changed and the files
   whose symbols depend on them.
+- `ccx read-file <path>`, for a file you know is stored in Git LFS, reports
+  that the path was not found once its repository's first pass completes.
 
 ## v0.1.53 — removing a large component commits in seconds; symbol names are corrected
 
