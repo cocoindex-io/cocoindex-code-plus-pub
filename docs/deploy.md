@@ -391,7 +391,7 @@ skipped **before it is downloaded**, so the saving covers API quota as well as
 embedding and storage.
 
 Two behaviors worth knowing, shared with `included_patterns` /
-`excluded_patterns` and with binary files:
+`excluded_patterns` and with binary and Git LFS files:
 
 - **Skipped files still appear in file listings.** The index mirrors each
   ref's full tree, so `ccx find-files` / the `find_files` tool still show the
@@ -405,7 +405,14 @@ Two behaviors worth knowing, shared with `included_patterns` /
   Changing `indexer.maxFileSizeBytes` re-walks every repo that doesn't set its
   own limit. See [What a settings change redoes](#what-a-settings-change-redoes).
 
-Binary files are never indexed, at any size.
+Two kinds of file are never indexed, at any size:
+
+- **Binary files** — images, archives, compiled artifacts.
+- **Files stored in [Git LFS](https://git-lfs.com).** The git blob of an
+  LFS-tracked file is a short text pointer to the file, not the file. The
+  indexer recognizes the pointer by its format and skips it; it does not
+  download the file from LFS storage. You don't need `excluded_patterns` to
+  keep LFS pointers out of the index.
 
 ## Central config repo
 
@@ -907,6 +914,7 @@ that does the same says so in its [upgrade.md](upgrade.md) entry.
 | `indexer.symbolIndex.enabled: false` | re-walks every repo, and deletes every symbol row and all extracted symbol data | nothing |
 | `indexer.symbolIndex.enabled: true`, after `false` | re-walks every repo, re-extracts symbols from every file, resolves every ref | nothing |
 | An upgrade that adds or changes language packs | re-walks every repo and re-extracts symbols from every file | nothing |
+| An upgrade that changes which files are skipped (binary, Git LFS) | re-walks every repo: reads and parses every file again, symbols included, and drops the contents of files now skipped | nothing |
 | `indexer.symbolIndex.maxFilesPerGitRef` or `maxIrBytesPerGitRef` | no re-walk: a ref that crosses the cap loses or regains its symbol rows | nothing |
 | `indexer.symbolIndex.resolveTimeoutSeconds` | nothing: it only decides how long a ref's resolve may run | nothing |
 | `indexer.symbolIndex.reuseMaxAgeSeconds` | nothing at once: from then on, a pass that resolves a ref also re-checks its files last resolved longer ago than the new age | nothing |
