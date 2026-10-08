@@ -56,8 +56,8 @@ definition, or its true use sites rather than every textual occurrence —
   `search` and `ask`, up to the server's per-search cap). Without such an
   origin the command **errors** with guidance rather than guessing — pass
   `--repo`;
-  `ccx repos` lists the indexed repos you can target. There is no global
-  "search everything" mode.
+  `ccx repos` lists the indexed repos you can target, each with the refs
+  it is indexed at. There is no global "search everything" mode.
 - **Ref defaulting.** Every query command is ref-scoped, and `--git-ref` is
   **optional everywhere**: when omitted, the server uses your checked-out branch
   if it's indexed, else the repo's default branch — and prints a

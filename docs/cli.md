@@ -121,7 +121,7 @@ an hour to appear while server-side caches refresh.
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs
 
 # Semantic search (targets explicitly-named repos; no global "search everything")
 ccx search "how are vector embeddings stored"   # scopes to the current repo + branch (see note below)
