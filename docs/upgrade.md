@@ -32,12 +32,32 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.55 — symbol steps run one at a time across repositories; the indexer logs its memory
+## v0.1.55 — indexed refs are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory
 
-Nothing is required — upgrade normally. Read on if you run several large
-repositories on one indexer, or if you size the indexer's memory.
+Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a BI role reads the `v_repo_activity_daily` view, if a script
+parses `ccx repos` output, if you run several large repositories on one
+indexer, or if you size the indexer's memory.
 
 ### What changed
+
+- **`ccx repos` prints every ref a repository is indexed at**, as a fourth
+  tab-separated column after the default branch: comma-separated, capped at
+  ten with a `+N more` tail (`ccx git-refs` still prints the full set with
+  commit shas). The MCP `list_repos` tool carries the same list as
+  `git_refs`. Before, a repository indexed at several branches or tags
+  looked identical to one indexed at its default branch alone.
+- **Insights reads ref counts from the index as you look.** The *Refs*
+  column of the Repositories table — in the web UI and, new, in
+  `ccx usage repos` — is a live read. It was sampled once a day, so a ref
+  added in the morning showed up the next day, and a repository indexed
+  after the day's sample showed `0`. A repository's drill-down (the web UI
+  and `ccx usage repo`) now lists each indexed ref with the commit indexed
+  for it and its own freshness.
+- **The `v_repo_activity_daily` view no longer has an `indexed_refs`
+  column**, and the analytics table behind it (`repo_profile`) is no longer
+  written with one. The query server recreates the view on its first start
+  after the upgrade, which drops any grants made on that view.
 
 - **One ref's symbol step at a time.** The symbol steps of different
   repositories no longer overlap: a ref whose step is due while another's
@@ -56,8 +76,42 @@ repositories on one indexer, or if you size the indexer's memory.
 
 ### What to do
 
-Nothing. If you had raised `indexer.resources.limits.memory` to fit several
-repositories' symbol steps at once, size for the largest ref instead.
+- If a BI role reads `v_repo_activity_daily`, re-apply its grant after the
+  upgrade (the schema-wide statement from [Insights](insights.md#sql-views-for-bi-and-grafana)
+  works too):
+
+  ```sql
+  GRANT SELECT ON ccx_usage.v_repo_activity_daily TO bi_reader;
+  ```
+
+  A report that read `indexed_refs` from the view should read the index's
+  own `ccx.git_ref_roots` instead (one row per repository and ref) — the
+  live source the dashboards now use.
+- Scripts that split `ccx repos` output on tabs keep working — the column
+  is appended — but should take the full ref set from `ccx git-refs`, since
+  the listing caps it at ten per row.
+- If you had raised `indexer.resources.limits.memory` to fit several
+  repositories' symbol steps at once, size for the largest ref instead
+  ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+
+### What to do (optional)
+
+An analytics schema created before this release keeps the unused
+`repo_profile.indexed_refs` column: nothing writes or reads it any more, so
+it holds whatever the last daily sample wrote. Drop it if you like:
+
+```sql
+ALTER TABLE ccx_usage.repo_profile DROP COLUMN IF EXISTS indexed_refs;
+```
+
+### How to verify
+
+- `ccx repos` prints four columns, and a repository indexed at several refs
+  lists them in the last one.
+- In `ccx ui`, open a repository under Repositories: an **Indexed refs**
+  card lists its refs, and the *Refs* column follows a newly indexed ref on
+  the next reload rather than the next day.
+- `\d ccx_usage.v_repo_activity_daily` shows no `indexed_refs` column.
 
 ## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt; Git LFS files are skipped
 

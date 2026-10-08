@@ -1141,6 +1141,16 @@ gives the pass time, about `cycleSeconds` − X. A longer
 `indexer.cycleSeconds` stores more long answers, at the cost of index
 freshness.
 
+When the reason is what the investigation read or asked for
+(`unattested_read`, `symbols_not_current`, `feature_unavailable`,
+`subquery_failed`, `budget_exhausted`), its steps are still stored. Asking
+the same question again reruns each step's searches and reads and, while they
+come back unchanged, reuses the model's recorded decisions instead of calling
+it. Over an unchanged index, with the same `agentQuery.maxTurns`, the same
+answer comes back with no model calls. Where a result comes back different,
+the model takes over from that step with the turns a fresh investigation
+would have had left there.
+
 If you change `CCX_EMBED_MODEL`, the server refuses to start until the cache's
 compatibility epoch is bumped in the same release — searching behaves
 differently under a new model, and stored answers must not outlive that. A

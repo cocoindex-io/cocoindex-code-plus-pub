@@ -117,9 +117,14 @@ saved, and errors per day by code; Indexing splits the work into what was
 embedded and what reuse skipped.
 
 In **Repositories**, clicking a row opens that repository on its own: its
-figures, the operations it served, and its days — queries, agent queries live
-vs cached, chunks embedded. The address bar carries the selection, so a link
-to a repository's detail reopens it.
+figures, the operations it served, its days — queries, agent queries live
+vs cached, chunks embedded — and its refs right now: each one the index
+holds, at the commit indexed for it, plus any the indexer is still working
+on or failed to index, each with its own freshness. The table's *Refs*
+column counts the refs the index holds, read as you look (not a daily
+sample).
+The address bar carries the selection, so a link to a repository's detail
+reopens it.
 
 ## The terminal (`ccx usage`)
 
@@ -136,7 +141,7 @@ response verbatim, which is the supported shape for scripting — the table
 layout is not.
 
 `ccx usage repo` is the web UI's drill-down in a terminal: the repository's
-figures, the operations it served, then a row per day. It needs no
+figures, its indexed refs, the operations it served, then a row per day. It needs no
 entitlement, for the same reason the table does not — these are statistics
 about repositories you can already query.
 
