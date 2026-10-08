@@ -32,11 +32,12 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.55 — a repository's indexed refs are shown wherever repositories are listed
+## v0.1.55 — indexed refs are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory
 
 Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
-Read on if a BI role reads the `v_repo_activity_daily` view, or if a script
-parses `ccx repos` output.
+Read on if a BI role reads the `v_repo_activity_daily` view, if a script
+parses `ccx repos` output, if you run several large repositories on one
+indexer, or if you size the indexer's memory.
 
 ### What changed
 
@@ -58,6 +59,21 @@ parses `ccx repos` output.
   written with one. The query server recreates the view on its first start
   after the upgrade, which drops any grants made on that view.
 
+- **One ref's symbol step at a time.** The symbol steps of different
+  repositories no longer overlap: a ref whose step is due while another's
+  runs waits, logs that it waits, and starts when the other finishes. The
+  indexer's memory peak for the step is one ref's, not a sum over
+  repositories ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+  `indexer.symbolIndex.maxConcurrentResolves` (default 1) lets more run at
+  once, with the memory to match.
+- **The indexer logs its memory**, once a minute while it has work in
+  progress, every ten minutes while idle, and at each symbol step's
+  boundary. Include those lines when you report an OOM kill.
+- **The sizing guide covers new refs.** A branch or tag added to an indexed
+  repository is a first pass of its new content, the refs of one repository
+  walk one at a time, and `indexer.maxFilesInFlight` bounds the files in
+  progress, not the files read ahead of them.
+
 ### What to do
 
 - If a BI role reads `v_repo_activity_daily`, re-apply its grant after the
@@ -74,6 +90,9 @@ parses `ccx repos` output.
 - Scripts that split `ccx repos` output on tabs keep working — the column
   is appended — but should take the full ref set from `ccx git-refs`, since
   the listing caps it at ten per row.
+- If you had raised `indexer.resources.limits.memory` to fit several
+  repositories' symbol steps at once, size for the largest ref instead
+  ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
 
 ### What to do (optional)
 
