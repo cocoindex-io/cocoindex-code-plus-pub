@@ -32,6 +32,33 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.55 — symbol steps run one at a time across repositories; the indexer logs its memory
+
+Nothing is required — upgrade normally. Read on if you run several large
+repositories on one indexer, or if you size the indexer's memory.
+
+### What changed
+
+- **One ref's symbol step at a time.** The symbol steps of different
+  repositories no longer overlap: a ref whose step is due while another's
+  runs waits, logs that it waits, and starts when the other finishes. The
+  indexer's memory peak for the step is one ref's, not a sum over
+  repositories ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+  `indexer.symbolIndex.maxConcurrentResolves` (default 1) lets more run at
+  once, with the memory to match.
+- **The indexer logs its memory**, once a minute while it has work in
+  progress, every ten minutes while idle, and at each symbol step's
+  boundary. Include those lines when you report an OOM kill.
+- **The sizing guide covers new refs.** A branch or tag added to an indexed
+  repository is a first pass of its new content, the refs of one repository
+  walk one at a time, and `indexer.maxFilesInFlight` bounds the files in
+  progress, not the files read ahead of them.
+
+### What to do
+
+Nothing. If you had raised `indexer.resources.limits.memory` to fit several
+repositories' symbol steps at once, size for the largest ref instead.
+
 ## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt; Git LFS files are skipped
 
 Nothing is required — upgrade normally. The first indexer pass after the

@@ -503,7 +503,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
-| **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
+| **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
 | **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
@@ -718,39 +718,53 @@ seconds. Rules of thumb:
 
 ### Indexer memory sizing
 
-The indexer needs the most memory during a repository's **first pass** — the
-initial build, and the one-time re-walk that some upgrades trigger (their
-[upgrade](upgrade.md) entry says so). Later passes read only what changed,
-except for the symbol step below.
+The indexer needs the most memory during a **first pass**: a repository's
+initial build, a branch or tag newly added to a repository's `branches` /
+`tags` (the content it does not share with the refs already indexed is a
+first pass of its own), and the one-time re-walk that some upgrades trigger
+(their [upgrade](upgrade.md) entry says so). Later passes read only what
+changed, except for the symbol step below.
 
 A first pass has two peaks. Set `indexer.resources.limits.memory` to the
-larger of the two, or above:
+larger of the two, or above. One ref's walk ends before its symbol step
+starts, but on a deployment with several repositories one repository's
+symbol step can run while another's walk is still reading: add the walk's
+figure to the step's then.
 
-- **The walk: about 512 MiB plus 8 times the source size of the repositories
-  whose first pass runs at the same time.** On a fresh deployment, that is
-  every configured repository. Measured: a repository of 20,000 files and
-  170 MiB of source peaked at 1.4 GiB, one of 8,900 files and 80 MiB at
-  0.9 GiB.
-- **The symbol step, with the symbol index on (the default).** A repository's
+- **The walk: about 512 MiB plus 8 times the source size of the content
+  being walked at the same time.** The refs of one repository are walked one
+  after another, in the order of their names, so count one ref's new
+  content at a time; repositories walk in parallel, so on a fresh deployment
+  count every configured repository. Measured on TypeScript: a repository
+  of 20,000 files and 170 MiB of source peaked at 1.4 GiB, one of 8,900
+  files and 80 MiB at 0.9 GiB. A file whose text holds characters outside
+  Latin-1 costs two to four times its size while it waits, so a codebase
+  with many such files runs higher.
+- **The symbol step, with the symbol index on (the default).** A ref's
   first pass ends by resolving its whole symbol graph, which holds all of
-  that repository's symbols at once. For a large repository this step sets
-  the peak: the 8,900-file TypeScript repository above reached 1.6 GiB
-  there. Plan on roughly 0.2 MiB per source file of your largest
-  repository; the ratio varies with the language and the code. A later pass
-  resolves only the files whose symbols may have changed
-  ([Symbol index](#symbol-index)), so its peak is the walk's: 0.8 GiB for
-  the same repository after a one-commit change, 1.0 GiB after 25 commits.
-  Budget for the full step in steady state anyway: once a day, a changing
-  repository's files that were not resolved that day are resolved again as
-  a check (1.2 GiB there), and the first pass after an upgrade that changes
-  symbol resolution resolves everything.
+  that ref's symbols at once. One such step runs at a time across every
+  repository (`indexer.symbolIndex.maxConcurrentResolves`, default 1), so
+  size for your largest ref, not for a sum over repositories. For a large
+  repository this step sets the peak: the 8,900-file TypeScript repository
+  above reached 1.6 GiB there, about 0.2 MiB per source file. That ratio is
+  TypeScript's; C++ and C# have not been measured, and a header-heavy C++
+  codebase can run well above it. A later pass resolves only the files
+  whose symbols may have changed ([Symbol index](#symbol-index)), so its
+  peak is the walk's: 0.8 GiB for the same repository after a one-commit
+  change, 1.0 GiB after 25 commits. Budget for the full step in steady
+  state anyway: once a day, a changing repository's files that were not
+  resolved that day are resolved again as a check (1.2 GiB there), and the
+  first pass after an upgrade that changes symbol resolution resolves
+  everything.
 
 Where the walk's memory goes:
 
-- **Files read but not yet finished.** The walk reads a repository's files
-  far faster than their chunks are embedded, so early in the pass nearly
-  every file is waiting its turn, holding its contents. This is the part that
-  grows with the repository.
+- **Files read but not yet finished.** The walk reads a ref's files far
+  faster than their chunks are embedded, so early in the pass nearly every
+  file is waiting its turn, holding its contents. This is the part that
+  grows with the ref, and when the embedding provider rate-limits the
+  indexer it grows to the ref's whole new content. No setting bounds it
+  today.
 - **Files in progress.** At most `indexer.maxFilesInFlight` files (default
   256) are parsed and waiting on their embeddings at once, each holding about
   7 times its own size. For typical source files that is tens of MiB.
@@ -758,12 +772,25 @@ Where the walk's memory goes:
   large files — generated code or data near the
   [file size limit](#file-size-limits) — the files in progress can reach
   gigabytes (256 files of 1 MiB hold about 1.75 GiB). Lowering it to 64 cuts
-  that part fourfold.
+  that part fourfold. It does nothing for the files waiting their turn.
 
 To keep the symbol step small, set `indexer.symbolIndex.maxFilesPerGitRef`
 below the file count of your largest repositories: a ref past it gets no
 symbol graph, and `ccx defs` / `ccx refs` say so, while search and grep are
 unaffected ([Symbol index](#symbol-index)).
+
+**Read the memory from the log.** The indexer logs its memory once a minute
+while it has work in progress and every ten minutes while idle:
+
+```
+indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, symbol steps: 1 running
+```
+
+`used` is the container's memory charge, the figure the kernel's OOM killer
+acts on, and `peak` the most it has reached since the container started.
+The symbol step's own lines end with the same figure. When you report an
+OOM kill, include these lines from the pass that was killed: they tell the
+walk's backlog apart from the symbol step.
 
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
@@ -792,12 +819,13 @@ notes:
       maxIrBytesPerGitRef: 1073741824 # default 1 GiB of extracted symbol data per ref
       resolveTimeoutSeconds: 1800    # default 30 min; how long one ref's resolve may run
       reuseMaxAgeSeconds: 86400      # default 1 day; how long a file's symbols are reused unchecked
+      maxConcurrentResolves: 1       # default; refs' symbol steps running at once, across repositories
   ```
 
   (They map to `CCX_SYMBOL_INDEX_ENABLED`,
   `CCX_SYMBOL_MAX_FILES_PER_GIT_REF`, `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF`,
-  `CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS`, `CCX_SYMBOL_REUSE_MAX_AGE_SECONDS`
-  should you set the env directly.)
+  `CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS`, `CCX_SYMBOL_REUSE_MAX_AGE_SECONDS`,
+  `CCX_SYMBOL_MAX_CONCURRENT_RESOLVES` should you set the env directly.)
 - **Turning it off reclaims storage — it is not a pause.** `enabled: false`
   changes what the indexer's incremental state is keyed on, so the next pass
   re-runs without symbols and the symbol rows (plus their shared parsed-module
@@ -821,12 +849,12 @@ notes:
   wrote:
 
   ```
-  symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; checking 3954 modules
-  symbol graph: github:github.com:4242 heads/main: resolving 3954 of 3954 modules (0 to check their records), reusing 0
+  symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; checking 3954 modules; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
+  symbol graph: github:github.com:4242 heads/main: resolving 3954 of 3954 modules (0 to check their records), reusing 0; memory 1.2 GiB used (cgroup; peak 1.4 GiB)
   symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows compared, 1 min
   symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; comparing rows, 450000 compared, 2 min
   symbol graph: github:github.com:4242 heads/main resolved 3954 of 3954 modules → 101532 definitions, 912345 references in 96.0s (read 2.3s, check 0.4s, resolve 71.4s, rows 21.9s; ...)
-  symbol graph: github:github.com:4242 heads/main wrote 12 modules (402 definitions, 1911 references, 867 name-site rows) and removed 1 in 0.2s
+  symbol graph: github:github.com:4242 heads/main wrote 12 modules (402 definitions, 1911 references, 867 name-site rows) and removed 1 in 0.2s; memory 1.1 GiB used (cgroup; peak 1.6 GiB)
   ```
 
   That is a first build. A later pass resolves only the modules whose
@@ -841,7 +869,9 @@ notes:
   behind another ref's resolve), and `rows` is checking each resolved file's
   rows against what is stored and preparing those that changed. Include that
   line when you report a slow symbol step. A module is one source file. The
-  `wrote` line is absent when no file's rows changed.
+  `wrote` line is absent when no file's rows changed. The step's boundary
+  lines end with the indexer's memory at that moment
+  ([Indexer memory sizing](#indexer-memory-sizing)).
 
   When neither count has moved for 10 minutes, the indexer logs a WARNING,
   `No module has finished resolving for … in the symbol step of …` (or
@@ -866,6 +896,13 @@ notes:
     that repository's file count, which skips its symbol graph so its passes
     complete. Report it either way: a healthy resolve takes seconds to
     minutes.
+- **Symbol steps run one at a time across repositories.** A ref whose symbol
+  step is due while another repository's runs waits for it, logging
+  `waiting for 1 running symbol step(s) (CCX_SYMBOL_MAX_CONCURRENT_RESOLVES=1)`
+  and, when it starts, how long it waited. Its pass completes later; nothing
+  it writes changes. The refs of one repository already run one after
+  another. `maxConcurrentResolves` lets more steps run at once, each adding
+  a ref's worth of memory ([Indexer memory sizing](#indexer-memory-sizing)).
 - **Changing a cap redoes no indexing.** The caps are checked after the walk,
   so a change never re-walks, re-extracts or re-embeds anything: a ref that
   crosses a cap only loses or regains its symbol rows on the next pass
@@ -918,6 +955,7 @@ that does the same says so in its [upgrade.md](upgrade.md) entry.
 | `indexer.symbolIndex.maxFilesPerGitRef` or `maxIrBytesPerGitRef` | no re-walk: a ref that crosses the cap loses or regains its symbol rows | nothing |
 | `indexer.symbolIndex.resolveTimeoutSeconds` | nothing: it only decides how long a ref's resolve may run | nothing |
 | `indexer.symbolIndex.reuseMaxAgeSeconds` | nothing at once: from then on, a pass that resolves a ref also re-checks its files last resolved longer ago than the new age | nothing |
+| `indexer.symbolIndex.maxConcurrentResolves` | nothing: it only decides how many refs' symbol steps run at once | nothing |
 
 The two symbol caps act on each ref's symbol graph after the walk:
 
