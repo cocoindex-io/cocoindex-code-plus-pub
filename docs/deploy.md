@@ -737,7 +737,7 @@ figure to the step's then.
   content at a time; repositories walk in parallel, so on a fresh deployment
   count every configured repository. Measured on TypeScript: a repository
   of 20,000 files and 170 MiB of source peaked at 1.4 GiB, one of 8,900
-  files and 80 MiB at 0.9 GiB. A file whose text holds characters outside
+  files and 80 MiB at 0.8 GiB. A file whose text holds characters outside
   Latin-1 costs two to four times its size while it waits, so a codebase
   with many such files runs higher.
 - **The symbol step, with the symbol index on (the default).** A ref's
@@ -760,11 +760,12 @@ figure to the step's then.
 Where the walk's memory goes:
 
 - **Files read but not yet finished.** The walk reads a ref's files far
-  faster than their chunks are embedded, so early in the pass nearly every
-  file is waiting its turn, holding its contents. This is the part that
-  grows with the ref, and when the embedding provider rate-limits the
-  indexer it grows to the ref's whole new content. No setting bounds it
-  today.
+  faster than their chunks are embedded, so through most of a pass several
+  hundred files are waiting their turn, each holding its contents. The
+  indexing engine bounds them at about 1,000: a file is read only once the
+  engine has room for it, so an embedding provider that rate-limits the
+  indexer holds the backlog there instead of growing it. On the 8,900-file
+  repository above, at most 746 files waited.
 - **Files in progress.** At most `indexer.maxFilesInFlight` files (default
   256) are parsed and waiting on their embeddings at once, each holding about
   7 times its own size. For typical source files that is tens of MiB.
@@ -783,7 +784,7 @@ unaffected ([Symbol index](#symbol-index)).
 while it has work in progress and every ten minutes while idle:
 
 ```
-indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 14640 files waiting their turn, symbol steps: 1 running
+indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 files waiting their turn, symbol steps: 1 running
 ```
 
 - **`used` and `peak`.** `used` is the container's memory charge, the
