@@ -133,7 +133,7 @@ ccx search parse --lang python --lang rust        # restrict by source language 
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
-ccx grep 'def \_(\*) \*:' -l python               # every function def (async, decorated, `-> T` too)
+ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)
 ccx grep 'foo(\*)' -l python --git-ref v1.2       # foo(...) with any arguments, at tag v1.2
 ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
