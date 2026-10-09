@@ -133,8 +133,8 @@ ccx search parse --lang python --lang rust        # restrict by source language 
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
-ccx grep 'def \NAME(\(ARGS*\)):' -l python        # every Python function def
-ccx grep 'foo(\X)' -l python --git-ref v1.2       # calls to foo (captures \X), at tag v1.2
+ccx grep 'def \_(\*) \*:' -l python               # every function def (async, decorated, `-> T` too)
+ccx grep 'foo(\*)' -l python --git-ref v1.2       # foo(...) with any arguments, at tag v1.2
 ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
 # Symbol navigation: definitions & references (resolved, not text matches)
@@ -418,8 +418,9 @@ has been checked against the repositories in question.
   the error names the failure as a connectivity one, not an expired login.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
   possible future add (track via the release docs).
-- **Structured output** — machine-readable (`--json`) output is planned so agents
-  don't parse formatted text; until then, prefer the MCP path below for agents.
+- **Structured output** — `ccx ask --json` emits the response model; the other
+  commands print formatted text, so agents that want typed results use the MCP
+  path below.
 
 ## MCP integration
 
