@@ -36,7 +36,9 @@ and the symptoms of a CLI that is too old).
 
 **If agentic query is enabled, raise the ingress timeout and move two values
 before upgrading** — the chart refuses to render otherwise. Nothing else is
-required: upgrade normally, and upgrade the `ccx` CLI with it.
+required: upgrade normally, and upgrade the `ccx` CLI with it. Usage
+analytics needs nothing: the new columns are added on the first start, with
+your history kept.
 Read on if a BI role reads the `v_repo_activity_daily` view, if a script
 parses `ccx repos` output, if you run several large repositories on one
 indexer, or if you size the indexer's memory.
@@ -103,8 +105,11 @@ indexer, or if you size the indexer's memory.
   response's new `completion` field reads `forced_turns` or
   `forced_context`, and `ccx ask` prints a note on stderr. Insights counts
   forced answers apart from complete ones.
-- **The usage-analytics tables are rebuilt** for the new columns. There are
-  no migrations: collected usage history is lost back to this upgrade.
+- **The usage-analytics tables gain the columns behind those counts on the
+  first start**, keeping your collected history — the first release to
+  upgrade the analytics schema in place, which is how analytics schema
+  changes work from here on ([deploy.md § How the analytics schema
+  evolves](deploy.md#how-the-analytics-schema-evolves)).
 
 ### What to do
 
@@ -116,12 +121,6 @@ indexer, or if you size the indexer's memory.
     and a tuned `agentQuery.requestDeadlineSeconds` to
     `agentQuery.effort.medium.deadlineSeconds`. The chart refuses to render
     while either old key is set, and names the replacement.
-- **If `usageAnalytics.enabled` is true**, the new query-server pods refuse
-  to start on the old analytics tables, while the old pods keep serving. Their
-  log names one `DROP TABLE IF EXISTS … CASCADE` statement over the
-  analytics schema's query-server tables; run it as the query role
-  (`cocoindex_server`), and the pods start and rebuild the tables. The
-  indexer's tables in that schema are unaffected.
 - If a BI role reads `v_repo_activity_daily`, re-apply its grant after the
   upgrade (the schema-wide statement from [Insights](insights.md#sql-views-for-bi-and-grafana)
   works too):
