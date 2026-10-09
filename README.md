@@ -47,6 +47,10 @@ copy the self-contained `skills/ccx-codebase-explorer/` folder to
 `~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your agent's skills
 directory.
 
+The skill teaches only what an agent acts on — which command to run and how to
+read its output. Setup, login and operator guidance live in
+[docs/cli.md](docs/cli.md), not in the skill.
+
 **Installed before 2026-09-05?** The skill was named `ccx` then, and the CLI
 treats it as a separate entry, so remove it first — this also cleans the links
 it made in every agent's skills directory:
