@@ -67,8 +67,12 @@ indexer, or if you size the indexer's memory.
   `indexer.symbolIndex.maxConcurrentResolves` (default 1) lets more run at
   once, with the memory to match.
 - **The indexer logs its memory**, once a minute while it has work in
-  progress, every ten minutes while idle, and at each symbol step's
-  boundary. Include those lines when you report an OOM kill.
+  progress and every ten minutes while idle, counting the files the walk
+  has read ahead apart from the files in progress. Each ref's walk, each
+  symbol step's boundaries and each pass's last line end with the same
+  figure. Include those lines when you report an OOM kill
+  ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)
+  has the command).
 - **The sizing guide covers new refs.** A branch or tag added to an indexed
   repository is a first pass of its new content, the refs of one repository
   walk one at a time, and `indexer.maxFilesInFlight` bounds the files in
