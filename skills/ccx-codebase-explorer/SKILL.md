@@ -133,7 +133,7 @@ are more matches.
 
 ```bash
 ccx grep 'foo(\*)' -l python                  # foo(...) with any arguments: every call, and the def header
-ccx grep 'def \_(\*) \*:' -l python           # every function def (async, decorated, `-> T` too)
+ccx grep 'def \_(\*) \*:' -l python           # function defs (async, decorated, `-> T` too)
 ccx grep 'isinstance(\_, \_)' -l python --path 'src/**'
 ```
 

@@ -175,11 +175,11 @@ floods hits.
 
 | Intent | Pattern |
 |---|---|
-| every function def (incl. `async`, decorated, `-> T` annotated) | `def \_(\*) \*:` |
+| function defs (incl. `async`, decorated, `-> T` annotated) | `def \_(\*) \*:` |
 | the def of `X`, whatever its signature | `def X(\*) \*:` |
 | the def of `X` *with its body shown* | `def X(\*) \*: \*` |
 | calls of `X` (also matches its def header) | `X(\*)` |
-| every class, with or without a base list | `class \_\?:` |
+| classes, with or without a base list | `class \_\?:` |
 | classes deriving from `Base` | `class \_(\*Base\*):` — or just `class \_(\*):` and read |
 | `isinstance` checks | `isinstance(\_, \_)` |
 | a method call on any receiver | `\_.method(\*)` |
