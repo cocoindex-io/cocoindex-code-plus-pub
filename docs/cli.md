@@ -121,7 +121,7 @@ an hour to appear while server-side caches refresh.
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs as <ref>@<commit>
 
 # Semantic search (targets explicitly-named repos; no global "search everything")
 ccx search "how are vector embeddings stored"   # scopes to the current repo + branch (see note below)
@@ -403,8 +403,9 @@ and REST API closely (same capabilities, same scoping).
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
   - `list_repos(limit?, cursor?)` → the accessible indexed repos (stable
-    `repo_key` uid + alias + default branch), as a cursor walk — the
-    discovery call before a search.
+    `repo_key` uid + alias + default branch + up to ten indexed refs, each
+    with the commit indexed for it), as a cursor walk — the discovery call
+    before a search.
   - `code_search(query, repos, top_k?, offset?, paths?, languages?)` → one
     cross-repo-ranked list of code chunks (repo, filename, line range, code,
     score). `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
