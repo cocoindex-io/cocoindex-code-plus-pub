@@ -32,6 +32,6 @@ ccx find-files "src/**" --case insensitive              # smart (default) | sens
 ccx find-files --git-ref v1.2                           # every indexed path at that ref, a page at a time
 ```
 
-Globs are repo-relative and repeatable; `--limit` (default 100) and `--offset`
+Several repo-relative globs can be given; `--limit` (default 100) and `--offset`
 page, and a stderr note (`… N total (showing 100)`) means there are more. Useful
 before a `--git-ref`-scoped `read-file`, or to compare paths across refs.

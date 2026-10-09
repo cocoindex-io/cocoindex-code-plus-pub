@@ -59,9 +59,10 @@ definition, or its true use sites rather than every textual occurrence —
   `--git-ref`). There is no global "search everything" mode.
 - **Ref defaulting.** Every query command is ref-scoped, and `--git-ref` is
   **optional everywhere**: when omitted, the server uses your checked-out branch
-  if it's indexed (for the auto-detected repo; an explicit `--repo` gets that
-  repo's default branch), else the repo's default branch — and prints a
-  `Using git ref …` note to stderr so you know which ref answered. Trust this
+  if it's indexed, else the repo's default branch (an explicit `--repo` always
+  gets that repo's default branch) — and prints a `Using git ref …` note to
+  stderr so you know which ref answered (`ask` prints its `s0: … (commit …)`
+  scope lines instead). Trust this
   default; there is no need to run `ccx git-refs` first just to discover a
   ref. Pass `--git-ref` only to target a *different* ref — a bare branch/tag
   name works (`main`, `v1.2`); the qualified `heads/<branch>` / `tags/<tag>`
@@ -86,9 +87,9 @@ definition, or its true use sites rather than every textual occurrence —
 Describe the concept, behavior, or functionality to find — not exact syntax.
 
 ```bash
-ccx search how are vector embeddings stored      # auto-scopes to the current repo + branch
-ccx search user authentication flow
-ccx search error handling retry logic
+ccx search "how are vector embeddings stored"    # auto-scopes to the current repo + branch
+ccx search "user authentication flow"
+ccx search "error handling retry logic"
 ```
 
 - **Scope.** `--repo <owner>/<repo>` targets another repo — repeat it to search
@@ -154,7 +155,7 @@ them all. Reach for `\NAME` only when the name does work:
 
 ```bash
 ccx grep '\_.filter(\*).map(\*)' -l rust           # a .filter(...).map(...) chain, any receiver
-ccx grep 'catch (\E) \{{ throw \E \}}' -l java     # catch that re-throws the SAME var (backref \E)
+ccx grep 'catch (\E) \{{ throw \E \}}' -l typescript   # catch that re-throws the SAME var (backref \E)
 ccx grep 'DenseMap<\_, \_>' -l c++                 # nested generic; structural, so >> just works
 ```
 
@@ -229,6 +230,8 @@ src/db.py:42:4 [method] python:db.Repo.find
   lang=python  uses: ccx refs src/db.py Repo.find
 
 $ ccx refs src/db.py Repo.find --role call
+src/api.py:88:12 [call]
+  resolved  → src/db.py Repo.find  in handle_get
 ```
 
 Three precisions of `ccx refs`, broad to exact:
@@ -237,7 +240,8 @@ Three precisions of `ccx refs`, broad to exact:
   name, plus unresolved mentions.
 - **Qualified name** — `ccx refs python:db.Repo.find`: the name a `ccx defs`
   headline shows, every occurrence and overload under it. Every qualified name
-  opens with its language tag, so the `:` selects the mode — no flag needed.
+  opens with its language tag (the CLI's errors say "pack-tagged"), so the `:`
+  selects the mode — no flag needed.
 - **One definition** — the pasted `uses:` command, `ccx refs PATH ENTITY_ID`.
 
 Run the printed command — don't compose the second token yourself: the
@@ -246,6 +250,12 @@ the entity id (`Repo.find`, file-relative). A lone argument that looks like half
 of a forgotten pair (a path, or a dotted / `#`-suffixed id) errors with the fix
 instead of running a broad query you didn't intend (`--base-name` forces name
 mode when a base name genuinely contains such characters).
+
+A dotted name without its tag (`Repo.find`, `QueryService.search`) is read by
+`defs` as a base name and finds nothing: use the bare base name (`find`, with
+`--kind method` to narrow) or the tagged name (`python:db.Repo.find`). Both
+verbs page like `grep` (`-k`/`--limit`, default 100, and `--offset`); `refs`
+has no `--path`, so set test files aside by eye.
 
 Reading `refs` output — each row carries:
 
@@ -268,16 +278,17 @@ symbol index for this ref is *not built*, *skipped* (ref too large to resolve),
 *partial* (some files failed to parse), or *at another commit than the ref's
 indexed head* — in every one of those, a missing symbol may simply be
 unindexed. Absence is not completeness.
-A stale exact target (definition renamed/removed since the `defs` call) never
-comes back as an empty result: it errors with a re-run hint — re-run `ccx defs`
-for a current target.
+A stale exact target (definition renamed/removed since the `defs` call) errors
+and tells you to re-run `ccx defs` for a current target.
 
-**A clean coverage note still does not make `No references.` a proof.** A use
-the resolver could not commit — an opaque receiver, an import across a Python
-source root the index could not infer — is listed only as a `~name` row, never
-as a resolved one. Before concluding a symbol has no callers, read the `~name`
-rows of the output (`--role call` narrows them) as candidate uses and confirm
-by opening the file.
+**Zero *resolved* rows is not proof of no callers.** A use the resolver could
+not commit — an opaque receiver, an import across a Python source root the
+index could not infer — appears as a `~name` row, never as a resolved one: read
+those rows (`--role call` narrows them) as candidate uses and confirm by
+opening the file; re-run without `--no-include-unresolved` if you dropped them.
+A literal `No references.` with no coverage note is strong evidence, but where
+`refs` cannot see at all — string keys, dynamic dispatch, an uncovered
+language — `ccx grep` the call or registration shape before calling it settled.
 
 **Settling what runs.** To confirm a candidate is the live path, look at its
 uses, not its text: `ccx refs <candidate>` lists them, and reading one gives the
@@ -322,7 +333,8 @@ or code to read** (which file to change, where a symbol lives, its call
 sites), stay with those. Run one `ask` at a time (the server caps concurrent
 agentic requests), and do not wrap it in a shell `timeout` — the server
 enforces its own deadline (ten minutes by default, twenty at `--effort high`);
-if your own command runner has a shorter limit, raise it for this call.
+if your own command runner has a shorter limit, raise it or run the call in the
+background.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and
@@ -331,8 +343,8 @@ if your own command runner has a shorter limit, raise it for this call.
   is at that commit; for a repo you don't have, `ccx read-file` with that
   `--repo`/`--git-ref` (the ref's indexed head — the same commit unless the
   index has moved since). Drop a claim its lines don't support; don't repeat it.
-- **A forced answer may be incomplete.** When the agent runs out of steps
-  first, stderr says `this answer was forced` and the answer ends with a
+- **A forced answer may be incomplete.** When the agent runs out of steps or
+  of room first, stderr says `this answer was forced` and the answer ends with a
   `## Not verified` section. Treat those items as open: check them with
   `search`/`grep`/`defs`/`refs`, or ask once more with `--effort high` (or a
   narrower question) — never repeat the same ask at the same level.
@@ -341,7 +353,8 @@ if your own command runner has a shorter limit, raise it for this call.
   their platform team decides, and don't try again this session.
   `agent_query_busy` (concurrency cap) and an `HTTP 503` `Request deadline
   exceeded` (the investigation outran the server's deadline): fall back to the
-  other commands for this question — at most one later retry, never a loop.
+  other commands for this question — at most one later retry, narrower or at
+  `--effort high` for the longer deadline, never a loop.
 
 ## Reading & listing files at a ref (remote / cross-ref)
 
@@ -354,9 +367,10 @@ Full usage: [references/remote-access.md](references/remote-access.md).
 ## Repo & ref metadata
 
 `ccx repos` lists the indexed repos you can target (alias, stable uid, default
-branch). `ccx git-refs [<owner>/<repo>]` lists a repo's indexed refs and their
-commit shas (`(default)` marks the default branch) — reach for it to target a
-non-default ref, or to see which commit a ref is indexed at, not as a routine
+branch, and the refs each is indexed at as `<ref>@<commit>`).
+`ccx git-refs [<owner>/<repo>]` lists one repo's indexed refs with their full
+commit shas (`(default)` marks the default branch) — reach for either to target
+a non-default ref, or to see which commit a ref is indexed at, not as a routine
 pre-flight; the ref default already handles the common case.
 
 Note the two different senses of "ref": `ccx git-refs` lists **git** refs

@@ -62,15 +62,15 @@ and `\_` for a genuine single slot (a receiver, one operand).
 
 Names are `[A-Za-z0-9_]+`. A single-node term matches *any* node — including a bare
 keyword/operator leaf — so `\/if|while/` matches the `if`/`while` keyword itself.
-Inside a regex term a literal `/` is written `\/` — the one escape besides `\\`:
-`\/"\/project\/file.*"/`.
+Text inside `\/…/` reaches the regex engine as written; only a literal `/` needs
+`\/`: `\/"\/project\/file.*"/`.
 
 ### Backreferences — reuse a name to require equal text
 
 Repeating a captured name requires the two nodes to have **equal text**:
 
 ```bash
-ccx grep 'catch (\E) \{{ throw \E \}}' -l java   # re-throw the SAME var it caught
+ccx grep 'catch (\E) \{{ throw \E \}}' -l typescript   # re-throw the SAME var it caught
 ccx grep '\N === \A || \N === \B'      -l javascript    # same value tested twice
 ```
 
@@ -185,6 +185,7 @@ floods hits.
 | a method call on any receiver | `\_.method(\*)` |
 | calls to any `get_*` function | `\/get_.*/(\*)` |
 | a call whose string argument contains `config` | `open(\/".*config.*"/)` |
+| an `except … as e:` whose body re-raises | `except \_ as \E: \{{ raise \* \}}` (`raise \E` for the same object) |
 
 ## More worked examples
 
@@ -198,8 +199,9 @@ ccx grep 'template <typename \T, typename... \TS>' -l c++     # variadic templat
 
 ## Not implemented
 
-Alternation / grouping inside a metavariable (`\( if | while \)`) does not parse: run
-two greps, or match a keyword leaf with a regex term (`\/if|while/`). Sub-patterns
-`\[ … \]`, separated lists `%`, exclusion `\!( … \)`, and node-kind matchers
-`\(NAME:kind\)` are likewise unimplemented — when a pattern needs them, fall back to a
-broader grep plus `ccx search`.
+Alternation / grouping inside a metavariable (`\( if | while \)`), sub-patterns
+`\[ … \]`, separated lists `%`, and exclusion `\!( … \)` are not implemented — and
+they do not error: the sigil is read as literal text, so the pattern **silently
+matches nothing**. (A node-kind matcher `\(NAME:kind\)` does error.) For
+alternatives, run two greps or match a keyword leaf with a regex term
+(`\/if|while/`); otherwise fall back to a broader grep plus `ccx search`.

@@ -151,7 +151,7 @@ ccx refs QueryService --role call                 # restrict to a reference role
 ccx read-file README.md                          # print a file's contents
 ccx read-file src/app.py --offset 40 --limit 20  # 20 lines from line 40 (--offset = 1-based line)
 ccx find-files "*.py"                            # list files by glob
-ccx find-files --git-ref main                    # list all files, on a specific ref
+ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
 
 # Repo / ref metadata
 ccx git-refs                                     # the current repo's indexed refs + commit shas
@@ -197,12 +197,12 @@ it tells you when the symbol index for the ref isn't built yet, skipped the ref
 as too large, parsed only part of it, or was built at another commit than the
 ref's indexed head (the note names both) — in all of those, a missing symbol may
 just be unindexed, so absence is not completeness. A clean note is still not a
-proof: an exact target lists only *resolved* uses, and a use
-the resolver could not commit (an unknown receiver, an import across a Python
-source root the index could not infer — roots come from package markers and the
-repo's own absolute imports, never from build config) appears only as a
-`name_only` row of the broad `ccx refs NAME` form — check it before concluding
-a symbol has no callers.
+proof: a use the resolver could not commit (an unknown receiver, an import
+across a Python source root the index could not infer — roots come from package
+markers and the repo's own absolute imports, never from build config) appears
+as a `name_only` row rather than a resolved one — every target form includes
+those rows unless you pass `--no-include-unresolved` — so read them before
+concluding a symbol has no callers.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
@@ -222,7 +222,8 @@ These commands are also **ref-scoped**: they operate on one git ref of the repo.
 `heads/<branch>` / `tags/<tag>` form if a branch and tag share a name. When you
 omit it, the CLI uses **your checked-out branch** if that branch is indexed
 (including its `origin` upstream when the local name differs), else the repo's
-**default branch**; it prints a `Using git ref …` note to stderr so you always
+**default branch** (an explicit `--repo` always gets that repo's default
+branch); it prints a `Using git ref …` note to stderr so you always
 know which ref answered. `ccx git-refs` lists what's indexed.
 
 Similarly, when you run `search` or `grep` from a **subdirectory** of the
@@ -419,8 +420,8 @@ has been checked against the repositories in question.
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
   possible future add (track via the release docs).
 - **Structured output** — `ccx ask --json` emits the response model; the other
-  commands print formatted text, so agents that want typed results use the MCP
-  path below.
+  query commands print formatted text, so agents that want typed results use
+  the MCP path below.
 
 ## MCP integration
 
