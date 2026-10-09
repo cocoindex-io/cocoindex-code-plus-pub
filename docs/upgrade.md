@@ -32,7 +32,7 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.55 — indexed refs are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory
+## v0.1.55 — indexed refs and their commits are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory
 
 Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
 Read on if a BI role reads the `v_repo_activity_daily` view, if a script
@@ -41,12 +41,15 @@ indexer, or if you size the indexer's memory.
 
 ### What changed
 
-- **`ccx repos` prints every ref a repository is indexed at**, as a fourth
-  tab-separated column after the default branch: comma-separated, capped at
-  ten with a `+N more` tail (`ccx git-refs` still prints the full set with
-  commit shas). The MCP `list_repos` tool carries the same list as
-  `git_refs`. Before, a repository indexed at several branches or tags
-  looked identical to one indexed at its default branch alone.
+- **`ccx repos` prints every ref a repository is indexed at, with its
+  commit**, as a fourth tab-separated column after the default branch:
+  comma-separated `<ref>@<commit>` entries, the commit cut to 12 hex
+  characters, capped at ten with a `+N more` tail (`ccx git-refs` still
+  prints the full set with full shas). The MCP `list_repos` tool carries
+  the same list as `git_refs`, each entry an object with `git_ref` and
+  `commit_sha`. Before, a repository indexed at several branches or tags
+  looked identical to one indexed at its default branch alone, and no
+  listing said which commit the index was at.
 - **Insights reads ref counts from the index as you look.** The *Refs*
   column of the Repositories table — in the web UI and, new, in
   `ccx usage repos` — is a live read. It was sampled once a day, so a ref
@@ -54,6 +57,13 @@ indexer, or if you size the indexer's memory.
   after the day's sample showed `0`. A repository's drill-down (the web UI
   and `ccx usage repo`) now lists each indexed ref with the commit indexed
   for it and its own freshness.
+- **Insights names the commit behind every freshness pill.** The
+  Repositories table has a *Commit* column: the default branch at its
+  indexed commit, or the first ref when the default branch is not indexed,
+  with `+N` for the other refs. A drill-down ref that is behind shows the
+  newer head the indexer has seen and how long ago; one that is caught up
+  says so as of the indexer's last poll, which the table and the drill-down
+  both name.
 - **The `v_repo_activity_daily` view no longer has an `indexed_refs`
   column**, and the analytics table behind it (`repo_profile`) is no longer
   written with one. The query server recreates the view on its first start
@@ -92,8 +102,9 @@ indexer, or if you size the indexer's memory.
   own `ccx.git_ref_roots` instead (one row per repository and ref) — the
   live source the dashboards now use.
 - Scripts that split `ccx repos` output on tabs keep working — the column
-  is appended — but should take the full ref set from `ccx git-refs`, since
-  the listing caps it at ten per row.
+  is appended — but a ref to pass to `--git-ref` is the part of each entry
+  before `@`. Take the full ref set from `ccx git-refs`, since the listing
+  caps it at ten per row.
 - If you had raised `indexer.resources.limits.memory` to fit several
   repositories' symbol steps at once, size for the largest ref instead
   ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
@@ -111,10 +122,12 @@ ALTER TABLE ccx_usage.repo_profile DROP COLUMN IF EXISTS indexed_refs;
 ### How to verify
 
 - `ccx repos` prints four columns, and a repository indexed at several refs
-  lists them in the last one.
+  lists them in the last one, each with the commit `ccx git-refs` shows for
+  it.
 - In `ccx ui`, open a repository under Repositories: an **Indexed refs**
   card lists its refs, and the *Refs* column follows a newly indexed ref on
-  the next reload rather than the next day.
+  the next reload rather than the next day. The table's *Commit* column
+  matches the drill-down's commit for the same ref.
 - `\d ccx_usage.v_repo_activity_daily` shows no `indexed_refs` column.
 
 ## v0.1.54 — symbols are resolved and written per file, in one step; the symbol tables are rebuilt; Git LFS files are skipped
