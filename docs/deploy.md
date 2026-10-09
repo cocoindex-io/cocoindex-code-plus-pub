@@ -505,7 +505,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,requestDeadlineSeconds,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 ### Secrets: inline or existingSecret
 
@@ -1021,21 +1021,53 @@ agentQuery:
   call; the query server then logs a warning at startup naming the model, and
   the provider's default reasoning applies.
 - **Raise your ingress timeout.** An agentic query runs far longer than a
-  low-level one (`agentQuery.requestDeadlineSeconds`, default **600 s**), and a
+  low-level one (up to **1200 s** at the `high` effort level, below), and a
   single backend timeout covers every route. The chart **refuses to render** if
-  `queryServer.ingress.timeoutSeconds` does not clear it — see
-  [Timeout chain](#timeout-chain).
-- **Cost is bounded per request.** One query is capped at
-  `agentQuery.maxTurns` model turns for the main agent (default 30) plus at
-  most 8 helper sub-investigations of half as many turns each; there is no
-  unbounded loop. Raise `maxTurns` when your model needs more turns to answer
-  well. Each turn resends the conversation so far, so cost and latency grow
-  faster than the limit does, and `requestDeadlineSeconds` still applies.
-  With the answer cache on, an answer made under the old limit is
-  recomputed once at the new one.
+  `queryServer.ingress.timeoutSeconds` does not clear the largest effort
+  deadline — see [Timeout chain](#timeout-chain).
+- **Cost is bounded per request, by effort level.** See
+  [Effort levels](#effort-levels) below.
 - **Capacity.** `agentQuery.maxConcurrentRequests` (default 4 per pod) admits
   agentic queries; over-capacity callers get an immediate retryable `503` while
   low-level search is unaffected. Each principal may hold 2 at a time.
+
+#### Effort levels
+
+Each question runs at one of three **effort levels** — `low`, `medium`,
+`high` — named by the asker (`ccx ask --effort`, the MCP tool's `effort`).
+You decide what each level means; the server applies `effort.default`
+(`medium` unless you change it) when the asker names none.
+
+```yaml
+agentQuery:
+  effort:
+    default: medium
+    low:    { turns: 10, deadlineSeconds: 300 }
+    medium: { turns: 30, deadlineSeconds: 600 }
+    high:   { turns: 60, deadlineSeconds: 1200, reasoningEffort: high }
+```
+
+- **`turns`** is the level's model-call bound: one turn is one model call,
+  and each turn resends the conversation so far, so cost and latency grow
+  faster than the number. A helper sub-investigation runs one level below its
+  caller, at most 8 per question, and `low` runs none — there is no unbounded
+  loop. Levels must rise by at least 4 turns each; the server refuses to start
+  otherwise.
+- **`deadlineSeconds`** is the level's whole-query deadline. Deadlines must not
+  fall from `low` to `high`, and the ingress must clear the largest.
+- **`reasoningEffort`** overrides `agentQuery.reasoningEffort` for that level
+  only — for example, more provider reasoning at `high`. The same caution
+  applies: check what your model accepts.
+
+**When the steps run out**, the agent still answers from what it found and
+ends the answer with what it could not verify; the response marks it
+`forced_turns` (or `forced_context` when the model's context window filled
+first). The **Insights → Queries** view counts forced answers apart from
+complete ones. A large forced share at a level says its `turns` is too small
+for your questions — or that your model takes one small step per turn, where
+a model that batches its reads gets further on the same number. With the
+answer cache on, retuning the table invalidates nothing: an answer made with
+fewer turns is recomputed once when asked at a level with more.
 
 #### Answer cache (optional)
 
@@ -1146,7 +1178,7 @@ When the reason is what the investigation read or asked for
 `subquery_failed`, `budget_exhausted`), its steps are still stored. Asking
 the same question again reruns each step's searches and reads and, while they
 come back unchanged, reuses the model's recorded decisions instead of calling
-it. Over an unchanged index, with the same `agentQuery.maxTurns`, the same
+it. Over an unchanged index, at the same effort level, the same
 answer comes back with no model calls. Where a result comes back different,
 the model takes over from that step with the turns a fresh investigation
 would have had left there.
@@ -1819,14 +1851,14 @@ the server:
   nothing auto-derives it.
 - **The ccx CLI needs no retuning.** Its timeouts are deliberately not
   coordinated with the server: connects fail on a fixed 10 s bound, and the
-  read ceiling is a generous fixed 600 s (1200 s for `ccx ask`) that only
+  read ceiling is a generous fixed 600 s (2400 s for `ccx ask`) that only
   catches a dead network path or a wedged server — the server's own error
   always arrives first. A custom REST/MCP client must still keep its own
   timeout above the chain.
-- **[Agentic query](#agentic-query) has its own, much longer deadline**
-  (`agentQuery.requestDeadlineSeconds`, default 600 s) — and one backend
-  timeout covers every route, so the ingress must clear *that* one:
-  **ingress (630) > agentic deadline (600 + ≤5 s)**. Raising the ingress
+- **[Agentic query](#agentic-query) has its own, much longer deadlines** —
+  one per [effort level](#effort-levels), up to 1200 s at `high` by default —
+  and one backend timeout covers every route, so the ingress must clear the
+  largest: **ingress (1230) > agentic `high` deadline (1200 + ≤5 s)**. Raising the ingress
   budget does not weaken the low-level routes: their own 60 s server deadline
   still answers first, and the ingress is only the backstop behind it. The
   chart enforces this at render time — enabling `agentQuery` while leaving the
@@ -1860,7 +1892,10 @@ clients keep calling. Two things keep those requests from failing:
   `terminationGracePeriodSeconds` is derived to allow for that — the delay,
   plus the longest request deadline, plus 10 s: **80 s** by default, and
   **600 s** with [Agentic query](#agentic-query) enabled — the chart caps it
-  there, GKE Autopilot's maximum. You don't set it.
+  there, GKE Autopilot's maximum. You don't set it. A question asked at an
+  [effort level](#effort-levels) whose deadline runs longer — `high`, 1200 s
+  by default — can therefore be cut off when its pod is replaced; the caller
+  gets an error and asks again.
 
 10 s is enough for ingress-nginx. A cloud load balancer that programs its
 endpoints from outside the cluster can take longer to stop sending traffic to

@@ -48,7 +48,7 @@ deployment.
 |---|---|
 | `CCX_SERVER_URL` | the query server's URL (e.g. `https://ccx.example.com`, or `http://127.0.0.1:8080` via `kubectl port-forward`). Optional interactively: prompted once and saved as your default; a one-off `--server` overrides without changing the default |
 | `CCX_API_TOKEN` | your API token — your platform team issues it: a token shared across the deployment, or your own `ccxk_…` key. Both go in this one variable, sent as `Authorization: Bearer`. On an SSO deployment humans skip this and run `ccx login` instead (below) |
-| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; **debug override** of the client's read ceiling — default **600 s** (**1200 s** for [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer)), with connects failing on their own fixed 10 s bound. The server enforces and reports its own deadline (`deadline_exceeded`), so the ceiling is deliberately generous and uncoordinated: it only catches a dead network path or a wedged server, and your platform team raising the server deadline needs **no** change here |
+| `CCX_CLIENT_TIMEOUT_SECONDS` | optional; **debug override** of the client's read ceiling — default **600 s** (**2400 s** for [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer)), with connects failing on their own fixed 10 s bound. The server enforces and reports its own deadline (`deadline_exceeded`), so the ceiling is deliberately generous and uncoordinated: it only catches a dead network path or a wedged server, and your platform team raising the server deadline needs **no** change here |
 
 ```bash
 export CCX_SERVER_URL=https://ccx.example.com   # optional in a terminal (prompted + saved)
@@ -253,6 +253,7 @@ numbers are at that commit, so you can open exactly what the agent read.
 ccx ask "how does the indexer decide what to re-embed?"
 ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b
 ccx ask "walk me through the release flow" --git-ref v1.2
+ccx ask "what are the main components?" --effort high
 ccx ask "what are the main components?" --json    # exact response model
 ```
 
@@ -260,12 +261,12 @@ Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
 answer is Markdown on stdout.
 
-Two things to expect:
+Things to expect:
 
 - **It is slower.** The agent runs many reads before answering — seconds to a
-  couple of minutes for a broad question, up to the server's agentic deadline
-  (10 min by default). Reach for `ccx search`/`grep` when you know what you're
-  looking for, and `ccx ask` when you don't.
+  couple of minutes for a broad question, up to the effort level's deadline
+  (10 min by default, 20 min at `--effort high`). Reach for `ccx search`/`grep`
+  when you know what you're looking for, and `ccx ask` when you don't.
 - **It may be turned off.** It is off unless your deployment enables it,
   because answering requires sending your question and the code the agent
   reads to a model provider. When it's off the command exits non-zero with
@@ -279,17 +280,47 @@ Two things to expect:
   change the next ask investigates again, reusing the steps that still apply.
   `--json` reports which happened, under `usage.result_cache_hit`.
 
+#### How much investigation: `--effort`
+
+`--effort low|medium|high` sets how much investigation the question gets. Your
+deployment decides what each level means — how many steps the agent may take,
+and how long it may run — so the same flag works everywhere:
+
+| Level | Use it for |
+|---|---|
+| `low` | a lookup with a known shape: where is X, what does Y return |
+| `medium` | how-does-this-work questions; the default unless your deployment picked another |
+| `high` | architecture, comparison, and multi-repo questions, and asking again after a forced answer |
+
+When the agent runs out of steps — or its model runs out of room — before it
+is done, it still answers from what it found, and the answer ends with a
+`## Not verified` section listing what it could not check. The command says so
+on stderr:
+
+```text
+Note: this answer was forced — the session's turn allocation of 30 turns ran
+out — so it may be incomplete (it ends with what was not verified); narrow the
+question, or ask again with --effort high.
+```
+
+`--json` carries the level applied as `effort` and how the session ended as
+`completion`: `complete`, `forced_turns`, or `forced_context`. A stored answer
+that was forced when it was made is reported as forced when it is served.
+
+#### Usage and cache statistics
+
 By default the command prints the answer and nothing else. Pass `--stats` to
 also see what the request cost and how much of that the cache covered — per
 metric, the no-cache total and the share served from storage:
 
 ```text
-stats: queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
+stats: turns 18/30, queries 6 (reused 3 / 50%), model calls 27 (reused 13 / 48%),
 input tokens 238142 (reused 105992 / 45%), output tokens 14554
 (reused 6610 / 45%), tool calls 73 (reused 38 / 52%), answer stored, 47.8s
 ```
 
-The segment before the wall time says whether the answer is now stored for
+`turns` is how many of the effort level's steps the agent used. The segment
+before the wall time says whether the answer is now stored for
 the next identical question: `answer stored`, or `answer not stored
 (<reasons>)` — [deploy.md → Answer cache](deploy.md#answer-cache-optional)
 lists the reasons. `--json` carries the same under `usage.result_stored` and
@@ -425,7 +456,7 @@ and REST API closely (same capabilities, same scoping).
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
-  - `ask_codebase(question, repos, include_stats?)` → a written,
+  - `ask_codebase(question, repos, effort?, include_stats?)` → a written,
     citation-backed answer to a natural-language question — the MCP form of
     [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer).
     A server-side agent investigates with the tools above under the caller's
@@ -433,10 +464,15 @@ and REST API closely (same capabilities, same scoping).
     The tool is always advertised, but **fails with `agent_query_unavailable`
     unless the deployment enables the feature** (answering sends the question
     and the code read to a model provider). It also runs far longer than the
-    other tools — up to the agentic deadline, 600 s by default — so give the
-    client a generous timeout. Prefer it for open-ended "how/why" questions
-    and the typed tools above for targeted lookups. By default the response
-    carries the answer and the resolved scopes only; `include_stats: true`
+    other tools — up to the effort level's deadline, 600 s by default and
+    1200 s at `effort: "high"` — so give the client a generous timeout. Prefer
+    it for open-ended "how/why" questions and the typed tools above for
+    targeted lookups. `effort` takes the same `low` / `medium` / `high` as
+    `--effort`. The response always carries `completion`: a `forced_turns` or
+    `forced_context` answer was extracted at the limit and may be incomplete,
+    so narrow the question or ask again with `effort: "high"`. By default the
+    response carries the answer, the resolved scopes, the level, and the
+    completion only; `include_stats: true`
     adds the usage and cache-savings counters, which are operator
     information a querying agent rarely needs.
 

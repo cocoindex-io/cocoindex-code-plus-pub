@@ -32,9 +32,11 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.55 — indexed refs are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory
+## v0.1.55 — indexed refs are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory; agentic questions take an effort level
 
-Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
+**If agentic query is enabled, raise the ingress timeout and move two values
+before upgrading** — the chart refuses to render otherwise. Nothing else is
+required: upgrade normally, and upgrade the `ccx` CLI with it.
 Read on if a BI role reads the `v_repo_activity_daily` view, if a script
 parses `ccx repos` output, if you run several large repositories on one
 indexer, or if you size the indexer's memory.
@@ -74,8 +76,38 @@ indexer, or if you size the indexer's memory.
   walk one at a time, and `indexer.maxFilesInFlight` bounds the files in
   progress, not the files read ahead of them.
 
+- **Agentic questions take an effort level** — `low`, `medium`, or `high`,
+  named with `ccx ask --effort` or the MCP tool's `effort`. A table under
+  `agentQuery.effort` sets each level's turns, deadline, and optional
+  reasoning effort ([deploy.md § Effort levels](deploy.md#effort-levels)).
+  It replaces `agentQuery.maxTurns` and `agentQuery.requestDeadlineSeconds`.
+  The defaults are 10 / 30 / 60 turns and 300 / 600 / 1200 s; `medium`, the
+  default level, matches the old defaults. A helper sub-investigation now
+  runs one level below its caller instead of with half the turns.
+- **A forced answer says so.** When the agent runs out of turns or context
+  before it is done, the answer ends with what it could not verify, the
+  response's new `completion` field reads `forced_turns` or
+  `forced_context`, and `ccx ask` prints a note on stderr. Insights counts
+  forced answers apart from complete ones.
+- **The usage-analytics tables are rebuilt** for the new columns. There are
+  no migrations: collected usage history is lost back to this upgrade.
+
 ### What to do
 
+- **If `agentQuery.enabled` is true**, before upgrading:
+  - raise `queryServer.ingress.timeoutSeconds` to clear the largest effort
+    deadline plus 5 s — **1230** for the defaults, up from 630 — or lower
+    `agentQuery.effort.high.deadlineSeconds`;
+  - move a tuned `agentQuery.maxTurns` to `agentQuery.effort.medium.turns`,
+    and a tuned `agentQuery.requestDeadlineSeconds` to
+    `agentQuery.effort.medium.deadlineSeconds`. The chart refuses to render
+    while either old key is set, and names the replacement.
+- **If `usageAnalytics.enabled` is true**, the new query-server pods refuse
+  to start on the old analytics tables, while the old pods keep serving. Their
+  log names one `DROP TABLE IF EXISTS … CASCADE` statement over the
+  analytics schema's query-server tables; run it as the query role
+  (`cocoindex_server`), and the pods start and rebuild the tables. The
+  indexer's tables in that schema are unaffected.
 - If a BI role reads `v_repo_activity_daily`, re-apply its grant after the
   upgrade (the schema-wide statement from [Insights](insights.md#sql-views-for-bi-and-grafana)
   works too):

@@ -302,8 +302,15 @@ pattern. Scoping is the same as `search`: the current checkout by default,
 
 ```bash
 ccx ask "how does the indexer decide what to re-embed?"
-ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b
+ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b --effort high
 ```
+
+**Pick the effort level from the question's shape** with `--effort`: `low`
+for a lookup with a known shape, nothing (the server default, usually
+`medium`) for a how-does-this-work question, `high` for architecture,
+comparison, and multi-repo questions. Higher levels let the agent take more
+steps and run longer; they cost more and are worth it only when the question
+needs the breadth.
 
 What it costs: `ask` runs seconds to minutes, where `search`, `grep`, `defs`
 and `refs` answer in a second or two — so when the deliverable is a **location
@@ -322,9 +329,15 @@ instantly from the answer cache.
   `--repo`/`--git-ref` (the ref's indexed head — the same commit unless the
   index has moved since). A claim its lines don't support is dropped, not
   repeated.
+- **A forced answer may be incomplete.** When the agent runs out of steps
+  first, stderr says `this answer was forced` and the answer ends with a
+  `## Not verified` section. Treat those items as open: check them with
+  `search`/`grep`/`defs`/`refs`, or ask once more with `--effort high` (or a
+  narrower question) — never repeat the same ask at the same level.
 - **`--json`** emits the exact response model (`answer`, `resolved_scopes`,
-  `usage`; `usage.result_cache_hit` says whether the cache answered); `--stats`
-  adds a one-line cost/reuse summary on stderr.
+  `effort`, `completion` — `complete`, `forced_turns`, or `forced_context` —
+  and `usage`; `usage.result_cache_hit` says whether the cache answered);
+  `--stats` adds a one-line cost/reuse summary on stderr.
 - **It may be off, busy, or out of time.** `agent_query_unavailable` means the
   deployment hasn't enabled it: answer with the other commands, tell the user
   their platform team decides, and don't try again this session.
