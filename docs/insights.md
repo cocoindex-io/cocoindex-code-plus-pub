@@ -116,13 +116,29 @@ queries into answered live and served from cache, wait time into spent and
 saved, and errors per day by code; Indexing splits the work into what was
 embedded and what reuse skipped.
 
-In **Repositories**, clicking a row opens that repository on its own: its
-figures, the operations it served, its days — queries, agent queries live
-vs cached, chunks embedded — and its refs right now: each one the index
-holds, at the commit indexed for it, plus any the indexer is still working
-on or failed to index, each with its own freshness. The table's *Refs*
-column counts the refs the index holds, read as you look (not a daily
-sample).
+**Repositories** gives each repository you can read its own row: queries,
+developers, agent queries, estimated model cost and what reuse saved, and
+**agent time saved** — the waiting the answer cache removed for queries
+naming that repository. A small figure reads in minutes, so a few minutes
+saved shows as minutes rather than `0.0 h`. Each row also names the commit
+the index is at:
+
+- **Commit** is the default branch at the commit indexed for it, or the
+  first ref when the default branch is not indexed, with `+N` for the
+  repository's other refs.
+- **Refs** counts the refs the index holds, read as you look (not a daily
+  sample).
+- **Freshness** means no known unfinished work older than the threshold.
+  It does not mean "at your latest commit": the indexer only sees a push at
+  its next poll, and the table's caption says when that last poll was.
+
+Clicking a row opens that repository on its own: its figures, the
+operations it served, its days — queries, agent queries live vs cached,
+agent time saved, chunks embedded — and its refs right now. Each ref the
+index holds is listed at the commit indexed for it, plus any the indexer is
+still working on or failed to index. Each has its own freshness and a
+*Head* column: the newer head the indexer has seen and how long ago, or
+"at head as of the last poll".
 The address bar carries the selection, so a link to a repository's detail
 reopens it.
 
@@ -140,8 +156,13 @@ ccx usage queries             # operations, latency, agent reuse, errors
 response verbatim, which is the supported shape for scripting — the table
 layout is not.
 
+Bare `ccx usage` prints the Repositories table — agent time saved and the
+*Commit* column included — with a total line under it and the time of the
+indexer's last poll.
+
 `ccx usage repo` is the web UI's drill-down in a terminal: the repository's
-figures, its indexed refs, the operations it served, then a row per day. It needs no
+figures, its indexed refs with their commits and heads, the operations it
+served, then a row per day, with the day's agent time saved. It needs no
 entitlement, for the same reason the table does not — these are statistics
 about repositories you can already query.
 
@@ -282,7 +303,13 @@ settled:
   a new deployment shows no misleading "+900%".
 - **Unknown is not zero.** Token totals exclude queries whose provider
   returned no count, and say how many. Time-saved excludes cache hits with no
-  stored duration, and says how many.
+  stored duration, and says how many. Under the Repositories table, the note
+  counts the repositories that had such hits.
+- **Per-repository savings add up; per-repository counts overlap.** A query
+  that names several repositories splits its cost and its agent time saved
+  evenly among them, so those columns sum to the organization's totals.
+  Counts — queries, agent queries, hits without a stored duration — count
+  in full on every repository the query named.
 - **Savings are measured, not modelled.** "Cost saved" values reuse at what
   producing the same result again would have cost. "Agent time saved" is wall
   time on both sides of the subtraction — the stored original's duration less

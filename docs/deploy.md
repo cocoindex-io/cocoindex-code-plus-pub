@@ -783,14 +783,36 @@ unaffected ([Symbol index](#symbol-index)).
 while it has work in progress and every ten minutes while idle:
 
 ```
-indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, symbol steps: 1 running
+indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 14640 files waiting their turn, symbol steps: 1 running
 ```
 
-`used` is the container's memory charge, the figure the kernel's OOM killer
-acts on, and `peak` the most it has reached since the container started.
-The symbol step's own lines end with the same figure. When you report an
-OOM kill, include these lines from the pass that was killed: they tell the
-walk's backlog apart from the symbol step.
+- **`used` and `peak`.** `used` is the container's memory charge, the
+  figure the kernel's OOM killer acts on, and `peak` the most it has
+  reached since the container started.
+- **What holds it.** `files waiting their turn` are the files the walk has
+  read ahead, each holding its contents; `files in progress` are the ones
+  parsed and waiting on their embeddings; `symbol steps` and
+  `symbol writes` are the symbol index's work.
+- **Other lines end with the same figure.** Each ref's walk, the first time
+  the indexer walks the ref after it starts and again whenever the ref's
+  content changes; the symbol step's lines
+  ([Symbol index](#symbol-index)); and each pass's last line, which shows
+  the memory a finished pass leaves behind for the next one:
+
+  ```
+  walk: github:github.com:4242 heads/main at 3f2a9c1d7e4b finished in 312.4s; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
+  Cycle finished; attested 3 ref(s); memory 1.1 GiB used (cgroup; peak 1.6 GiB). Next cycle in 240.0s.
+  ```
+
+- **When you report an OOM kill**, send every line carrying the figure from
+  the container that was killed (substitute your namespace and release):
+
+  ```bash
+  kubectl -n ccx logs deploy/ccx-cocoindex-code-plus-indexer --previous | grep -E '[GM]iB used'
+  ```
+
+  Read in order, they tell the walk's backlog apart from the symbol step,
+  and both from memory an earlier ref's step left behind.
 
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
