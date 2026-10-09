@@ -1260,6 +1260,26 @@ that silently collected nothing would be discovered weeks later from an empty
 dashboard. The error prints the two role statements with your real database
 and role names.
 
+#### How the analytics schema evolves
+
+Your collected history is yours to keep across upgrades.
+
+- **A release that adds columns adds them on the first start.** The query
+  server applies its additive steps at startup, idempotently, in place; no
+  statement to run, nothing lost. Old and new pods coexist during the
+  rollout: the old ones keep writing, and the daily aggregates for the
+  affected days are recomputed from the raw events afterwards.
+- **A release that cannot change the schema additively says so** in its
+  [upgrade entry](upgrade.md), and is rare. Then the new query-server pods
+  refuse to start while the old ones keep serving, and their log prints the
+  one `DROP TABLE IF EXISTS … CASCADE` statement to run as the query role
+  (`cocoindex_server`). Run it before the upgrade to avoid a stalled rollout
+  (a `helm upgrade --wait` would otherwise time out while the pods wait for
+  it), or after, when the pods restart on their own. The indexer's tables in
+  the same schema are never part of it.
+- **A downgrade never destroys data.** A query server older than the schema
+  it finds refuses to start and tells you to roll forward.
+
 #### Capacity
 
 Raw request events are ~99% of the footprint, so one figure sizes it:
