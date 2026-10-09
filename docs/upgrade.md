@@ -282,6 +282,21 @@ or if you exclude file types to keep Git LFS pointers out of the index.
   `symbol_coverage`, `symbol_definitions`, `symbol_references` and
   `symbol_name_only_sites`. The first pass after the upgrade creates the new
   tables and drops the old ones.
+- **Symbols are extracted and resolved more accurately.** `ccx defs` and
+  `ccx refs` find more definitions and fewer wrong ones:
+  - **C and C++:** `class MYLIB_API Widget : public Base { … };`, a class
+    declared with an export macro, defines `Widget` and its members; the
+    macro used to be read as the class name, so `ccx defs Widget` found
+    only forward declarations. `void MYLIB_API f(int);` declares a
+    function. `class ui::Widget { … };`, written outside namespace `ui`,
+    defines `ui::Widget`.
+  - **TypeScript/JavaScript and Rust:** a name reached through a directory
+    resolves only where the language finds it. `pkg.mod.f()` through
+    `import * as pkg from "./pkg"` when `pkg/` has no `index` file, and
+    `a::b::f()` when `a.rs` declares no `mod b;`, are name-only matches
+    instead of resolving to the directory's file of that name.
+  - **Rust:** in `src/a/b.rs`, `use super::x;` and `use super::*;` find the
+    items of `src/a.rs`.
 - **Git LFS files are no longer indexed as their pointers.** The git blob of
   an LFS-tracked file is a short text pointer, not the file. Earlier releases
   stored and embedded that pointer as the file's contents; the indexer now
