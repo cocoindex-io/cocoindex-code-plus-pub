@@ -32,6 +32,78 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.56 — the indexer reads at most about 1,000 files ahead; symbol lookups are more accurate
+
+Nothing is required — upgrade normally. The first indexer pass after the
+upgrade walks every repository again and resolves every ref's symbols
+again; nothing is re-embedded. Read on if an indexer ran out of memory while
+walking a new repository or branch, or if you size the indexer's memory.
+
+### What changed
+
+- **The walk no longer reads a whole ref ahead.** The indexer reads files
+  from the code host far faster than it embeds them. Earlier releases kept
+  every file read ahead in memory until its turn came, so a first pass — a
+  new repository, a branch newly added to a large one, or the re-walk an
+  upgrade triggers — could hold the ref's whole new content, and an
+  embedding provider that rate-limited the indexer made it do so. A file is
+  now read only once the indexing engine has room for it, so at most about
+  1,000 files wait their turn at once.
+  - Measured on an 8,900-file TypeScript repository: at most 746 files
+    waited instead of 7,412, and the pass peaked at 0.8 GiB instead of
+    0.9 GiB.
+  - Embedding starts sooner (after 22 s instead of 2 minutes on that
+    repository), and the pass as a whole took 5% longer.
+- **Symbols are extracted and resolved more accurately.** `ccx defs` and
+  `ccx refs` find more definitions and fewer name-only matches:
+  - **Python:** an annotated `*items: int` or `**options: str` is a rest
+    parameter. A reassignment such as `text = text.copy()` no longer leaves
+    that call, and every later `text.…` call, as a name-only match. A
+    module that imports its own name (`from pkg.table import Table as
+    Table`) no longer turns every import of that name into one.
+  - **C and C++:** `typedef struct tag { … } tag_t;` defines `struct tag`
+    and its members. `int app::helper() {}` defines a function of
+    namespace `app`, not a method. `extern int counter;` and an in-class
+    `static int count;` are declarations, so references go to the
+    definition. `using Base::count;` in a class exposes the base class's
+    member. `struct point p;` gives `p` the type `struct point`. A variadic
+    `...` parameter accepts extra arguments.
+  - **C/C++, C# and TypeScript:** a call to an overloaded function is
+    typed by the overload its arguments select, and left untyped when they
+    select none, instead of by every overload.
+  - **C#:** a parameter with a default value (`int c = 0`) is optional, so
+    a call that leaves it out matches.
+  - **Rust:** `use super::…` and `use self::…` inside an inline `mod` (such
+    as `mod tests`) name the module the path climbs to.
+  - **TypeScript:** member access through an alias of a union
+    (`type Shape = Circle | Square`) resolves per member, as through the
+    written union.
+
+### The first pass after the upgrade
+
+- **It walks every repository again.** It reads every file from the code
+  host and parses it again, symbol extraction included. Nothing is
+  re-embedded. The pass takes longer than a
+  usual one and uses more code-host API quota
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes)).
+- **It resolves every ref's symbol graph again.** The cost is one symbol
+  step per ref ([Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+
+### What to do (optional)
+
+- **You raised the indexer's memory limit after it was OOM-killed walking
+  a new repository or branch:** the walk's backlog is now bounded. Check the
+  limit against [Indexer memory sizing](deploy.md#indexer-memory-sizing)
+  before lowering it; the symbol step's peak is unchanged.
+
+### How to verify
+
+- During a first pass, the indexer's minute line, `indexer memory: … N
+  files waiting their turn`, stays below about 1,000.
+- Each ref's symbol step in that pass logs `resolving N of N modules (…),
+  reusing 0`: every file's symbols are resolved again, and only the files
+  whose symbols changed are written.
+
 ## v0.1.55 — indexed refs and their commits are shown wherever repositories are listed; symbol steps run one at a time; the indexer logs its memory; agentic questions take an effort level
 
 **If agentic query is enabled, raise the ingress timeout and move two values
