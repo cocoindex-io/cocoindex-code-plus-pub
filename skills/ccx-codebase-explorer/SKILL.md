@@ -281,13 +281,13 @@ unindexed. Absence is not completeness.
 A stale exact target (definition renamed/removed since the `defs` call) errors
 and tells you to re-run `ccx defs` for a current target.
 
-**Zero *resolved* rows is not proof of no callers.** A use the resolver could
+**Resolved rows alone do not settle "no callers".** A use the resolver could
 not commit — an opaque receiver, an import across a Python source root the
 index could not infer — appears as a `~name` row, never as a resolved one: read
 those rows (`--role call` narrows them) as candidate uses and confirm by
 opening the file; re-run without `--no-include-unresolved` if you dropped them.
-A literal `No references.` with no coverage note is strong evidence, but where
-`refs` cannot see at all — string keys, dynamic dispatch, an uncovered
+A literal `No references.` with no coverage note (the `Using git ref` line is
+not one) is strong evidence, but where `refs` cannot see at all — string keys, dynamic dispatch, an uncovered
 language — `ccx grep` the call or registration shape before calling it settled.
 
 **Settling what runs.** To confirm a candidate is the live path, look at its
