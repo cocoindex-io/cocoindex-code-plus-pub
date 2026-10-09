@@ -1044,7 +1044,7 @@ agentQuery:
     default: medium
     low:    { turns: 10, deadlineSeconds: 300 }
     medium: { turns: 30, deadlineSeconds: 600 }
-    high:   { turns: 60, deadlineSeconds: 1200, reasoningEffort: high }
+    high:   { turns: 60, deadlineSeconds: 1200 }
 ```
 
 - **`turns`** is the level's model-call bound: one turn is one model call,
@@ -1055,9 +1055,9 @@ agentQuery:
   otherwise.
 - **`deadlineSeconds`** is the level's whole-query deadline. Deadlines must not
   fall from `low` to `high`, and the ingress must clear the largest.
-- **`reasoningEffort`** overrides `agentQuery.reasoningEffort` for that level
-  only — for example, more provider reasoning at `high`. The same caution
-  applies: check what your model accepts.
+- Levels differ in those two values only. `agentQuery.reasoningEffort`
+  applies at every level, which is what lets an answer found at one level be
+  served at another.
 
 **When the steps run out**, the agent still answers from what it found and
 ends the answer with what it could not verify; the response marks it

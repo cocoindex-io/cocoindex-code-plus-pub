@@ -78,8 +78,8 @@ indexer, or if you size the indexer's memory.
 
 - **Agentic questions take an effort level** — `low`, `medium`, or `high`,
   named with `ccx ask --effort` or the MCP tool's `effort`. A table under
-  `agentQuery.effort` sets each level's turns, deadline, and optional
-  reasoning effort ([deploy.md § Effort levels](deploy.md#effort-levels)).
+  `agentQuery.effort` sets each level's turns and deadline
+  ([deploy.md § Effort levels](deploy.md#effort-levels)).
   It replaces `agentQuery.maxTurns` and `agentQuery.requestDeadlineSeconds`.
   The defaults are 10 / 30 / 60 turns and 300 / 600 / 1200 s; `medium`, the
   default level, matches the old defaults. A helper sub-investigation now
