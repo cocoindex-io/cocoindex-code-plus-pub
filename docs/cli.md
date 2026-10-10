@@ -381,10 +381,16 @@ has been checked against the repositories in question.
   built-in grep and file reads for anything that looks doable locally. In
   rising order of force:
   1. **The skill alone.** Its description asks the agent to use `ccx` before
-     grep for understanding-and-finding tasks — how something works, a
-     walkthrough, where a symbol is defined and used, code matching a concept.
-     Requests phrased that way trigger it; a bare "grep for X" does not, by
-     design.
+     its own grep and file reads whenever it, or you, need to find or
+     understand code — where a symbol is defined and used, code matching a
+     concept, how something works — including the searches the agent starts
+     itself in the middle of an implementation task. Expect it to fire on a
+     minority of those: a skill that overlaps the host's built-in grep is
+     consulted only sometimes, and a machine with dozens of skills can lose
+     the description entirely (Claude Code budgets about 1% of the context
+     for the skill listing and drops the least-used skills' descriptions
+     first; the `skillListingBudgetFraction` setting raises the budget). A
+     bare "grep for X" does not trigger it, by design.
   2. **The MCP endpoint** ([below](#mcp-integration)) — its tools sit in the
      agent's tool list on every turn, carrying the same routing guidance from
      the server, so there is nothing to trigger.
@@ -392,18 +398,25 @@ has been checked against the repositories in question.
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
      ```markdown
-     To find or understand code in this repo, run `ccx` (search / grep / defs / refs / ask) before grepping or reading files — see the `ccx-codebase-explorer` skill.
+     To find or understand code in this repo — including the searches you start yourself mid-task — run `ccx` (search / grep / defs / refs / ask) before grepping or reading files; grep only the files you changed since the indexed commit. See the `ccx-codebase-explorer` skill.
      ```
 
      Codex follows such a line at once; Claude Code treats it as a preference
      and still greps first at times.
   4. **A Claude Code hook**, when it must be enforced: a `UserPromptSubmit`
-     hook whose output is added to every prompt, in `.claude/settings.json`:
+     hook whose output is added to every prompt, in `.claude/settings.json`.
+     Word it as a rule that names the commands. Measured on six
+     implementation tasks (Claude Code, Opus 5.5, 2026-10-09): the skill
+     alone put `ccx` first on none; an advisory line ("use the skill before
+     you grep") on two; this rule on all six:
 
      ```json
      {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
-       "command": "echo 'Before exploring code, check whether the ccx-codebase-explorer skill applies and invoke it if so.'"}]}]}}
+       "command": "echo 'Rule for this repo: before any repository-wide search (the Grep tool, grep -r, rg), run the equivalent ccx command first and read its result: ccx defs NAME for where a symbol is defined, ccx refs NAME --role call for its callers, ccx search \"<concept>\" for code with no exact term, ccx grep PATTERN -l LANG for a syntactic shape. Use grep only on files you changed since the indexed commit. Before your first search, state in one line which of these you are using and why.'"}]}]}}
      ```
+
+     The line rides every prompt, including ones that never touch code, so
+     it is a team's choice rather than the default.
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to

@@ -1,7 +1,7 @@
 ---
 name: ccx-codebase-explorer
-description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it proactively, before falling back to grep and file reads, whenever the user wants to understand or find code: how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; where something is implemented; where a symbol is defined and every place it is used or called; code matching a concept with no exact term to grep; code with a particular syntactic shape; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal one-token grep in a small checked-out repo, or for reading a file already at hand."
-when_to_use: "Trigger phrases: 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'where is X implemented/defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'search the codebase', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
+description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself in the middle of an implementation task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented; code matching a concept with no exact term to grep; code with a particular syntactic shape; how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal string in a file already at hand."
+when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, or to read several files to see how something works; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -39,13 +39,23 @@ tools reach only after a chain of greps:
   in these two services"), or the question is too broad for one search or
   pattern → `ccx ask` (see below).
 
+One command per question, from a checkout of the repo (no flags needed):
+
+```bash
+ccx defs <Name>                       # where is it defined — then paste the row's `uses:` command
+ccx refs <Name> --role call           # who calls it
+ccx search "<what the code does>"     # no exact term to grep
+ccx grep '<pattern>' -l <language>    # a syntactic shape
+ccx ask "<question>"                  # a cited written answer
+```
+
 Local tools stay the right choice for exactly two things: reading a file that
-is already at hand, and a plain literal-identifier lookup in a small repo you
-have checked out — local `rg` answers that directly, and a `ccx grep` with no
-structure (a bare identifier, no metavariable) just floods unstructured hits.
-(But when the identifier question is really a *symbol* question — its
-definition, or its true use sites rather than every textual occurrence —
-`ccx defs` / `ccx refs` beat both.)
+is already at hand, and the files you edited or added since the indexed commit
+(the snapshot rule below). A bare identifier is not a reason to grep: as a text
+pattern `ccx grep` with no metavariable floods hits, but the question behind it
+is almost always a *symbol* question — its definition, or its true use sites
+rather than every textual occurrence — and `ccx defs` / `ccx refs` answer that
+where `rg` cannot.
 
 ## Repo & ref scoping (applies to every query command)
 
@@ -77,6 +87,10 @@ definition, or its true use sites rather than every textual occurrence —
   tree before acting on it; when you need the exact commit that answered,
   `ccx git-refs` prints it per ref. Keep querying on a dirty checkout, though:
   locating existing code — the common case — survives a line-number offset.
+  On a feature branch the split is simple: ccx for the code your branch did
+  not touch, which is nearly all of it; your own grep only for the files you
+  edited or added since the indexed commit — `git diff --name-only
+  <indexed-commit>` lists them, and `ccx repos` prints that commit.
 - **CWD subtree scoping.** Run from a *subdirectory* of the checkout and
   `search`/`grep` default `--path` to that subtree (a stderr note names the
   glob). To cover the whole repo, run from the repo root or pass `--path '*'`.
