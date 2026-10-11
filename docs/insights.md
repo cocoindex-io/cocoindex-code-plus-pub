@@ -142,6 +142,15 @@ still working on or failed to index. Each has its own freshness and a
 The address bar carries the selection, so a link to a repository's detail
 reopens it.
 
+**Indexing** ends with a freshness table: one row per repository you can
+read that the indexer has reported on, named `<owner>/<repo>`, with the
+branch or tag whose unfinished work sets the lag, the folded state, the lag
+and the error streak. Clicking a row opens that repository's drill-down,
+where every ref has its own freshness. Repositories the indexer reports on
+that are not listed — ones you cannot read, or ones the index does not hold
+yet because their first pass is pending or failed — appear as a count under
+the table, never by name.
+
 ## The terminal (`ccx usage`)
 
 ```bash
@@ -165,6 +174,11 @@ figures, its indexed refs with their commits and heads, the operations it
 served, then a row per day, with the day's agent time saved. It needs no
 entitlement, for the same reason the table does not — these are statistics
 about repositories you can already query.
+
+`ccx usage indexing` ends with the repositories you can read that are not
+fresh, each named `<owner>/<repo>` with the ref behind its lag, its state,
+lag and error streak, and the count of reported repositories not listed;
+`--json` carries every listed repository's row, fresh ones included.
 
 Running an organization-wide subcommand without the entitlement tells you so
 and points at the per-repository view, rather than failing opaquely.

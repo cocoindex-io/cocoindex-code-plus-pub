@@ -32,6 +32,37 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.57 — Insights names repositories in the freshness table
+
+Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a script parses `ccx usage indexing --json` or
+`ccx usage repos --json`.
+
+### What changed
+
+- **The Indexing view's freshness table names repositories, and lists only
+  the ones you can read.** Each row is the repository's `<owner>/<repo>`,
+  with the branch or tag whose unfinished work sets the lag beside the
+  state, and a click opens the repository's drill-down. Before, the table
+  listed every repository by a key such as `github:github.com:1146989733`,
+  which nobody can read, to every holder of the usage entitlement. It now
+  follows the same per-repository authorization as the Repositories table;
+  repositories the indexer reports on that are not listed — ones you cannot
+  read, or ones the index does not hold yet because their first pass is
+  pending or failed — are a count under the table. `ccx usage indexing`
+  prints the same names, the same *REF* column and the same count.
+- **`ccx usage indexing --json` carries `freshness` as a list**, plus
+  `freshness_withheld`. `freshness` was an object keyed by repository key;
+  it is now one row per listed repository, sorted by name, each with
+  `repo_key`, `repo`, `instance` and the pill under `freshness`;
+  `freshness_withheld` is the count above. A repository's pill (in this
+  list and on the Repositories rows) gains `git_ref`: the ref behind its
+  pending head, `null` when nothing is pending.
+- **Repositories rows no longer carry `removed`.** The rows of
+  `ccx usage repos --json` and the drill-down are always repositories the
+  index holds (they are the ones you can list), so the flag was never true;
+  the *removed* badge is gone with it.
+
 ## v0.1.56 — the indexer reads at most about 1,000 files ahead; symbol lookups are more accurate
 
 Nothing is required — upgrade normally. The first indexer pass after the
