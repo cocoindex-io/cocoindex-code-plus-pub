@@ -32,11 +32,12 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.57 — Insights names repositories in the freshness table
+## v0.1.57 — Insights names repositories in the freshness table; Rust and C/C++ symbols are more accurate; Nix files are parsed
 
 Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.
-Read on if a script parses `ccx usage indexing --json` or
-`ccx usage repos --json`.
+The first indexer pass after the upgrade walks every repository again;
+only `.nix` files are re-embedded. Read on if a script parses
+`ccx usage indexing --json` or `ccx usage repos --json`.
 
 ### What changed
 
@@ -62,6 +63,35 @@ Read on if a script parses `ccx usage indexing --json` or
   `ccx usage repos --json` and the drill-down are always repositories the
   index holds (they are the ones you can list), so the flag was never true;
   the *removed* badge is gone with it.
+- **Rust and C/C++ symbols are extracted more accurately.** `ccx defs` and
+  `ccx refs` find more definitions and fewer name-only matches:
+  - **Rust:** a variable's use refers to the binding in force where it is
+    written. A shadowing `let text = text.copy();` no longer leaves later
+    `text.…` calls as name-only matches, and in `let parser = parser();`
+    the call finds the function. Calls inside a match arm's guard
+    (`Some(s) if s.is_empty() =>`) are indexed.
+  - **C and C++:** `struct point { int x; } origin;` gives `origin` the
+    type `struct point`, so `origin.x` finds the field.
+- **Nix files are parsed.** `.nix` files are chunked along their syntax,
+  and `ccx grep -l nix` searches them.
+
+### The first pass after the upgrade
+
+- **It walks every repository again.** It reads every file from the code
+  host and parses it again, symbol extraction included. The pass takes
+  longer than a usual one and uses more code-host API quota
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes)).
+- **Only `.nix` files are re-embedded**, because their chunks change.
+- **It resolves again only the symbols the change reaches**: the Rust and
+  C/C++ files, and the files whose lookups read them. Other files' symbols
+  are reused.
+
+### How to verify
+
+- Each ref's symbol step in that pass logs `resolving N of M modules (…),
+  reusing K`, with N covering the ref's Rust and C/C++ files.
+- `ccx grep 'pkgs.\X' -l nix` returns matches in a repository with `.nix`
+  files once its pass completes.
 
 ## v0.1.56 — the indexer reads at most about 1,000 files ahead; symbol lookups are more accurate
 
