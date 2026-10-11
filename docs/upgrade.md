@@ -32,6 +32,83 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.58 — follow-up questions continue a stored answer; the answer cache is rebuilt
+
+Nothing is required unless you run the answer cache
+(`agentQuery.cache.enabled`): then its tables are dropped once, right after
+the upgrade — the new query server refuses to start until they are, and
+prints the statement. Upgrade the `ccx` CLI with the server. Usage analytics
+needs nothing: its new column is added on the first start, with your
+history kept, and the agentic day rollups are recomputed to count
+follow-ups (`ccx usage queries --json` gains `agent.follow_ups`; Insights
+shows it as a tile). Read on if a client of the agentic query REST API sends
+fields the server does not define.
+
+### What changed
+
+- **A stored answer can be continued.** An answer the cache stored now
+  carries a `resume_id`, which `ccx ask` prints as `resume id: <resume-id>`
+  on stderr. `ccx ask --resume <resume-id> "<follow-up>"` and the `resume`
+  parameter of the `ask_codebase` MCP tool answer a follow-up with the
+  earlier investigation's evidence in context; a forced answer names its
+  continuation, and an answer may be a clarifying question to reply to the
+  same way — [cli.md → Follow-ups](cli.md#follow-ups---resume).
+- **The answer cache keeps what the agent observed.** Each stored
+  investigation step now also stores what its tool call returned, when that
+  is 32 KiB or smaller, so a follow-up loads the transcript instead of
+  re-running it; a larger result, or any result after the code changed, is
+  re-run to verify. That is a new table shape: the cache's schema contract
+  is now `5`, and cache state is rebuilt, not migrated.
+- **The agentic query REST request rejects fields it does not define.**
+  `POST /code/v0/query` fails with `HTTP 400` on an unknown field, where it
+  used to ignore it; the `ask_codebase` MCP tool still ignores an argument
+  it does not define. A `ccx` CLI of this release sends none.
+
+### What to do
+
+With the answer cache on, in this order:
+
+1. Run the upgrade. The new query-server pods fail to start with
+   `SchemaContractError`; the old pods keep serving.
+2. Run the statement the error prints — one `DROP TABLE IF EXISTS … CASCADE`
+   naming the cache's tables — or, equivalently, drop every table in the
+   cache schema while keeping the schema and its grants:
+
+   ```bash
+   psql -c "DO \$\$ DECLARE t text; BEGIN
+     FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'ccx_agentic'
+     LOOP EXECUTE format('DROP TABLE IF EXISTS ccx_agentic.%I CASCADE', t); END LOOP;
+   END \$\$;"
+   ```
+
+   `ccx_agentic` is the chart's default `agentQuery.cache.schema`; substitute
+   yours.
+3. From here, agentic requests on the old pods fail (their cache reads hit
+   the dropped tables) until a new pod's next restart brings it up — with
+   crash-loop backoff, up to a few minutes. The new pods recreate the
+   tables at startup.
+
+Stored answers are gone — the next ask of each question investigates again
+and stores the result — and no collected history is involved: usage
+analytics live in their own schema and are untouched. The counter behind
+resume ids is not a table and survives, so an id is never reused.
+
+### During the rollout
+
+While old and new query-server pods serve side by side, a follow-up can land
+on an old one, which still requires `repos` and ignores `resume`. A follow-up
+without `repos` (`ccx ask --resume` without `--repo`) fails there with a
+plain `HTTP 400`: retry shortly. One that carries `repos` (`--repo`, or the
+MCP `repos` argument) is answered by it as a fresh question in that scope,
+with no `resume_id` in the reply; the CLI reports that as a wire-model
+mismatch. The window closes with the rollout.
+
+### Verify
+
+`ccx ask --stats` on a question reports `answer stored` and prints
+`resume id: …` after the answer; `ccx ask --resume <resume-id> "say that
+again in one line"` with that id answers from the stored investigation.
+
 ## v0.1.57 — Insights names repositories in the freshness table; Rust and C/C++ symbols are more accurate; Nix files are parsed
 
 Nothing is required — upgrade normally, and upgrade the `ccx` CLI with it.

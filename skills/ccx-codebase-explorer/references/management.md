@@ -35,7 +35,7 @@ value, and never ask for a token to be pasted into the conversation.
 | `HTTP 401` | missing or invalid `CCX_API_TOKEN` | the user sets a valid token |
 | `HTTP 503` `index tables … do not exist yet` (or `symbol tables …`, from `defs`/`refs`) | the server-side indexer hasn't populated this deployment yet | server state the CLI can't fix — tell the user. A different ref does not help; an unknown ref is a separate error that lists the indexed refs |
 | a connection error from a sandbox that blocks outbound network | `ccx` must reach the server (and the IdP, on a cached login) | ask the user to allow network for the sandbox |
-| `agent_query_unavailable` (from `ccx ask`) | the deployment hasn't enabled agentic query (off by default: answering sends code to a model provider) | answer with `search`/`grep`/`defs`/`refs`; tell the user their platform team decides; don't retry this session |
+| `agent_query_unavailable` (from `ccx ask`) | the deployment hasn't enabled agentic query (off by default: answering sends code to a model provider) — or, from `ccx ask --resume`, its answer cache is off or unreachable (the message names the cache) | answer with `search`/`grep`/`defs`/`refs`; tell the user their platform team decides; don't retry this session (on `--resume`: ask the question afresh, or retry shortly when the message says so) |
 | `agent_query_busy`, or `HTTP 503` `Request deadline exceeded` (from `ccx ask`) | the server is at its concurrent agentic-query cap, or the investigation outran the server's deadline | fall back to the other commands for this question; at most one later retry, never a loop |
 
 The **indexer is server-side**: no CLI command builds or refreshes an index.

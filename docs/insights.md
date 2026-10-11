@@ -113,7 +113,8 @@ headline figures, plus the day-by-day series and the breakdowns behind them.
 A number on the Overview can always be followed to the day it happened on —
 Queries & agents splits requests per day by operation and by client, agent
 queries into answered live and served from cache, wait time into spent and
-saved, and errors per day by code; Indexing splits the work into what was
+saved, and errors per day by code, and counts the follow-ups — questions
+that continued a stored answer; Indexing splits the work into what was
 embedded and what reuse skipped.
 
 **Repositories** gives each repository you can read its own row: queries,
