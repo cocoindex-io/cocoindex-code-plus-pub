@@ -361,11 +361,14 @@ has been checked against the repositories in question.
   coding agent when and how to drive `ccx` (search vs. structural grep vs.
   symbol navigation, scoping, reading empty results). Install it user-level
   with the [skills CLI](https://skills.sh), which detects Claude Code, Codex,
-  Cursor, Gemini CLI and others:
+  Cursor, Gemini CLI and others and links the skill into each:
 
   ```bash
-  npx skills add cocoindex-io/cocoindex-code-plus-pub -g
+  npx skills add cocoindex-io/cocoindex-code-plus-pub -g -y
   ```
+
+  Keep the `-y`: without it the CLI asks which agents to install to, and on a
+  first run Claude Code starts unticked.
 
   (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
   `~/.claude/skills/ccx-codebase-explorer`.) Installed before 2026-09-05? The
@@ -425,11 +428,24 @@ has been checked against the repositories in question.
   job that keeps its token in a repo `.env` gets `401`s.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
-- **Sandboxes need network access** — `ccx` talks to the query server (and, on a
-  cached login, to your IdP), so an agent sandbox that blocks outbound network
-  blocks `ccx`. In the OpenAI Codex CLI, whose default sandbox does, set
-  `sandbox_workspace_write.network_access = true` (or run outside the sandbox);
-  the error names the failure as a connectivity one, not an expired login.
+- **Sandboxes** — an agent sandbox can block two things `ccx` needs:
+  - **Network.** `ccx` talks to the query server (and, on a cached login, to
+    your IdP); the error names the failure as a connectivity one, not an
+    expired login.
+  - **Writing the token file.** On an SSO login, each token refresh saves the
+    renewed login to `~/.config/ccx/tokens.json` (the default file cache;
+    `ccx config` names it). Once the access token expires — minutes to an
+    hour, set by your IdP — a sandbox that blocks that write fails the
+    command with a `PermissionError`.
+
+  The OpenAI Codex CLI's default sandbox blocks both. Allow them in
+  `~/.codex/config.toml` (or run outside the sandbox):
+
+  ```toml
+  [sandbox_workspace_write]
+  network_access = true
+  writable_roots = ["~/.config/ccx"]
+  ```
 - **Container option** — for sandboxes without Python, a small `ccx` image is a
   possible future add (track via the release docs).
 - **Structured output** — `ccx ask --json` emits the response model; the other

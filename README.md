@@ -39,8 +39,11 @@ agents you have (Claude Code, Codex, Cursor, Gemini CLI, …) and links the skil
 into each:
 
 ```bash
-npx skills add cocoindex-io/cocoindex-code-plus-pub -g
+npx skills add cocoindex-io/cocoindex-code-plus-pub -g -y
 ```
+
+Keep the `-y`: without it the CLI asks which agents to install to, and on a
+first run Claude Code starts unticked.
 
 Update later with `npx skills update ccx-codebase-explorer -g`. Without the CLI,
 copy the self-contained `skills/ccx-codebase-explorer/` folder to
