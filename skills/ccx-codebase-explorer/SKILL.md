@@ -332,15 +332,15 @@ repeatable, `--git-ref` for a single repo.
 ```bash
 ccx ask "how does the indexer decide what to re-embed?"
 ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b --effort high
-ccx ask --resume 7e3a0012 "and where is that retried?"
+ccx ask --parent 7e3a0012 "and where is that retried?"
 ```
 
-**Follow up instead of re-asking.** When an answer printed `resume id:
-<resume-id>` on stderr and your next question builds on it — a detail, the
-next step, or the reply to an answer headed `## Clarification needed` — run
-`ccx ask --resume <resume-id> "<follow-up>"`: the evidence is already in
-context, so the investigation is not repeated, and it needs no `--repo` (the
-scope is the answer's). `resume_outdated` prints the conversation's questions
+**Follow up instead of re-asking.** When an answer printed a `follow-up:`
+command on stderr and your next question builds on it — a detail, the next
+step, or the reply to an answer headed `## Clarification needed` — run that
+command with your question (`ccx ask --parent <answer-id> "<follow-up>"`):
+the evidence is already in context, so the investigation is not repeated, and it needs no `--repo` (the
+scope is the answer's). `parent_outdated` prints the conversation's questions
 in order: ask the first again, then re-issue the rest from each new id.
 
 **Pick the effort level from the question's shape** with `--effort`: `low`
@@ -369,14 +369,14 @@ background.
 - **A forced answer may be incomplete.** When the agent runs out of steps or
   of room first, stderr says `this answer was forced` and the answer ends with a
   `## Not verified` section. Treat those items as open: when the notice ends
-  with a `ccx ask --resume …` command, run it; otherwise check them with
+  with a `ccx ask --parent …` command, run it; otherwise check them with
   `search`/`grep`/`defs`/`refs`, or ask once more with `--effort high` (or a
   narrower question) — never repeat the same ask at the same level.
 - **It may be off, busy, or out of time.** `agent_query_unavailable` means the
   deployment hasn't enabled it: answer with the other commands, tell the user
   their platform team decides, and don't try again this session — unless it
-  answered a `--resume` and names the answer cache: then ask the question
-  afresh without `--resume`, or retry shortly when it says so.
+  answered a `--parent` and names the answer cache: then ask the question
+  afresh without `--parent`, or retry shortly when it says so.
   `agent_query_busy` (concurrency cap) and an `HTTP 503` `Request deadline
   exceeded` (the investigation outran the server's deadline): fall back to the
   other commands for this question — at most one later retry, narrower or at

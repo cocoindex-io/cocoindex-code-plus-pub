@@ -43,12 +43,12 @@ query-server replicas and want to know what a follow-up does mid-rollout.
 ### What changed
 
 - **A stored answer can be continued.** An answer the cache stored now
-  carries a `resume_id`, which `ccx ask` prints as `resume id: <resume-id>`
-  on stderr. `ccx ask --resume <resume-id> "<follow-up>"` and the `resume`
+  carries an `answer_id`, which `ccx ask` prints on stderr as the follow-up
+  command, `follow-up: ccx ask --parent <answer-id> "<question>"`. `ccx ask --parent <answer-id> "<follow-up>"` and the `parent`
   parameter of the `ask_codebase` MCP tool answer a follow-up with the
   earlier investigation's evidence in context; a forced answer names its
   continuation, and an answer may be a clarifying question to reply to the
-  same way — [cli.md → Follow-ups](cli.md#follow-ups---resume).
+  same way — [cli.md → Follow-ups](cli.md#follow-ups---parent).
 - **The answer cache keeps what the agent observed.** Each stored
   investigation step now also stores what its tool call returned, when that
   is 32 KiB or smaller, so a follow-up loads the transcript instead of
@@ -56,7 +56,7 @@ query-server replicas and want to know what a follow-up does mid-rollout.
   re-run to verify. The cache's schema contract is now `5`: the new columns
   and tables are added at the first start, and stored answers stay. An
   answer made before the upgrade is still served from the cache, but it has
-  no resume id and cannot be continued; the first answer made after the
+  no answer id and cannot be continued; the first answer made after the
   upgrade can.
 - **Usage analytics count follow-ups.** The new column is added on the
   first start, with your history kept, and the agentic day rollups are
@@ -70,11 +70,11 @@ query-server replicas and want to know what a follow-up does mid-rollout.
 ### During the rollout
 
 While old and new query-server pods serve side by side, a follow-up can land
-on an old one, which still requires `repos` and ignores `resume`. A follow-up
-without `repos` (`ccx ask --resume` without `--repo`) fails there with a
+on an old one, which still requires `repos` and ignores `parent`. A follow-up
+without `repos` (`ccx ask --parent` without `--repo`) fails there with a
 plain `HTTP 400`: retry shortly. One that carries `repos` (`--repo`, or the
 MCP `repos` argument) is answered by it as a fresh question in that scope,
-with no `resume_id` in the reply; the CLI reports that as a wire-model
+with no `answer_id` in the reply; the CLI reports that as a wire-model
 mismatch. The window closes with the rollout.
 
 ### Rolling back
@@ -88,9 +88,10 @@ later upgrades need no such step.
 
 ### Verify
 
-`ccx ask --stats` on a question reports `answer stored` and prints
-`resume id: …` after the answer; `ccx ask --resume <resume-id> "say that
-again in one line"` with that id answers from the stored investigation.
+`ccx ask --stats` on a question reports `answer stored` and prints a
+`follow-up:` command after the answer; running that command with the
+question `"say that again in one line"` answers from the stored
+investigation.
 
 ## v0.1.57 — Insights names repositories in the freshness table; Rust and C/C++ symbols are more accurate; Nix files are parsed
 
