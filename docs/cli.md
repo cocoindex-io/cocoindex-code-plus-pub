@@ -255,7 +255,7 @@ ccx ask "how does the indexer decide what to re-embed?"
 ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/b
 ccx ask "walk me through the release flow" --git-ref v1.2
 ccx ask "what are the main components?" --effort high
-ccx ask --resume 7e3a0012 "and where is that retried?"   # continue a stored answer
+ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored answer
 ccx ask "what are the main components?" --json    # exact response model
 ```
 
@@ -306,30 +306,31 @@ question, or ask again with --effort high.
 ```
 
 When the answer was stored and the turn allocation ran out, the notice also
-names the continuation command ([Follow-ups](#follow-ups---resume)).
+names the continuation command ([Follow-ups](#follow-ups---parent)).
 
 `--json` carries the level applied as `effort` and how the session ended as
 `completion`: `complete`, `forced_turns`, or `forced_context`. A stored answer
 that was forced when it was made is reported as forced when it is served.
 
-#### Follow-ups: `--resume`
+#### Follow-ups: `--parent`
 
-With the answer cache on, an answer that was stored prints a handle on stderr
-after it:
+With the answer cache on, an answer that was stored prints the command for a
+follow-up on stderr after it:
 
 ```text
-resume id: 7e3a0012
+follow-up: ccx ask --parent 7e3a0012 "<question>"
 ```
 
-Pass it back to continue the conversation instead of asking afresh:
+Run it with your question to continue the conversation instead of asking
+afresh:
 
 ```bash
-ccx ask --resume 7e3a0012 "and where is that retried?"
+ccx ask --parent 7e3a0012 "and where is that retried?"
 ```
 
 The follow-up is answered with the earlier investigation's evidence already in
 context — the investigation is not repeated, only verified against the current
-code — and its answer prints its own `resume id` for the next one. Any wording
+code — and its answer prints its own follow-up command for the next one. Any wording
 works: the text is what the agent is told next, not a keyword. What to expect:
 
 - **The scope is the answer's.** A follow-up runs on the same repositories at
@@ -340,31 +341,31 @@ works: the text is what the agent is told next, not a keyword. What to expect:
 - **A forced answer is worth continuing.** When the notice says the turn
   allocation ran out, it names the continuation, which keeps the evidence the
   cut-off investigation gathered:
-  `ccx ask --resume 7e3a0012 "continue: finish what was not verified"`. When
+  `ccx ask --parent 7e3a0012 "continue: finish what was not verified"`. When
   the model's context ran out instead, continuing would hit the same wall;
   narrow the question or ask again at `--effort high`.
 - **The answer may be a question.** When the question is ambiguous in a way
   the code cannot settle, the answer is a short clarifying question headed
-  `## Clarification needed`; answer it with `--resume`.
+  `## Clarification needed`; answer it with `--parent`.
 - **The answer may have gone stale.** A follow-up first re-checks what the
   earlier investigation read and found. A change that leaves every recorded
   result the same — the files it read, the hits its searches returned — is
-  fine; a change that alters one fails the command with `resume_outdated`,
+  fine; a change that alters one fails the command with `parent_outdated`,
   which lists the conversation's questions in order: ask the first again,
   then re-issue the follow-ups from each new answer's id.
-- **An id can stop resolving.** `resume_not_found` means no stored answer
+- **An id can stop resolving.** `parent_not_found` means no stored answer
   with that id is available here: a wrong id, an answer the cache has since
   dropped (a repository purge, or the cache rebuilt by an upgrade), one made
   under an earlier version of the agent, or one on repositories you cannot
   read. Ask the question afresh.
-- **`--json` carries `resume_id`**, `null` when nothing was stored (the answer
+- **`--json` carries `answer_id`**, `null` when nothing was stored (the answer
   cache is off, or the answer was not stored), in which case the stderr line
   is absent too.
 - **Right after a server upgrade**, a follow-up can reach a replica that does
-  not know follow-ups yet. `ccx ask --resume` without `--repo` then fails with
+  not know follow-ups yet. `ccx ask --parent` without `--repo` then fails with
   a plain `HTTP 400` saying `repos` is required, and the command says the
   server is mid-upgrade: retry shortly. With `--repo`, that replica answers a
-  fresh question about that repository instead; the reply lacks `resume_id`,
+  fresh question about that repository instead; the reply lacks `answer_id`,
   which the command reports as a wire-model mismatch, and the retry is the
   same.
 
@@ -548,7 +549,7 @@ and REST API closely (same capabilities, same scoping).
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
     the default branch.
-  - `ask_codebase(question, repos?, resume?, effort?, include_stats?)` → a
+  - `ask_codebase(question, repos?, parent?, effort?, include_stats?)` → a
     written, citation-backed answer to a natural-language question — the MCP
     form of [`ccx ask`](#ccx-ask--ask-a-question-get-an-answer).
     A server-side agent investigates with the tools above under the caller's
@@ -563,17 +564,17 @@ and REST API closely (same capabilities, same scoping).
     `--effort`. The response always carries `completion`: a `forced_turns` or
     `forced_context` answer was extracted at the limit and may be incomplete,
     so narrow the question or ask again with `effort: "high"`. With the answer
-    cache on, a stored answer carries `resume_id`: pass it as `resume` with a
+    cache on, a stored answer carries `answer_id`: pass it as `parent` with a
     follow-up question to continue with the investigation's evidence in
     context — `repos` is then optional and only picks the refs of the stored
     scope — and a `forced_turns` answer is worth continuing that way. An
     answer may itself be a clarifying question headed `## Clarification
-    needed`; reply the same way. `resume_outdated` means the code changed
+    needed`; reply the same way. `parent_outdated` means the code changed
     since: ask the root question again and continue from the new id;
-    `resume_not_found` means no such stored answer is available here
-    ([Follow-ups](#follow-ups---resume)). By default the
+    `parent_not_found` means no such stored answer is available here
+    ([Follow-ups](#follow-ups---parent)). By default the
     response carries the answer, the resolved scopes, the level, the
-    completion, and `resume_id` only; `include_stats: true`
+    completion, and `answer_id` only; `include_stats: true`
     adds the usage and cache-savings counters, which are operator
     information a querying agent rarely needs.
 
