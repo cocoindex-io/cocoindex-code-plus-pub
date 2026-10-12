@@ -77,6 +77,15 @@ MCP `repos` argument) is answered by it as a fresh question in that scope,
 with no `resume_id` in the reply; the CLI reports that as a wire-model
 mismatch. The window closes with the rollout.
 
+### Rolling back
+
+With the answer cache on, a query server rolled back to v0.1.57 refuses to
+start: that release does not know the cache's new shape. Roll forward, or —
+to run v0.1.57 anyway — start the cache over with the command in
+[deploy.md → Answer cache](deploy.md#answer-cache-optional). From this
+release on, the query server migrates its own cache tables at startup, so
+later upgrades need no such step.
+
 ### Verify
 
 `ccx ask --stats` on a question reports `answer stored` and prints

@@ -1147,8 +1147,9 @@ Three consequences to know before you turn it on.
   # server's role owns the tables and rebuilds them at next startup. (With
   # the one-time role setup in place it could re-create the schema too; a
   # deployment that pre-created the schema instead cannot, so dropping only
-  # the tables is the command that works everywhere. A contract-mismatch
-  # error at startup prints this same command with the exact table list.)
+  # the tables is the command that works everywhere. Upgrades never need
+  # it: the server migrates its own tables at startup, keeping stored
+  # answers when the change allows and rebuilding them itself when not.)
   psql -c "DO \$\$ DECLARE t text; BEGIN
     FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'ccx_agentic'
     LOOP EXECUTE format('DROP TABLE IF EXISTS ccx_agentic.%I CASCADE', t); END LOOP;
