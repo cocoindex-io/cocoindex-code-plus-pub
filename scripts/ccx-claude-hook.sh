@@ -32,8 +32,9 @@ state="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/ccx-claude-hook}/markers"
 mkdir -p "$state" 2>/dev/null || exit 0
 prefix="$state/${session:-nosession}-${agent:-main}"
 
-# Compaction summarises earlier context away: let every hint fire again.
-if [ "$event" = SessionStart ] && [ "$source" = compact ]; then
+# Compaction summarises earlier context away and /clear empties it: let
+# every hint fire again.
+if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = clear ]; }; then
   rm -f "$state/${session:-nosession}-"* 2>/dev/null
 fi
 
