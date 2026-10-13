@@ -231,6 +231,26 @@ rule worth a SIEM alert: MCP reports a tool failure *inside* a successful
 response, so a failed MCP call carries `status: 200` with an `error_code`,
 not an HTTP error status.
 
+### The Claude Code plugin's probe
+
+The [ccx plugin for Claude Code](cli.md#for-agents--automation) runs a hook
+at an agent's repository searches. The hook calls `ccx indexed`, which asks
+your server once per checkout whether that checkout's `origin` repository is
+indexed, through `GET /repo/v0/git_refs/{repo}` with the remote's hostname as
+`host_hint` — the same request `ccx git-refs` makes, carrying the same
+credential, to your server only. Two consequences for the audit stream:
+
+- A checkout of a repository the index does not hold produces a
+  `repo_decision` with outcome `not_resolved`; the repository name the
+  developer's remote carried appears only under the free-text policy below
+  (redacted by default). Developers who enable the plugin machine-wide will
+  cause such records for their unrelated checkouts on the same code host.
+- The answer is cached on the developer's machine (`~/.cache/ccx/indexed.json`)
+  for between a minute and an hour depending on how recently the fetched
+  remote branch moved, so a checkout is asked about once per that window,
+  never per search. Nothing is sent without a configured server and a
+  credential the server accepts.
+
 ### Caller free text is redacted by default
 
 `audit.freeText` governs **all** caller-supplied free text uniformly — search
