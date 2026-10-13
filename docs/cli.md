@@ -231,6 +231,11 @@ checkout (and gave no `--path`), results are scoped to that subtree — the note
 on stderr names the glob; run from the repo root or pass `--path '*'` to cover
 the whole repo.
 
+`grep` metavariables use the `\` sigil (`\_`, `\*`, `\NAME`). A pattern written
+in ast-grep's `$NAME` / `$$$` dialect matches those tokens literally and
+usually finds nothing; the CLI then prints a `warning:` line on stderr showing
+the pattern in ccx's forms (the MCP response carries it as `warnings`).
+
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
 
@@ -534,7 +539,9 @@ and REST API closely (same capabilities, same scoping).
     score). `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
     at its own ref; `resolved_scopes` reports every scope's resolution.
   - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
-    structural matches (filename, line range, node kind, code, captured metavars).
+    structural matches (filename, line range, node kind, code, captured metavars),
+    plus `warnings` (e.g. a pattern in ast-grep's `$NAME` / `$$$` dialect, which
+    ccx matches literally; the warning shows the ccx form).
   - `find_definitions(name, repo, qualified?, git_ref?, kinds?, languages?, paths?,
     limit?, offset?)` → where a symbol is defined (path, span, kind, qualified
     name, `entity_id`); the response's `coverage` states how complete the symbol
