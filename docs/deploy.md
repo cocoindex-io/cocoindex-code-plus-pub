@@ -505,7 +505,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentRequestsPerPrincipal,busyRetryAfterSeconds,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 ### Secrets: inline or existingSecret
 
@@ -1050,9 +1050,10 @@ agentQuery:
   deadline — see [Timeout chain](#timeout-chain).
 - **Cost is bounded per request, by effort level.** See
   [Effort levels](#effort-levels) below.
-- **Capacity.** `agentQuery.maxConcurrentRequests` (default 4 per pod) admits
-  agentic queries; over-capacity callers get an immediate retryable `503` while
-  low-level search is unaffected. Each principal may hold 2 at a time.
+- **Capacity.** Each pod admits a bounded number of agentic queries, and each
+  caller a bounded share of them; a caller past either gets an immediate
+  retryable `503` while low-level search is unaffected. See
+  [Concurrency](#concurrency) below.
 
 #### Effort levels
 
@@ -1091,6 +1092,65 @@ for your questions — or that your model takes one small step per turn, where
 a model that batches its reads gets further on the same number. With the
 answer cache on, retuning the table invalidates nothing: an answer made with
 fewer turns is recomputed once when asked at a level with more.
+
+#### Concurrency
+
+Two caps admit agentic queries on each pod. A query past either is refused
+at once, never queued.
+
+```yaml
+agentQuery:
+  maxConcurrentRequests: 4               # the default: queries one pod runs at once
+  maxConcurrentRequestsPerPrincipal: 2   # the default: how many of those one caller may hold
+  busyRetryAfterSeconds: 10              # the default: the wait a refusal states
+```
+
+- **A caller is one signed-in user or one API-key record.** Its cap stops
+  one caller from taking every slot. It must not exceed
+  `maxConcurrentRequests`; the query server refuses to start otherwise.
+- **Both caps are per pod.** The ingress does not spread one caller's
+  requests evenly across pods, so plan on a caller reaching its cap on a
+  single pod, however many pods run.
+- **A refusal is `HTTP 503` with code `agent_query_busy`** and a
+  `Retry-After` header of `busyRetryAfterSeconds`. The MCP tool error
+  carries the same wait as `retry_after_seconds`, and `ccx ask` prints it.
+
+##### One API key that runs many queries at once
+
+A service that fans out under one key, such as a pull-request review bot run
+from many processes, needs more than a person does. Give its key record its
+own cap; every other caller keeps the default:
+
+```yaml
+agentQuery:
+  maxConcurrentRequests: 8               # a key's own cap cannot exceed this
+auth:
+  apiKeys:
+    - id: review-bot
+      secretHash: "sha256:<hex>"
+      label: PR review bot
+      agentQuery:
+        maxConcurrentRequestsPerPrincipal: 6
+rateLimit:
+  agentQuery: { perPrincipalPerMinute: 30, burst: 6 }
+```
+
+- **Leave headroom for everyone else.** A key whose cap equals
+  `maxConcurrentRequests` can hold every slot on a pod. Above, the bot holds
+  at most 6 of a pod's 8, so people still get theirs.
+- **Raise the rate limit with it.** Every agentic query is also charged to
+  the per-caller rate class `rateLimit.agentQuery` (default 6 per minute,
+  burst 2, per pod), including one refused as busy. At the defaults, a caller
+  that starts three queries at once gets `HTTP 429` on the third before
+  concurrency matters. Size `burst` to the caller's fan-out.
+- **Keep the stated wait at or above the class's refill interval**, which is
+  60 divided by `perPrincipalPerMinute` seconds. A client that retries on the
+  hint then never draws a `429`.
+- **More queries share the same model-call budget.**
+  `agentQuery.maxConcurrentModelCalls` (default 8 per pod) bounds outbound
+  completions across every running query. Raise it with
+  `maxConcurrentRequests` if your provider quota allows, or each query waits
+  longer for its turns.
 
 #### Answer cache (optional)
 
@@ -1478,6 +1538,10 @@ to reissue, replace the record.
 The record **`id` must match `[A-Za-z0-9-]{1,64}`** — hyphens fine, **no
 underscores** (that is what separates `<id>` from `<secret>` in the token), so
 `id: ci-prod` works and `id: ci_prod` is rejected at startup.
+
+A record may also carry its own agentic-query concurrency, for a service
+that runs many queries at once under one key —
+[One API key that runs many queries at once](#one-api-key-that-runs-many-queries-at-once).
 
 A record's `scope` is normally `{ mode: indexScope }` (the whole index). An
 explicit `{ mode: repoAllowlist, repos: [<repo-uid>, …] }` also exists
