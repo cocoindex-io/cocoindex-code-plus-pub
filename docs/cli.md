@@ -233,6 +233,12 @@ as a `name_only` row rather than a resolved one — every target form includes
 those rows unless you pass `--no-include-unresolved` — so read them before
 concluding a symbol has no callers.
 
+A member written with its qualifier but no language tag, as in
+`ccx defs Repo.find` or C++/Rust `ccx defs Store::fetch`, usually finds
+nothing. The CLI then prints a `warning:` line on stderr naming the base name
+to look up instead (`find`, `fetch`), and the MCP response carries it as
+`warnings`.
+
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
 `origin`** — that origin is mapped to the matching indexed repo. Otherwise (no
@@ -599,7 +605,9 @@ and REST API closely (same capabilities, same scoping).
   - `find_definitions(name, repo, qualified?, git_ref?, kinds?, languages?, paths?,
     limit?, offset?)` → where a symbol is defined (path, span, kind, qualified
     name, `entity_id`); the response's `coverage` states how complete the symbol
-    index is for the ref.
+    index is for the ref, and `warnings` explains a miss on a member written
+    with its qualifier (e.g. `Repo.find` or `Store::fetch`; the warning names the
+    base name to look up instead).
   - `find_references(repo, path?+entity_id?|base_name, git_ref?, roles?,
     include_unresolved?, limit?, offset?)` → where a symbol is used — exact
     target (`path` + `entity_id` from `find_definitions`) or by `base_name`;
