@@ -32,6 +32,38 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.59 — config files reject unknown fields; groups share fields across entries
+
+Nothing is required for a config repo whose entries carry only documented
+fields: upgrade normally. Read on if a config file might carry a field the
+indexer does not define, because that file now fails.
+
+### What changed
+
+- **An unknown field in a config entry is an error.** A config file with a
+  field the indexer does not know — a typo such as `excluded_pattern`, or a
+  field of your own — now fails the config refresh for that config repo,
+  naming the file and the entry, where it used to be ignored. Indexing of
+  already configured repos continues; adding, removing and changing repos
+  pauses until the field is removed. Before upgrading, check each config
+  file against the field table in
+  [deploy.md → Index config repo](deploy.md#index-config-repo).
+- **An invalid `included_patterns` / `excluded_patterns` value is an error
+  at the config file.** Each must be a list of glob strings, and a glob that
+  does not compile now fails the config refresh naming the repo, instead of
+  failing that repo's own refresh mid-index.
+- **Groups.** An entry with a `repos` key is a group whose other fields are
+  inherited by the entries under it; `excluded_patterns` accumulate, every
+  other field is overridden by the nearer value. A fleet-wide exclude list
+  is written once per file —
+  [deploy.md → Groups](deploy.md#groups-write-shared-fields-once).
+
+### Verify
+
+After the upgrade, the indexer's next config refresh logs no
+`config refresh cycle failed` line; one that does names the file and the
+field to fix.
+
 ## v0.1.58 — follow-up questions continue a stored answer
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
