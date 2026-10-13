@@ -32,11 +32,13 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.59 — config files reject unknown fields; groups share fields across entries
+## v0.1.59 — config files reject unknown fields; groups share fields across entries; per-key agentic concurrency
 
 Nothing is required for a config repo whose entries carry only documented
-fields: upgrade normally. Read on if a config file might carry a field the
-indexer does not define, because that file now fails.
+fields: upgrade normally, and upgrade the `ccx` CLI with it. Read on if a
+config file might carry a field the indexer does not define, because that
+file now fails; if an API key runs many agentic queries at once; or if
+Insights' agentic query counts for recent days change after the upgrade.
 
 ### What changed
 
@@ -57,12 +59,56 @@ indexer does not define, because that file now fails.
   other field is overridden by the nearer value. A fleet-wide exclude list
   is written once per file —
   [deploy.md → Groups](deploy.md#groups-write-shared-fields-once).
+- **The per-caller concurrency cap is a setting.**
+  `agentQuery.maxConcurrentRequestsPerPrincipal` (default 2, as before) is
+  how many agentic queries one caller may run at once on one pod, and an
+  `auth.apiKeys` record can set its own —
+  [deploy.md → Concurrency](deploy.md#concurrency). Neither may exceed
+  `agentQuery.maxConcurrentRequests`; the query server refuses to start
+  otherwise.
+- **A busy refusal states its wait.** The `HTTP 503` `agent_query_busy`
+  response carries `Retry-After` (`agentQuery.busyRetryAfterSeconds`,
+  default 10), and the MCP tool error carries `retry_after_seconds`.
+  `ccx ask` prints it.
+- **A busy refusal no longer spends a rate-limit token.**
+  `rateLimit.agentQuery` now counts only the queries the concurrency caps
+  admit. A caller that starts more queries at once than its cap gets
+  `agent_query_busy` for the excess, where it used to get `HTTP 429` once
+  its burst ran out, and retrying on the stated wait costs it nothing.
+- **Insights counts the agentic queries that ran.** A request refused at
+  admission, busy or rate-limited, still counts as a request and an error,
+  and no longer as an agentic query. After the upgrade, the days still
+  within `usageAnalytics.retention.rawDays` (default 90) are recomputed in
+  the background, one day about every 30 seconds; those days show as
+  partial until rebuilt, and period comparisons stay hidden meanwhile.
+  Their agentic query counts drop by the busy refusals they included;
+  older days keep their counts.
+
+### During the rollout
+
+Old and new pods each apply their own rules, so a refusal on an old pod
+still spends a rate-limit token until the rollout completes. Set a key's
+own cap in a later `helm upgrade`, after this one completes: a query-server
+pod of the previous release that restarts mid-rollout would refuse an auth
+configuration carrying it.
+
+### Rolling back
+
+A query server rolled back to v0.1.58 refuses to start while any
+`auth.apiKeys` record carries an `agentQuery` block; remove those blocks
+first. Insights then recomputes the recent days again under the previous
+counting.
 
 ### Verify
 
 After the upgrade, the indexer's next config refresh logs no
 `config refresh cycle failed` line; one that does names the file and the
 field to fix.
+
+Start three `ccx ask` questions at once under one caller with the default
+cap: two answer, and the third fails at once with
+`[agent_query_busy] … (retry in 10s)`.
+
 
 ## v0.1.58 — follow-up questions continue a stored answer
 

@@ -320,6 +320,9 @@ settled:
   returned no count, and say how many. Time-saved excludes cache hits with no
   stored duration, and says how many. Under the Repositories table, the note
   counts the repositories that had such hits.
+- **An agent query is one that ran.** A request refused before it started,
+  because its caller was at a concurrency cap or over its rate limit, counts
+  as a request and an error, not as an agent query.
 - **Per-repository savings add up; per-repository counts overlap.** A query
   that names several repositories splits its cost and its agent time saved
   evenly among them, so those columns sum to the organization's totals.

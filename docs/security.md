@@ -358,10 +358,11 @@ flow:
   [What the product stores](#what-the-product-stores-in-your-database) live
   in your Postgres.
 - **Bounds**: the model and its reasoning effort are operator configuration,
-  never caller-selected. One query is capped at 30 model turns plus at most
-  8 helper sub-investigations of 15 turns each, under a per-request deadline
-  (`agentQuery.requestDeadlineSeconds`, default 600 s) and per-pod
-  concurrency limits.
+  never caller-selected. One query is capped by its effort level's model
+  turns and deadline, plus at most 8 helper sub-investigations one level
+  below it ([deploy.md → Effort levels](deploy.md#effort-levels)), and runs
+  under per-pod and per-caller concurrency limits
+  ([deploy.md → Concurrency](deploy.md#concurrency)).
 
 ## Vulnerability reporting & fixes
 
