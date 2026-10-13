@@ -135,7 +135,7 @@ ccx search parse config --lang python --path 'src/**'
 Each result prints `[score] <repo> <file>` and the code with a line-number
 gutter. To read more context around a hit, open the file with your normal file
 tools (or, for a ref you don't have checked out, `ccx read-file` — see
-remote-access reference).
+*Reading & listing files* below).
 
 ## AST structural grep
 
@@ -387,8 +387,16 @@ background.
 `ccx read-file` and `ccx find-files` fetch file contents and paths at an indexed
 ref. They're for code you **don't have on disk** — a repo not checked out locally,
 or a **different ref** than your working tree. **When the repo is checked out at
-the ref you care about, use your normal file tools instead** (faster, same bytes).
-Full usage: [references/remote-access.md](references/remote-access.md).
+the ref you care about, use your normal file tools instead** (faster, same bytes);
+nothing below applies then.
+
+```bash
+ccx read-file src/app.py --repo acme/api --git-ref v1.2   # a file at a ref you don't have on disk
+ccx find-files 'src/*.py' --repo acme/api --git-ref v1.2  # paths there, by glob (`*` spans `/`)
+```
+
+Line windows (`--offset`/`--limit`), paging, and case mode:
+[references/remote-access.md](references/remote-access.md).
 
 ## Repo & ref metadata
 
