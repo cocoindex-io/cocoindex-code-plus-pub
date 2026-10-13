@@ -1114,6 +1114,11 @@ agentQuery:
 - **A refusal is `HTTP 503` with code `agent_query_busy`** and a
   `Retry-After` header of `busyRetryAfterSeconds`. The MCP tool error
   carries the same wait as `retry_after_seconds`, and `ccx ask` prints it.
+- **The rate limit is a separate limit.** `rateLimit.agentQuery` (default 6
+  per minute, burst 2, per pod) bounds how often a caller starts queries;
+  these caps bound how many run at once. Only an admitted query counts
+  against the rate limit: a busy refusal does not, and a query the rate
+  limit refuses (`HTTP 429`) takes no slot.
 
 ##### One API key that runs many queries at once
 
@@ -1132,20 +1137,15 @@ auth:
       agentQuery:
         maxConcurrentRequestsPerPrincipal: 6
 rateLimit:
-  agentQuery: { perPrincipalPerMinute: 30, burst: 6 }
+  agentQuery: { perPrincipalPerMinute: 30, burst: 6 }   # the separate rate limit: starts per minute
 ```
 
 - **Leave headroom for everyone else.** A key whose cap equals
   `maxConcurrentRequests` can hold every slot on a pod. Above, the bot holds
   at most 6 of a pod's 8, so people still get theirs.
-- **Raise the rate limit with it.** Every agentic query is also charged to
-  the per-caller rate class `rateLimit.agentQuery` (default 6 per minute,
-  burst 2, per pod), including one refused as busy. At the defaults, a caller
-  that starts three queries at once gets `HTTP 429` on the third before
-  concurrency matters. Size `burst` to the caller's fan-out.
-- **Keep the stated wait at or above the class's refill interval**, which is
-  60 divided by `perPrincipalPerMinute` seconds. A client that retries on the
-  hint then never draws a `429`.
+- **Check its rate limit as well.** The default burst of 2 lets a caller
+  start only two queries at once, whatever its cap, so a key that starts six
+  at once needs `burst: 6`.
 - **More queries share the same model-call budget.**
   `agentQuery.maxConcurrentModelCalls` (default 8 per pod) bounds outbound
   completions across every running query. Raise it with
