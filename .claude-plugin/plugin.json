@@ -1,0 +1,10 @@
+{
+  "name": "ccx",
+  "displayName": "ccx codebase explorer",
+  "version": "0.1.0",
+  "description": "Routes a coding agent to the ccx code index at the moment it would grep: one context line per agent when the checkout is indexed, plus the ccx-codebase-explorer skill. Needs the ccx CLI on PATH and a login to your deployment.",
+  "author": { "name": "CocoIndex", "url": "https://cocoindex.io" },
+  "homepage": "https://github.com/cocoindex-io/cocoindex-code-plus-pub/blob/main/docs/cli.md",
+  "repository": "https://github.com/cocoindex-io/cocoindex-code-plus-pub",
+  "keywords": ["code-search", "codebase", "symbols", "ccx", "cocoindex"]
+}

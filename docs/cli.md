@@ -154,8 +154,9 @@ ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
 
 # Repo / ref metadata
-ccx git-refs                                     # the current repo's indexed refs + commit shas
+ccx git-refs                                     # the current repo's indexed refs + commit shas (+ where each sits relative to your HEAD)
 ccx git-refs cocoindex-io/cocoindex              # a specific repo ("(default)" marks the default branch)
+ccx indexed                                      # is this checkout indexed, at which commit, and which local files differ from it
 
 # Ask a question and get an answer (if your deployment enables it — see below)
 ccx ask "how does the indexer decide what to re-embed?"
@@ -165,6 +166,34 @@ ccx ask "what changed in the release flow" --git-ref v1.2 --json
 
 `ccx git-refs` lists **git** refs (branches and tags) — not to be confused with
 `ccx refs`, which finds where a *symbol* is used.
+
+**`ccx indexed`** answers the question an agent or a person asks before
+reaching for ccx in a checkout: is this repo indexed, and how far is the index
+from what I have? Exit 0 when it is:
+
+```text
+Indexed: acme/proj at heads/main@1a2b3c4d5e6f (origin/main, 3 commits behind your HEAD)
+  server:  https://ccx.example.com
+  local:   7 files differ locally (`git diff --name-only 1a2b3c4d5e6f` lists them, plus untracked files): grep those; ccx covers the rest.
+  refs:    heads/main@1a2b3c4d5e6f, tags/v1.2@9f8e7d6c5b4a
+  checked: 12 min ago (cached; --refresh asks the server now)
+```
+
+The ref it names is the one a query from that checkout would run against
+(your branch if indexed, else the default branch). The parenthesis says where
+the indexed commit sits relative to your `HEAD`: `your HEAD`, a ref name, a
+verified `HEAD~N`, `N commits behind/ahead of your HEAD`, `diverged`, or `not
+in your clone yet` when you have not fetched it. The `local` line is the
+split that matters on a feature branch: files that differ need local grep,
+everything else is what the index holds. Exit 1 when the server says the repo
+is not indexed (or not visible to you), 2 when it cannot be told (not in a
+git checkout with an `origin` remote, no server configured, server
+unreachable). The answer comes from a local cache (`~/.cache/ccx/indexed.json`)
+that your fetched `origin/*` refs keep honest: a fetch that knows a newer
+commit than the cached one re-asks at once, otherwise the entry lives from a
+minute to an hour depending on how recent the tip is; `--refresh` asks now,
+`--json` emits the facts as one object. `ccx git-refs` for the current repo
+also refreshes it.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
@@ -463,7 +492,31 @@ has been checked against the repositories in question.
   2. **The MCP endpoint** ([below](#mcp-integration)) — its tools sit in the
      agent's tool list on every turn, carrying the same routing guidance from
      the server, so there is nothing to trigger.
-  3. **One line in the repo's agent instructions** (`AGENTS.md` /
+  3. **The Claude Code plugin** — reaches the moment the skill cannot: the
+     agent's own decision to grep in the middle of a task, in subagents too.
+     Its hooks add one line of context, once per agent, when the checkout is
+     indexed: at the first repository-wide grep or `rg` (naming `ccx defs`,
+     `refs`, `search` and `ask` with what each answers, the indexed commit's
+     position relative to `HEAD`, and which local files still need grep); at
+     a grep that found nothing or far too much; and when a session or
+     subagent starts. In a checkout that is not indexed the hooks stay
+     silent. Install it from this repository, which is also a plugin
+     marketplace:
+
+     ```text
+     /plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
+     /plugin install ccx@cocoindex
+     ```
+
+     It needs the `ccx` CLI on `PATH` and a login to your deployment (the
+     hook runs `ccx indexed`; without either it does nothing). The plugin
+     bundles the skill above, so on Claude Code install the plugin *or* the
+     `npx skills add` copy, not both — two listing entries for one skill
+     spend the listing budget twice. The first hook run in a checkout sends
+     that repo's `origin` owner/name and hostname to your server, as any
+     `ccx` command would; see
+     [security.md → The Claude Code plugin's probe](security.md#the-claude-code-plugins-probe).
+  4. **One line in the repo's agent instructions** (`AGENTS.md` /
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
      ```markdown
@@ -472,12 +525,13 @@ has been checked against the repositories in question.
 
      Codex follows such a line at once; Claude Code treats it as a preference
      and still greps first at times.
-  4. **A Claude Code hook**, when it must be enforced: a `UserPromptSubmit`
-     hook whose output is added to every prompt, in `.claude/settings.json`.
-     Word it as a rule that names the commands. Measured on six
-     implementation tasks (Claude Code, Opus 5.5, 2026-10-09): the skill
-     alone put `ccx` first on none; an advisory line ("use the skill before
-     you grep") on two; this rule on all six:
+  5. **A `UserPromptSubmit` hook**, when it must be enforced on every prompt:
+     its output is added to each user prompt, in `.claude/settings.json`
+     (it does not reach subagents; the plugin's hooks do). Word it as a rule
+     that names the commands. Measured on six implementation tasks (Claude
+     Code, Opus 5.5, 2026-10-09): the skill alone put `ccx` first on none; an
+     advisory line ("use the skill before you grep") on two; this rule on all
+     six:
 
      ```json
      {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",

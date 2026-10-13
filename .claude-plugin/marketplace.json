@@ -1,0 +1,14 @@
+{
+  "name": "cocoindex",
+  "owner": { "name": "CocoIndex", "url": "https://cocoindex.io" },
+  "description": "CocoIndex Code Plus: the ccx plugin for Claude Code (hooks that point the agent at the code index, and the ccx-codebase-explorer skill).",
+  "plugins": [
+    {
+      "name": "ccx",
+      "source": ".",
+      "description": "Routes a coding agent to the ccx code index at the moment it would grep: one context line per agent when the checkout is indexed, plus the ccx-codebase-explorer skill.",
+      "category": "development",
+      "tags": ["code-search", "codebase", "symbols"]
+    }
+  ]
+}

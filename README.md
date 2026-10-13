@@ -67,6 +67,23 @@ directory.) If the agent keeps grepping instead of using
 it, [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation)
 lists the levers, from the MCP endpoint to a one-line repo rule and a hook.
 
+## Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace. The `ccx` plugin
+bundles the skill above with hooks that put one line of context in front of
+an agent at the moment it would grep an indexed checkout — including inside
+subagents, which skills never reach:
+
+```text
+/plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
+/plugin install ccx@cocoindex
+```
+
+It needs the `ccx` CLI on `PATH` and a login to your deployment. Install the
+plugin *or* the skill copy above on Claude Code, not both. Details, including
+what the hook sends to your server:
+[docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation).
+
 ## About
 
 CocoIndex Code Plus is built on [CocoIndex](https://cocoindex.io), the real-time
