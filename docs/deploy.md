@@ -326,7 +326,8 @@ config repos until it's fixed; indexing of already-configured repos
 continues) — so the symptom is "my config edits stopped taking effect", not
 an outage or data loss. Use `dir` whenever the repo isn't dedicated.
 
-Each file is a **list** of repo entries, written in YAML:
+Each file is a **list** of repo entries — or of
+[groups](#groups-write-shared-fields-once) of them — written in YAML:
 
 ```yaml
 # configs/acme.yaml — add as many config files as you like; they're merged
@@ -370,13 +371,74 @@ erroring.
 | `max_file_size` | default: `indexer.maxFileSizeBytes`, else 1 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 1 MiB** — a larger value is rejected at parse time (see below) |
 | `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
 | `code_host` | central config repos only | which `codeHosts` instance the repo lives on — see [Central config repo](#central-config-repo) |
+| `repos` | — | makes the item a **group**: a list of entries (or groups) that inherit the item's other fields — see [Groups](#groups-write-shared-fields-once) |
 
 An entry's **provider and instance come from the config repo that declares
 it** — the `codeHosts` entry the repo belongs to — so entries carry neither
 (an entry setting `provider` or `instance` is rejected; in a central config
 repo, `code_host` selects the instance instead). A bad regex or an
 entry missing both `branches` and `tags` fails the config parse with a clear
-error (nothing is indexed) rather than failing mid-index.
+error (nothing is indexed) rather than failing mid-index. So does a field the
+indexer does not know — a typo such as `excluded_pattern` fails the file
+rather than being ignored — and an `included_patterns` / `excluded_patterns`
+value that is not a list of glob strings, or a glob that does not compile.
+Every such error names the file and the entry's position in it
+(`configs/acme.yaml: entry #1 > repos entry #3`), so a value inherited from a
+group is one hop up that path.
+
+### Groups: write shared fields once
+
+An item with a `repos` key is a **group**. Its other fields are inherited by
+every entry (or group) listed under it, so a fleet-wide exclude list, or a
+`branches: main`, is written once per file instead of once per entry:
+
+```yaml
+# configs/acme.yaml
+- excluded_patterns:
+    - "**/{vendor,vendors,Vendor,Vendors,node_modules}/**"
+    - "**/{.env,.env.local,.env.*.local}"
+  repos:
+    - repo_owner: acme
+      branches: main
+      repos:
+        - repo_name: backend
+        - repo_name: payments
+          excluded_patterns: ["!**/vendor/acme-internal/**"] # kept; the rest of vendor/ is still dropped
+    - repo_owner: acme-web
+      excluded_patterns: ["**/dist/**"]
+      repos:
+        - repo_name: site
+          branches: main|release/.*
+```
+
+The rules:
+
+- **The nearer value wins** for every inherited field except
+  `excluded_patterns`, which **accumulate**: an entry's effective list is the
+  group's patterns followed by its own. A path matched by any `!` pattern is
+  indexed, whichever exclude matched it, so an entry takes a path back with
+  `!`. There is no un-setting an inherited value (`null` is the same as
+  leaving the field out); set another value instead.
+- **After inheritance an entry needs `repo_owner`, `repo_name`, and
+  `branches` or `tags`.** Everything else is optional, as before. A file
+  without any `repos` key is a plain list of entries, exactly as above.
+- **A group does not span files.** With several config files, repeat the
+  fleet group in each.
+- **Every field inherits**, including `to_delete`: a group with
+  `to_delete: true` drops every repo under it.
+- **A change takes effect on the next poll**, with no redeploy. Each repo
+  whose effective patterns changed is walked again once, and files that are
+  now excluded leave the index.
+
+Two facts about exclude patterns, worth knowing when writing a fleet list:
+
+- `**/node_modules/**` excludes every file beneath the directory, at any
+  depth, and `!` works anywhere under it. The directory is still listed by
+  the walk, but no file content is fetched, so nothing is embedded or stored.
+- `**/node_modules` with no suffix also prunes the directory from the walk,
+  which is cheapest, but a `!` with wildcards cannot reach inside a pruned
+  directory. Prefer the `/**` form in a fleet list; add the bare form only for
+  trees nobody will take back.
 
 ### File size limits
 
@@ -476,6 +538,8 @@ Notes:
   warm caches.
 - An instance-scoped config repo (the default) **rejects** `code_host` — the
   error points at the `scope: central` setting.
+- `code_host` is set once per [group](#groups-write-shared-fields-once) when
+  every repo under it lives on the same instance.
 
 ## Chart configuration
 
