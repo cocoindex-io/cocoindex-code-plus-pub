@@ -27,11 +27,13 @@ A long file comes back one bounded window at a time; a stderr note says
 ## find-files
 
 ```bash
-ccx find-files "*.py"                                    # paths matching a glob
-ccx find-files "src/**" --case insensitive              # smart (default) | sensitive | insensitive
+ccx find-files "*.py"                                    # every .py at any depth (`*` spans `/`)
+ccx find-files "src/*.py" --case insensitive            # smart (default) | sensitive | insensitive
 ccx find-files --git-ref v1.2                           # every indexed path at that ref, a page at a time
 ```
 
-Several repo-relative globs can be given; `--limit` (default 100) and `--offset`
-page, and a stderr note (`… N total (showing 100)`) means there are more. Useful
-before a `--git-ref`-scoped `read-file`, or to compare paths across refs.
+Several repo-relative globs can be given. `*` spans `/`, so `src/*.py` reaches
+every depth under `src/`; a `**/` segment demands one more directory level and
+misses top-level files. `--limit` (default 100) and `--offset` page, and a stderr
+note (`… N total (showing 100)`) means there are more. Useful before a
+`--git-ref`-scoped `read-file`, or to compare paths across refs.
