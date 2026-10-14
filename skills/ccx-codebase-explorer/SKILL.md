@@ -46,16 +46,20 @@ ccx defs <Name>                       # where is it defined — then paste the r
 ccx refs <Name> --role call           # who calls it
 ccx search "<what the code does>"     # no exact term to grep
 ccx grep '<pattern>' -l <language>    # a syntactic shape
+ccx grep --text '<regex>'             # an exact string or regex anywhere — comments, docs, config too
 ccx ask "<question>"                  # a cited written answer
 ```
 
 Local tools stay the right choice for exactly two things: reading a file that
 is already at hand, and the files you edited or added since the indexed commit
-(the snapshot rule below). A bare identifier is not a reason to grep: as a text
-pattern `ccx grep` with no metavariable floods hits, but the question behind it
-is almost always a *symbol* question — its definition, or its true use sites
-rather than every textual occurrence — and `ccx defs` / `ccx refs` answer that
-where `rg` cannot.
+(the snapshot rule below). A bare identifier is not a reason to grep locally;
+ask which question it stands for. A *symbol* question — its definition, or its
+true use sites rather than every textual occurrence — goes to `ccx defs` /
+`ccx refs`, which answer it where `rg` cannot. A *text* question — an exact
+string, a config key, a log message, a word in a comment or a doc — goes to
+`ccx grep --text`, which searches every file of the indexed repo with no
+language to name. A structural `ccx grep` with no metavariable is neither: it
+floods hits.
 
 ## Repo & ref scoping (applies to every query command)
 
@@ -143,7 +147,8 @@ tools (or, for a ref you don't have checked out, `ccx read-file` — see
 not text — so it ignores formatting and never matches code inside comments.
 Requires `-l/--language`; `--path '<glob>'` narrows (repeatable); `-k`/`--limit`
 (default 100) and `--offset` page, and a truncation note on stderr means there
-are more matches.
+are more matches. (For the text itself — comments and docs included — see
+*Plain-text grep* below.)
 
 ```bash
 ccx grep 'foo(\*)' -l python                  # foo(...) with any arguments: every call, and the def header
@@ -215,6 +220,33 @@ pattern language, verified recipes for common queries, and the gotchas (why
 `try \{{ … \}}` needs the `:`, qualified names, fragment spans), read
 [references/grep-syntax.md](references/grep-syntax.md) before writing non-trivial
 patterns.**
+
+### Plain-text grep: `ccx grep --text`
+
+`--text` makes the pattern a **regular expression matched line by line against
+the text of every file** in the ref — comments, docs, config and languages the
+structural grep cannot parse included — and needs no `-l`. Output is one
+`path:line:text` line per match; the line number is the one `ccx read-file
+--offset` takes.
+
+```bash
+ccx grep --text 'retry_budget'                   # a word or phrase anywhere
+ccx grep --text 'TODO|FIXME' --path 'src/*'      # a regex, scoped by path
+ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l is an optional filter
+```
+
+- **Reach for it when what you know is text**: a string literal, an error
+  message, a config key, a word in a comment or a doc. A symbol's definition
+  or uses → `ccx defs` / `ccx refs`; a code shape → structural `ccx grep`.
+- **Smart case** by default: case-insensitive unless the pattern has an
+  uppercase letter; `--case sensitive|insensitive` forces it. `-w`/`--word`
+  matches whole words only.
+- **Python `re` syntax**: `\b`, `\w`, `\d`, alternation and `(?i)` work as
+  in `rg`; lookarounds and backreferences also work (plain `rg` has neither);
+  `\p{…}` classes do not exist. A plain word needs no escaping.
+- **Cost**: a plain word or phrase is prefiltered in SQL and cheap; a regex
+  with no literal text scans every file of the ref — add `--path` on a large
+  repository, and page with `--offset` when the truncation note appears.
 
 ## Symbol navigation (`ccx defs` / `ccx refs`)
 

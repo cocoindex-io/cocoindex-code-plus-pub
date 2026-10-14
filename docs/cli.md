@@ -137,6 +137,11 @@ ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decora
 ccx grep 'foo(\*)' -l python --git-ref v1.2       # foo(...) with any arguments, at tag v1.2
 ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
+# Plain-text grep (a regex over the text of EVERY file — comments, docs, config; no -l needed)
+ccx grep --text 'retry_budget'                    # a word or phrase anywhere; smart case
+ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (Python re syntax), scoped by path
+ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l is an optional filter
+
 # Symbol navigation: definitions & references (resolved, not text matches)
 ccx defs QueryService                             # where is this symbol DEFINED?
 ccx defs python:db.Repo.find                      # exact qualified name (the ':' selects the mode)
@@ -264,6 +269,18 @@ the whole repo.
 in ast-grep's `$NAME` / `$$$` dialect matches those tokens literally and
 usually finds nothing; the CLI then prints a `warning:` line on stderr showing
 the pattern in ccx's forms (the MCP response carries it as `warnings`).
+
+`ccx grep --text` is the **plain-text** mode: the pattern is a regular
+expression (Python `re` syntax; a plain word works as-is) matched line by line
+against the text of **every** file in the ref — comments, docs, config and
+languages the structural grep cannot parse included — so it needs no `-l`
+(with `--text`, `-l` is an optional, repeatable filter by language). Case is
+**smart** by default (case-insensitive unless the pattern has an uppercase
+letter; `--case sensitive|insensitive` forces it); `-w/--word` matches whole
+words only. Output is one `path:line:text` line per match, ordered by path
+then line; the line number is the one `read-file --offset` takes. A plain word
+is cheap (the server prefilters it in SQL); a regex with no literal text scans
+every file of the ref, so add `--path` on a large repository.
 
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
@@ -596,6 +613,10 @@ and REST API closely (same capabilities, same scoping).
     structural matches (filename, line range, node kind, code, captured metavars),
     plus `warnings` (e.g. a pattern in ast-grep's `$NAME` / `$$$` dialect, which
     ccx matches literally; the warning shows the ccx form).
+  - `text_grep(pattern, repo, git_ref?, paths?, languages?, case?, whole_word?,
+    limit?, offset?)` → plain-text regex matches over every file of the ref
+    (filename, 1-based line, line text), no language named; `case` is `smart`
+    (default) / `sensitive` / `insensitive`.
   - `find_definitions(name, repo, qualified?, git_ref?, kinds?, languages?, paths?,
     limit?, offset?)` → where a symbol is defined (path, span, kind, qualified
     name, `entity_id`); the response's `coverage` states how complete the symbol
