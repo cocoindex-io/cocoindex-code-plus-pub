@@ -34,6 +34,47 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.60 — the indexer no longer reuses config-walk cache entries from before v0.1.54
+
+Nothing is required: upgrade normally. Read on if your indexer crash-loops
+on v0.1.59 with `KeyError: 'fields'`, or if your deployment was first
+installed before v0.1.54 and you want to know what the first pass does.
+
+### What changed
+
+On a deployment installed before v0.1.54 whose config files had not changed
+since, v0.1.59 could crash the indexer at every start:
+
+```
+  File ".../cocoindex_code_plus/indexer/config.py", in parse_repo_configs
+    cfg = entry["fields"]
+KeyError: 'fields'
+```
+
+preceded by `Dir.accept: 1 total | 1 unchanged`. The indexer caches the
+result of reading the config repository, so an unchanged config costs no
+code-host API calls per refresh. v0.1.59 changed what that read produces,
+and a cache entry stored by a release older than v0.1.54 was reused as if it
+were current. v0.1.60 caches only each config file's text, keyed by its git
+blob, and parses every file afresh on each refresh, so a cached entry can
+never disagree with the running release again.
+
+### Upgrade
+
+1. Upgrade the release with the command above, `--version 0.1.60`. No
+   database, values, or CLI change.
+2. The first pass re-reads the config files once (a handful of API calls)
+   and discards the old cache entries. Repositories are not re-indexed.
+3. If the indexer is crash-looping on v0.1.59 and you cannot upgrade yet,
+   change the content of every file in the config directory (a comment line
+   is enough): the indexer starts on the next refresh.
+
+### Verify
+
+The indexer's first startup logs the config read with `Dir.accept: …
+reprocessed` instead of `unchanged`, and the pass proceeds. `ccx status`
+reports the server healthy as before.
+
 ## v0.1.59 — config files reject unknown fields; groups share fields across entries; per-key agentic concurrency; plain-text grep; Java, Go and Kotlin symbols
 
 Nothing is required for a config repo whose entries carry only documented
