@@ -30,6 +30,20 @@ upgrade — then carries on, since login often still works without it. An older
 CLI stays silent, which is why the 0.1.34 floor is still worth checking by
 hand when a login fails.
 
+From **0.1.60 on** you no longer need to watch for releases: the CLI and the
+server release in lockstep, every reply from the server names its release,
+and a CLI that is older prints one line after its output, naming both
+versions and the upgrade command — once a day per server, and again as soon
+as the server moves to a new release:
+
+```text
+ccx 0.1.55 is older than the server (0.1.59); they release in lockstep. Upgrade: uv tool install -U cocoindex-code-plus
+```
+
+`ccx status` always shows the comparison on its `cli:` line. A CLI newer
+than the server is never nagged, and the check never consults PyPI: the
+right version is your deployment's, not the newest published one.
+
 Driving `ccx` from a coding agent? Install the **agent skill** too — see
 [For agents & automation](#for-agents--automation).
 
@@ -58,7 +72,10 @@ ccx status        # server reachable + healthy (and which one), then the credent
 
 `ccx status` reports two facts, separately. The server block — reachable and
 healthy, the URL it resolved and where that came from, version, uptime — is
-probed with no credential (`/health` is auth-exempt). The last line is the
+probed with no credential (`/health` is auth-exempt), then a `cli:` line
+says how this CLI's version stands to the server's (`matches the server`,
+`newer than the server`, or the warning `older than the server` with the
+upgrade command). The last line is the
 **credential** your next request would use: a cached login (`valid`, or
 `expired and could not be refreshed` with the fix named), `CCX_API_TOKEN`, or
 `none`. That line describes the credential; it does not test it — a token the
@@ -475,6 +492,7 @@ has been checked against the repositories in question.
 | IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin ([sso.md → Verifying before rollout](sso.md#verifying-before-rollout) ends with the per-IdP error table). |
 | login prompts for a client id on an SSO server, or Entra fails with `AADSTS901002` despite `resourceIndicator: false` | Your `ccx` predates server-advertised login settings — upgrade to 0.1.34+: `uv tool install -U cocoindex-code-plus`. |
 | `ccx login` warns about login settings it doesn't recognise | The server advertises a setting this CLI is too old to use. Upgrade: `uv tool install -U cocoindex-code-plus`. Login may still succeed meanwhile. |
+| a command ends with `ccx <version> is older than the server (<version>)`, or `ccx status` shows `cli: … older than the server` | Your deployment moved to a new release; the CLI and the server release in lockstep. Upgrade: `uv tool install -U cocoindex-code-plus` (and refresh the agent skill, [below](#for-agents--automation)). The line repeats once a day until you do. |
 
 ## For agents & automation
 
