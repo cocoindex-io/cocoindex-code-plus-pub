@@ -203,7 +203,7 @@ also refreshes it.
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
 alias- and re-export-aware — not from text matching. It covers **Python,
-TypeScript/JavaScript (incl. TSX), C/C++, C#, and Rust**; other languages
+TypeScript/JavaScript (incl. TSX), C/C++, C#, Rust, Java, Go, and Kotlin**; other languages
 remain reachable via `search` and `grep`. The two verbs chain: each `ccx defs`
 row ends with a paste-ready command —
 
@@ -284,9 +284,10 @@ languages the structural grep cannot parse included — so it needs no `-l`
 **smart** by default (case-insensitive unless the pattern has an uppercase
 letter; `--case sensitive|insensitive` forces it); `-w/--word` matches whole
 words only. Output is one `path:line:text` line per match, ordered by path
-then line; the line number is the one `read-file --offset` takes. A plain word
-is cheap (the server prefilters it in SQL); a regex with no literal text scans
-every file of the ref, so add `--path` on a large repository.
+then line; the line number is the one `read-file --offset` takes. A pattern
+with literal text in it is cheap (the server prefilters on that text in SQL);
+one with none — `.*`, a character class alone — scans every file of the ref,
+so add `--path` on a large repository.
 
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.

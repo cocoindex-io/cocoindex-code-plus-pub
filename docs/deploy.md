@@ -891,7 +891,8 @@ and the rest once their first pass is done.
 Alongside the vector index, the indexer builds a **resolved symbol graph** per
 indexed git ref — it backs `ccx defs` / `ccx refs` and the MCP
 `find_definitions` / `find_references` tools ([cli.md](cli.md)). Covered
-languages: Python, TypeScript/JavaScript (incl. TSX), C/C++, C#, Rust; other
+languages: Python, TypeScript/JavaScript (incl. TSX), C/C++, C#, Rust, Java,
+Go, Kotlin; other
 languages are still searchable, they just have no symbol graph. Operational
 notes:
 
