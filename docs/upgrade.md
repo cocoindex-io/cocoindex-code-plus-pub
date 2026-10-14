@@ -32,15 +32,33 @@ and the symptoms of a CLI that is too old).
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.59 — config files reject unknown fields; groups share fields across entries; per-key agentic concurrency
+## v0.1.59 — config files reject unknown fields; groups share fields across entries; per-key agentic concurrency; plain-text grep; Java, Go and Kotlin symbols
 
 Nothing is required for a config repo whose entries carry only documented
-fields: upgrade normally, and upgrade the `ccx` CLI with it. Read on if a
-config file might carry a field the indexer does not define, because that
-file now fails; if an API key runs many agentic queries at once; or if
-Insights' agentic query counts for recent days change after the upgrade.
+fields: upgrade normally, and upgrade the `ccx` CLI with it. The first
+indexer pass after the upgrade walks every repository again and resolves
+every symbol again. Read on if a config file might carry a field the indexer
+does not define, because that file now fails; if an API key runs many
+agentic queries at once; or if Insights' agentic query counts for recent
+days change after the upgrade.
 
 ### What changed
+
+- **`ccx grep --text` searches the text of every file.** A regular
+  expression, or a plain word, matched line by line against every file in
+  the ref — comments, docs, config and languages the structural grep cannot
+  parse included — with no `-l` to pass; smart case by default, `-w` for
+  whole words, one `path:line:text` line per match. The MCP server offers it
+  as `text_grep`, and `ccx ask` uses the same tool
+  ([cli.md → the quick reference](cli.md#quick-reference)).
+- **Java, Go and Kotlin symbols.** `ccx defs` / `ccx refs` and the MCP
+  `find_definitions` / `find_references` tools cover `.java`, `.go` (with
+  `go.mod`) and `.kt` files. Their qualified names open with `java:`, `go:`
+  and `kotlin:`; a Go name carries its package directory
+  (`go:internal/store:Store.Fetch`).
+- **C# lookups are more accurate.** A name declared in an enclosing
+  namespace now wins over one a `using` directive brings in at the same
+  level, and `this.member` resolves to the enclosing type's member.
 
 - **An unknown field in a config entry is an error.** A config file with a
   field the indexer does not know — a typo such as `excluded_pattern`, or a
@@ -84,6 +102,18 @@ Insights' agentic query counts for recent days change after the upgrade.
   Their agentic query counts drop by the busy refusals they included;
   older days keep their counts.
 
+### The first pass after the upgrade
+
+- **It walks every repository again.** It reads every file from the code
+  host and parses it again, symbol extraction included, so Java, Go and
+  Kotlin files gain their symbols. The pass takes longer than a usual one
+  and uses more code-host API quota
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes)).
+  Nothing is re-embedded.
+- **Every ref's symbol step resolves every module again**, because the
+  resolver's behavior changed for every language; that step takes about as
+  long as it did on the initial pass.
+
 ### During the rollout
 
 Old and new pods each apply their own rules, so a refusal on an old pod
@@ -108,6 +138,12 @@ field to fix.
 Start three `ccx ask` questions at once under one caller with the default
 cap: two answer, and the third fails at once with
 `[agent_query_busy] … (retry in 10s)`.
+
+`ccx grep --text 'TODO' --path 'docs/*'` prints matching lines from
+Markdown files. In a repository with Java, Go or Kotlin code, `ccx defs
+<ClassName>` returns a `java:` / `go:` / `kotlin:` qualified name once that
+repository's pass completes; each ref's symbol step logs `resolving N of N
+modules` on that pass.
 
 
 ## v0.1.58 — follow-up questions continue a stored answer

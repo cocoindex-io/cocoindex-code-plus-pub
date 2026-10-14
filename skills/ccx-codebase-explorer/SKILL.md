@@ -29,7 +29,7 @@ tools reach only after a chain of greps:
 - **Symbol navigation** — "where is `X` defined?", "who calls / imports / uses
   `X`?": a **resolved** cross-file answer (alias- and re-export-aware, not a
   text match) → `ccx defs` / `ccx refs`. Covers Python, TS/JS (incl. TSX), C/C++,
-  C#, and Rust.
+  C#, Rust, Java, Go, and Kotlin.
 - **Large / remote / multi-repo corpus** — the repo isn't checked out locally,
   you need a branch or tag other than your checkout, or the question spans
   several indexed repos (`--repo`, repeatable for `search` and `ask`;
@@ -244,16 +244,17 @@ ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l i
 - **Python `re` syntax**: `\b`, `\w`, `\d`, alternation and `(?i)` work as
   in `rg`; lookarounds and backreferences also work (plain `rg` has neither);
   `\p{…}` classes do not exist. A plain word needs no escaping.
-- **Cost**: a plain word or phrase is prefiltered in SQL and cheap; a regex
-  with no literal text scans every file of the ref — add `--path` on a large
-  repository, and page with `--offset` when the truncation note appears.
+- **Cost**: a pattern with literal text in it is prefiltered in SQL and cheap;
+  one with none (`.*`, a class alone) scans every file of the ref — add
+  `--path` on a large repository, and page with `--offset` when the truncation
+  note appears.
 
 ## Symbol navigation (`ccx defs` / `ccx refs`)
 
 Where is a symbol **defined**, and who **uses** it — answered from a resolved
 symbol graph (cross-file, alias- and re-export-aware), not from text matching.
-Covers **Python, TS/JS incl. TSX, C/C++, C#, and Rust**; for other languages
-fall back to `grep`/`search`.
+Covers **Python, TS/JS incl. TSX, C/C++, C#, Rust, Java, Go, and Kotlin**; for
+other languages fall back to `grep`/`search`.
 
 ```bash
 ccx defs QueryService                        # definitions of the base name
