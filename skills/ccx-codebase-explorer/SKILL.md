@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself in the middle of an implementation task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented; code matching a concept with no exact term to grep; code with a particular syntactic shape; how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, or to read several files to see how something works; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 metadata:
-  ccx-skill-revision: "2026-10-14"
+  ccx-skill-revision: "2026-10-14.2"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -389,10 +389,20 @@ What it costs: `ask` runs seconds to minutes, where `search`, `grep`, `defs`
 and `refs` answer in a second or two — so when the deliverable is a **location
 or code to read** (which file to change, where a symbol lives, its call
 sites), stay with those. Run one `ask` at a time (the server caps concurrent
-agentic requests), and do not wrap it in a shell `timeout` — the server
-enforces its own deadline (ten minutes by default, twenty at `--effort high`);
-if your own command runner has a shorter limit, raise it or run the call in the
-background.
+agentic requests).
+
+**Where to run it.** `ask` is the one command that takes minutes, so decide
+where it runs before you start it. Start it in the background when you have
+work the answer does not gate and your harness wakes you when it finishes
+(Claude Code: `run_in_background: true` on the Bash call); keep working or end
+your turn, then read the answer from the completion notice. Otherwise run it
+in the foreground and wait. In a subagent or a one-shot run, where ending your
+turn ends your run, always the foreground, with the longest timeout your
+runner allows: a background command dies with the run. Never wrap it in a
+shell `timeout` or stop it: the server enforces its own deadline (ten minutes
+by default, twenty at `--effort high`) and cancels the investigation the
+moment the client disconnects, keeping nothing, so a stopped `ask` starts
+over.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and

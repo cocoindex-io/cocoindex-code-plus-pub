@@ -345,7 +345,12 @@ Things to expect:
 - **It is slower.** The agent runs many reads before answering — seconds to a
   couple of minutes for a broad question, up to the effort level's deadline
   (10 min by default, 20 min at `--effort high`). Reach for `ccx search`/`grep`
-  when you know what you're looking for, and `ccx ask` when you don't.
+  when you know what you're looking for, and `ccx ask` when you don't. Let it
+  finish: stopping the command, or a harness timeout that kills it, cancels
+  the investigation on the server and keeps nothing of it, so the next ask
+  starts over. A coding agent should start it in the background where its
+  harness can wake it on completion; the [skill](#for-agents--automation)
+  carries the rule, and the Claude Code plugin states it to each agent.
 - **It may be turned off.** It is off unless your deployment enables it,
   because answering requires sending your question and the code the agent
   reads to a model provider. When it's off the command exits non-zero with
@@ -549,7 +554,10 @@ has been checked against the repositories in question.
      `refs`, `search` and `ask` with what each answers, the indexed commit's
      position relative to `HEAD`, and which local files still need grep); at
      a grep that found nothing or far too much; and when a session or
-     subagent starts. In a checkout that is not indexed the hooks stay
+     subagent starts, where the line also says how to run `ccx ask` there
+     (in the background from the main conversation; in the foreground with
+     the full ten-minute timeout from a subagent, whose run ending would end
+     a background command). In a checkout that is not indexed the hooks stay
      silent. Install it from this repository, which is also a plugin
      marketplace:
 
@@ -693,7 +701,13 @@ and REST API closely (same capabilities, same scoping).
     unless the deployment enables the feature** (answering sends the question
     and the code read to a model provider). It also runs far longer than the
     other tools — up to the effort level's deadline, 600 s by default and
-    1200 s at `effort: "high"` — so give the client a generous timeout. Prefer
+    1200 s at `effort: "high"` — so give the client a generous timeout. In
+    Claude Code that is a `timeout` field in milliseconds beside `url` in
+    the server's `.mcp.json` entry (`"timeout": 1200000`); it also keeps
+    Claude Code's idle timeout, five minutes without a response from a
+    network server, from aborting a call while the agent investigates (the
+    tool reports no progress meanwhile). A main-conversation call still
+    running after two minutes moves to a background task on its own. Prefer
     it for open-ended "how/why" questions and the typed tools above for
     targeted lookups. `effort` takes the same `low` / `medium` / `high` as
     `--effort`. The response always carries `completion`: a `forced_turns` or
