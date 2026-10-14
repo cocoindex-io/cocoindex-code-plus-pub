@@ -22,7 +22,9 @@ the restart; the query server keeps serving), so pin `<X.Y.Z>` deliberately.
 Versioning is lockstep: the chart, the images, and the `ccx` CLI share one
 version number. Upgrade the CLI alongside the server
 (`uv tool install -U cocoindex-code-plus`; [cli.md](cli.md) has the details
-and the symptoms of a CLI that is too old).
+and the symptoms of a CLI that is too old). From 0.1.60 on the CLI tells its
+users itself: after the server upgrade, the next command of an older CLI
+prints the upgrade command, so no announcement is needed for the CLI.
 
 ## Reading the entries
 
