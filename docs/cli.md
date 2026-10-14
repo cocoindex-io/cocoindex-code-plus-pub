@@ -162,6 +162,7 @@ ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l 
 # Symbol navigation: definitions & references (resolved, not text matches)
 ccx defs QueryService                             # where is this symbol DEFINED?
 ccx defs python:db.Repo.find                      # exact qualified name (the ':' selects the mode)
+ccx defs lookup:withDefault:                      # an Objective-C method: its full selector
 ccx defs Config --kind class --lang python        # filter by kind / language / --path
 ccx refs QueryService                             # where is it USED? (by name, broad)
 ccx refs python:db.Repo.find                      # every use of this exact qualified name
@@ -220,7 +221,7 @@ also refreshes it.
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
 alias- and re-export-aware — not from text matching. It covers **Python,
-TypeScript/JavaScript (incl. TSX), C/C++, C#, Rust, Java, Go, and Kotlin**; other languages
+TypeScript/JavaScript (incl. TSX), C/C++, Objective-C, C#, Rust, Java, Go, and Kotlin**; other languages
 remain reachable via `search` and `grep`. The two verbs chain: each `ccx defs`
 row ends with a paste-ready command —
 
