@@ -34,13 +34,31 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.60 — the indexer no longer reuses config-walk cache entries from before v0.1.54
+## v0.1.60 — Objective-C symbols; the indexer no longer reuses config-walk cache entries from before v0.1.54
 
-Nothing is required: upgrade normally. Read on if your indexer crash-loops
-on v0.1.59 with `KeyError: 'fields'`, or if your deployment was first
-installed before v0.1.54 and you want to know what the first pass does.
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it
+(an older one looks up an Objective-C method's name as a qualified name and
+finds nothing). The first indexer pass after the upgrade walks every
+repository again and resolves every symbol again. Read on if your indexer
+crash-loops on v0.1.59 with `KeyError: 'fields'`, or if your deployment was
+first installed before v0.1.54.
 
-### What changed
+### Objective-C symbols
+
+- **`ccx defs` / `ccx refs` and the MCP `find_definitions` /
+  `find_references` tools cover Objective-C**: `.m` files, and `.h` headers
+  written in Objective-C. Objective-C++ (`.mm`) is not covered yet.
+- **Names share C/C++'s `cpp:` tag**, since Objective-C code calls the C
+  functions its headers declare. A class's `@interface`, `@implementation`
+  and categories are one class.
+- **A method is named by its full selector**, and that is the name to look
+  up: `ccx defs formatCents:withSymbol:` finds
+  `cpp:Wallet.formatCents:withSymbol:`. `formatCents` alone finds nothing.
+- **C/C++ lookups are more accurate.** A class forward-declared in several
+  headers answers once, and a method a class inherits resolves to the
+  base's out-of-line definition, not only to its declaration in the header.
+
+### The config read on deployments installed before v0.1.54
 
 On a deployment installed before v0.1.54 whose config files had not changed
 since, v0.1.59 could crash the indexer at every start:
@@ -59,13 +77,25 @@ were current. v0.1.60 caches only each config file's text, keyed by its git
 blob, and parses every file afresh on each refresh, so a cached entry can
 never disagree with the running release again.
 
+### The first pass after the upgrade
+
+- **It walks every repository again.** It reads every file from the code
+  host and parses it again, symbol extraction included, so Objective-C files
+  gain their symbols. The pass takes longer than a usual one and uses more
+  code-host API quota
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes)).
+  Nothing is re-embedded.
+- **Every ref's symbol step resolves every module again**, because the
+  resolver's behavior changed; that step takes about as long as it did on
+  the initial pass.
+- **It re-reads the config files once** (a handful of API calls) and
+  discards the old config cache entries.
+
 ### Upgrade
 
-1. Upgrade the release with the command above, `--version 0.1.60`. No
-   database, values, or CLI change.
-2. The first pass re-reads the config files once (a handful of API calls)
-   and discards the old cache entries. Repositories are not re-indexed.
-3. If the indexer is crash-looping on v0.1.59 and you cannot upgrade yet,
+1. Upgrade the release with the command above, `--version 0.1.60`, and the
+   `ccx` CLI with it. No database or values change.
+2. If the indexer is crash-looping on v0.1.59 and you cannot upgrade yet,
    change the content of every file in the config directory (a comment line
    is enough): the indexer starts on the next refresh.
 
@@ -74,6 +104,11 @@ never disagree with the running release again.
 The indexer's first startup logs the config read with `Dir.accept: …
 reprocessed` instead of `unchanged`, and the pass proceeds. `ccx status`
 reports the server healthy as before.
+
+In a repository with Objective-C code, `ccx defs <ClassName>` returns a
+`cpp:` qualified name with an `.m` or `.h` path once that repository's pass
+completes; each ref's symbol step logs `resolving N of N modules` on that
+pass.
 
 ## v0.1.59 — config files reject unknown fields; groups share fields across entries; per-key agentic concurrency; plain-text grep; Java, Go and Kotlin symbols
 
