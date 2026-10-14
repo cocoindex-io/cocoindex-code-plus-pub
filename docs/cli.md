@@ -510,7 +510,13 @@ has been checked against the repositories in question.
   first run Claude Code starts unticked.
 
   (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
-  `~/.claude/skills/ccx-codebase-explorer`.) Installed before 2026-09-05? The
+  `~/.claude/skills/ccx-codebase-explorer`.) From **0.1.60 on** the CLI says
+  when that copy is older than the one it shipped with — one line after a
+  command's output, once a day, naming the update command — and `ccx status`
+  lists the copy it found (the skills CLI's `~/.agents/skills`, or a hand copy
+  under `~/.claude/skills` or `~/.codex/skills`) with its revision. A copy
+  installed before the skill carried a revision counts as older.
+  Installed before 2026-09-05? The
   skill was named `ccx` then and counts as a separate entry — remove it first,
   which also cleans its links in every agent's skills directory:
 
@@ -560,6 +566,19 @@ has been checked against the repositories in question.
      that repo's `origin` owner/name and hostname to your server, as any
      `ccx` command would; see
      [security.md → The Claude Code plugin's probe](security.md#the-claude-code-plugins-probe).
+
+     **Updates.** The plugin's manifest pins no version, so Claude Code
+     treats every change to this repository as a new plugin version — but
+     fetches it only when you ask (`/plugin marketplace update cocoindex`)
+     or when auto-update is on for the marketplace, which it is not by
+     default for a marketplace you added yourself. Turn it on once: `/plugin`
+     → **Marketplaces** → `cocoindex` → **Enable auto-update** (an admin can
+     set `"autoUpdate": true` on the marketplace's `extraKnownMarketplaces`
+     entry in managed settings instead). Claude Code then refreshes the
+     plugin shortly after a session's first message and offers
+     `/reload-plugins`. Either way, from `ccx` 0.1.60 on the hook tells you,
+     as a warning in the session once a day, when the installed plugin is
+     older than your CLI expects.
   4. **One line in the repo's agent instructions** (`AGENTS.md` /
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 

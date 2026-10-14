@@ -45,10 +45,11 @@ npx skills add cocoindex-io/cocoindex-code-plus-pub -g -y
 Keep the `-y`: without it the CLI asks which agents to install to, and on a
 first run Claude Code starts unticked.
 
-Update later with `npx skills update ccx-codebase-explorer -g`. Without the CLI,
-copy the self-contained `skills/ccx-codebase-explorer/` folder to
-`~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your agent's skills
-directory.
+Update later with `npx skills update ccx-codebase-explorer -g` — the `ccx`
+CLI says when the installed copy is older than the one it shipped with.
+Without the CLI, copy the self-contained `skills/ccx-codebase-explorer/`
+folder to `~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your
+agent's skills directory.
 
 The skill teaches only what an agent acts on — which command to run and how to
 read its output. Setup, login and operator guidance live in
@@ -80,8 +81,11 @@ subagents, which skills never reach:
 ```
 
 It needs the `ccx` CLI on `PATH` and a login to your deployment. Install the
-plugin *or* the skill copy above on Claude Code, not both. Details, including
-what the hook sends to your server:
+plugin *or* the skill copy above on Claude Code, not both. Updates reach you
+when you run `/plugin marketplace update cocoindex`, or on their own once you
+enable auto-update for the `cocoindex` marketplace under `/plugin` →
+Marketplaces; the hook warns in the session when the plugin is older than
+your `ccx` expects. Details, including what the hook sends to your server:
 [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation).
 
 ## About
