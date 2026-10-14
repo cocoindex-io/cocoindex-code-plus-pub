@@ -14,6 +14,9 @@ Only `-l/--language` is required; repo and ref are auto-detected like every quer
 command. Running from a *subdirectory* of a checkout defaults `--path` to that
 subtree (pass `--path '*'` for the whole repo).
 
+`ccx grep --text '<regex>'` is a different mode — plain text over every file, no
+`-l` (SKILL.md § Plain-text grep); nothing below applies to it.
+
 ---
 
 ## The mental model — read this first
