@@ -285,9 +285,11 @@ languages the structural grep cannot parse included — so it needs no `-l`
 letter; `--case sensitive|insensitive` forces it); `-w/--word` matches whole
 words only. Output is one `path:line:text` line per match, ordered by path
 then line; the line number is the one `read-file --offset` takes. A pattern
-with literal text in it is cheap (the server prefilters on that text in SQL);
-one with none — `.*`, a character class alone — scans every file of the ref,
-so add `--path` on a large repository.
+with literal text in it is cheap: the server prefilters on that text in SQL,
+and reads only the files holding it when the deployment has the
+[text search index](deploy.md#text-search-index); one with none — `.*`, a
+character class alone — scans every file of the ref, so add `--path` on a
+large repository.
 
 `--offset` differs by command: for `read-file` it's a **1-based line number**; for
 `grep` and `find-files` it's a **skip count** for paginating results.
