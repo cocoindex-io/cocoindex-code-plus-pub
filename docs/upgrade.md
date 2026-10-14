@@ -40,7 +40,8 @@ indexer pass after the upgrade walks every repository again and resolves
 every symbol again. Read on if a config file might carry a field the indexer
 does not define, because that file now fails; if an API key runs many
 agentic queries at once; or if Insights' agentic query counts for recent
-days change after the upgrade.
+days change after the upgrade. Optional: give the database the `pg_trgm`
+extension and `ccx grep --text` gets an index.
 
 ### What changed
 
@@ -51,6 +52,15 @@ days change after the upgrade.
   whole words, one `path:line:text` line per match. The MCP server offers it
   as `text_grep`, and `ccx ask` uses the same tool
   ([cli.md → the quick reference](cli.md#quick-reference)).
+- **A trigram index speeds up `ccx grep --text`** when the database has the
+  `pg_trgm` extension: the indexer builds it over every indexed file's text
+  at the end of its next pass, and a pattern with a distinctive literal then
+  reads only the files holding it instead of scanning the ref. The bundled
+  Postgres gets the extension on a fresh volume; an external database or an
+  existing bundled volume gets it with one statement, after which the
+  indexer needs a restart —
+  [deploy.md → Text search index](deploy.md#text-search-index). Without the
+  extension nothing changes except a startup log line naming the statement.
 - **Java, Go and Kotlin symbols.** `ccx defs` / `ccx refs` and the MCP
   `find_definitions` / `find_references` tools cover `.java`, `.go` (with
   `go.mod`) and `.kt` files. Their qualified names open with `java:`, `go:`
@@ -113,6 +123,9 @@ days change after the upgrade.
 - **Every ref's symbol step resolves every module again**, because the
   resolver's behavior changed for every language; that step takes about as
   long as it did on the initial pass.
+- **With `pg_trgm` installed, the pass ends by building the text search
+  index**: about 100 seconds per gigabyte of indexed text, and about 8% of
+  that text's size in disk.
 
 ### During the rollout
 
@@ -140,7 +153,10 @@ cap: two answer, and the third fails at once with
 `[agent_query_busy] … (retry in 10s)`.
 
 `ccx grep --text 'TODO' --path 'docs/*'` prints matching lines from
-Markdown files. In a repository with Java, Go or Kotlin code, `ccx defs
+Markdown files. With `pg_trgm` installed, the indexer's startup log has no
+`pg_trgm extension not installed` line, and after its pass the database has
+an index named `file_body_body_trgm` in the index schema (`ccx` by default).
+In a repository with Java, Go or Kotlin code, `ccx defs
 <ClassName>` returns a `java:` / `go:` / `kotlin:` qualified name once that
 repository's pass completes; each ref's symbol step logs `resolving N of N
 modules` on that pass.

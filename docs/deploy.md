@@ -646,8 +646,9 @@ GRANT pg_read_all_data TO cocoindex_server;   -- covers current and future table
 and point `database.target.queryUrl` (or `queryExistingSecret`, key
 `CCX_TARGET_DB_URL`) at its DSN. Left unconfigured on an external DB, the
 query server falls back to the writer credential. Also run
-`CREATE EXTENSION pg_prewarm;` at provisioning (see
-[Postgres memory sizing](#postgres-memory-sizing)).
+`CREATE EXTENSION pg_prewarm;` and `CREATE EXTENSION pg_trgm;` at
+provisioning (see [Postgres memory sizing](#postgres-memory-sizing) and
+[Text search index](#text-search-index)).
 
 **Then run the one-time role setup** — two statements, once, as the database
 admin. They are everything a deployment ever needs in the database beyond the
@@ -779,6 +780,31 @@ seconds. Rules of thumb:
   database run `CREATE EXTENSION pg_prewarm;` once as the provisioning user
   (the query server itself never runs DDL, and just skips prewarm with a log
   hint when the extension is absent).
+
+### Text search index
+
+`ccx grep --text` narrows its scan by the literal text in the pattern. With
+the **`pg_trgm` extension** in the database, the indexer keeps a trigram index
+on every indexed file's text, and a pattern with a distinctive literal reads
+only the files holding it: milliseconds, where a scan of every file in the
+ref costs about two seconds per gigabyte of text (five times that for a
+case-insensitive pattern). Without the extension `ccx grep --text` works and
+scans, and the indexer logs `pg_trgm extension not installed` at startup with
+the statement to run.
+
+- **Bundled Postgres** creates the extension on first init. A bundled volume
+  from before v0.1.59: run `CREATE EXTENSION pg_trgm;` once in the bundled
+  database as its superuser.
+- **External / Cloud SQL:** run `CREATE EXTENSION pg_trgm;` once as the
+  provisioning user, with the other extensions
+  ([Production Postgres](#production-postgres-cloud-sql--external)). Neither
+  workload credential creates extensions.
+- **The indexer builds the index at the end of its first pass after it finds
+  the extension** — restart the indexer after installing it on a running
+  deployment — at about 100 seconds per gigabyte of indexed text, and
+  maintains it as files change. Budget about **8% of the indexed text's
+  size** in disk for the index. Writing a file's text costs about twenty
+  times more with the index than without, a small share of a pass.
 
 ### Indexer memory sizing
 
