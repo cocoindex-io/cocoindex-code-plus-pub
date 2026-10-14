@@ -629,12 +629,17 @@ and REST API closely (same capabilities, same scoping).
     index is for the ref, and `warnings` explains a miss on a member written
     with its qualifier (e.g. `Repo.find` or `Store::fetch`; the warning names the
     base name to look up instead).
-  - `find_references(repo, path?+entity_id?|base_name, git_ref?, roles?,
-    include_unresolved?, limit?, offset?)` → where a symbol is used — exact
-    target (`path` + `entity_id` from `find_definitions`) or by `base_name`;
-    rows carry `resolution` (`resolved` / `ambiguous` / `name_only`) and a
-    reference role (`roles` filters on those, a different vocabulary from
-    `find_definitions.kinds`), plus the same `coverage`.
+  - `find_references(repo, path?+entity_id?|qualified_name?|base_name?, git_ref?,
+    roles?, include_unresolved?, limit?, offset?)` → where a symbol is used —
+    one exact definition (`path` + `entity_id` from `find_definitions`), every
+    occurrence under a pack-tagged `qualified_name` (e.g. `python:db.Repo.find`),
+    or by `base_name`; rows carry `resolution` (`resolved` / `ambiguous` /
+    `name_only`) and a reference role (`roles` filters on those, a different
+    vocabulary from `find_definitions.kinds`), plus the same `coverage`. A
+    target that matches no definition fails with `target_not_found`; when a
+    `qualified_name` lacks its pack tag (e.g. `Store::fetch`), the error names
+    the base name to look up with `find_definitions` (`suggested_base_name` in
+    its metadata) and says to pass a result's `path` + `entity_id`.
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
