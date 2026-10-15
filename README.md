@@ -45,8 +45,9 @@ npx skills add cocoindex-io/cocoindex-code-plus-pub -g -y
 Keep the `-y`: without it the CLI asks which agents to install to, and on a
 first run Claude Code starts unticked.
 
-Update later with `npx skills update ccx-codebase-explorer -g` — the `ccx`
-CLI says when the installed copy is older than the one it shipped with.
+Update later with `npx skills update ccx-codebase-explorer -g` — the skill's
+own first step asks `ccx` whether the copy in use is current, and the agent
+relays the update line when it is not.
 Without the CLI, copy the self-contained `skills/ccx-codebase-explorer/`
 folder to `~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your
 agent's skills directory.
