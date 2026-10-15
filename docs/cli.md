@@ -516,12 +516,12 @@ has been checked against the repositories in question.
   first run Claude Code starts unticked.
 
   (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
-  `~/.claude/skills/ccx-codebase-explorer`.) From **0.1.60 on** the CLI says
-  when that copy is older than the one it shipped with — one line after a
-  command's output, once a day, naming the update command — and `ccx status`
-  lists the copy it found (the skills CLI's `~/.agents/skills`, or a hand copy
-  under `~/.claude/skills` or `~/.codex/skills`) with its revision. A copy
-  installed before the skill carried a revision counts as older.
+  `~/.claude/skills/ccx-codebase-explorer`.) The skill checks itself: its
+  first step has the agent run `ccx skill-check <revision>` with the revision
+  the copy carries, and from **0.1.61 on** the CLI prints one update line, once
+  a day, when that copy is older than the one it shipped with — on every host
+  that runs the skill, Codex included. The agent relays the line; nothing is
+  updated behind your back, and nothing scans your skill directories.
   Installed before 2026-09-05? The
   skill was named `ccx` then and counts as a separate entry — remove it first,
   which also cleans its links in every agent's skills directory:
@@ -587,7 +587,9 @@ has been checked against the repositories in question.
      plugin shortly after a session's first message and offers
      `/reload-plugins`. Either way, from `ccx` 0.1.60 on the hook tells you,
      as a warning in the session once a day, when the installed plugin is
-     older than your CLI expects.
+     older than your CLI expects. If you moved to the plugin from a skills
+     CLI install, remove that copy (`npx skills remove
+     ccx-codebase-explorer -g`) so Claude Code lists the skill once.
   4. **One line in the repo's agent instructions** (`AGENTS.md` /
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
