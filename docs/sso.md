@@ -347,6 +347,14 @@ is one realm's configuration):
   so verify with a fresh `ccx login` rather than a refresh, and expect
   everyone already signed in to pick the new bound up at their next login.
 - Keycloak stamps `typ: JWT`, not `at+jwt` — leave `requireTypAtJwt: false`.
+- **Expose only what sign-in uses.** Route `/realms/<realm>/`, `/resources/`,
+  and `/.well-known/oauth-authorization-server/realms/<realm>` through your
+  ingress, and nothing else: `ccx login`, the token refresh, and the server's
+  key fetch need no other path. Keep `/admin/` and the `master` realm
+  internal, as Keycloak's own
+  [reverse-proxy guidance](https://www.keycloak.org/server/reverseproxy)
+  recommends — exposed, the master realm's token endpoint lets anyone try
+  passwords against your Keycloak administrators.
 
 **Helm values this produces:**
 

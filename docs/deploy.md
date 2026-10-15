@@ -1505,6 +1505,7 @@ queryServer:
     annotations:
       networking.gke.io/managed-certificates: ccx-cert
       kubernetes.io/ingress.global-static-ip-name: ccx-ip
+      kubernetes.io/ingress.allow-http: "false"   # step 4 — add once the cert is Active
   publicUrl: https://ccx.example.com   # must match `host` (origin-only)
 ```
 
@@ -1531,6 +1532,16 @@ Provisioning is asynchronous: the certificate reports `FailedNotVisible` until
 the A record is publicly resolvable, then flips to `Active` — typically 15–60
 minutes after DNS propagates. Check with
 `kubectl describe managedcertificate ccx-cert`.
+
+4. **Close port 80 once the certificate is `Active`**, with the
+   `kubernetes.io/ingress.allow-http: "false"` annotation above. The load
+   balancer otherwise answers plain HTTP too, so a client configured with an
+   `http://` URL sends its bearer token in clear. An http→https redirect would
+   not prevent that — the first request, credential included, is already
+   sent; with no port-80 listener the client fails to connect instead.
+   Leave the annotation out of the first install: GKE accepts it beside a
+   managed certificate only once the load balancer is programmed.
+   Certificate renewal needs port 443 only.
 
 **Browser-based MCP clients.** `/mcp` validates the `Origin` header (required
 by the MCP transport spec): a request carrying an `Origin` that isn't
@@ -2309,6 +2320,49 @@ Search keeps serving the last completed index meanwhile.
 **Upgrading from v0.1.44 or earlier**, where everything but the access log went
 to standard error and collectors stamped the lot `ERROR`: see
 [upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
+
+### Alerting
+
+**A Ready pod does not prove a working deployment.** The indexer can fail
+part of a pass and keep running, and a release can crash-loop on state an
+earlier release wrote. Wire these four signals into the monitoring you
+already run:
+
+| Signal | Alert when | What it catches |
+|---|---|---|
+| The query server answers | `GET <publicUrl>/health` fails over TLS, checked from outside the cluster | an outage, an expired certificate, a broken ingress |
+| The workloads stay up | a container restarts, or a Deployment stays below its desired available replicas for 15 minutes | crash loops, OOM kills, pods that never become Ready |
+| The indexer applies what it reads | any indexer line contains `component build failed` | a pass that fails part of the index while the pod stays Ready; such a pass publishes no completeness stamps |
+| The query server reports no errors | a query-server line logged at `ERROR` or `CRITICAL` | failures behind requests, such as the IdP's signing keys becoming unreachable |
+
+- **Match the level word, not the severity.** Warnings share standard error
+  with errors ([Logs and severity](#logs-and-severity)), so a collector that
+  stamps the stream marks both `ERROR`. Lines read `<ts> <LEVEL> <logger>:
+  <message>`; match `ERROR` or `CRITICAL` in the level position.
+- **Known noise:** until a fix ships, exclude lines containing `asyncio:
+  Unclosed` — an HTTP client library reporting a session it was not asked to
+  close, logged at `ERROR` with no effect on requests.
+
+With kube-state-metrics and the release in namespace `ccx` (substitute
+yours), the workload signals are:
+
+```promql
+# a container restarted (crash, OOM kill, failed liveness probe)
+increase(kube_pod_container_status_restarts_total{namespace="ccx"}[15m]) > 0
+# a Deployment short of available replicas — alert when this holds for 15 min
+kube_deployment_spec_replicas{namespace="ccx"} - kube_deployment_status_replicas_available{namespace="ccx"} > 0
+```
+
+On GKE with Cloud Monitoring, build the restart signal on the system metric
+`kubernetes.io/container/restart_count` (`kubernetes_io:container_restart_count`
+in PromQL) — managed collection does not export the kube-state restart
+counter. The log signals are log-match alert policies; the indexer's, for
+example:
+
+```text
+resource.type="k8s_container" AND resource.labels.namespace_name="ccx"
+AND resource.labels.container_name="indexer" AND textPayload:"component build failed"
+```
 
 ### Interrupted passes and cleanup
 
