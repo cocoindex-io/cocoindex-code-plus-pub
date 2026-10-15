@@ -2339,9 +2339,6 @@ already run:
   with errors ([Logs and severity](#logs-and-severity)), so a collector that
   stamps the stream marks both `ERROR`. Lines read `<ts> <LEVEL> <logger>:
   <message>`; match `ERROR` or `CRITICAL` in the level position.
-- **Known noise:** until a fix ships, exclude lines containing `asyncio:
-  Unclosed` — an HTTP client library reporting a session it was not asked to
-  close, logged at `ERROR` with no effect on requests.
 
 With kube-state-metrics and the release in namespace `ccx` (substitute
 yours), the workload signals are:
