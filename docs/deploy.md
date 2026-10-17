@@ -1258,7 +1258,7 @@ agentQuery:
     schema: ccx_agentic
 ```
 
-Three consequences to know before you turn it on.
+Four consequences to know before you turn it on.
 
 - **The query server becomes a writer — of a schema it owns.** It creates
   `agentQuery.cache.schema` and its tables at startup; your index schemas keep
@@ -1311,6 +1311,19 @@ Three consequences to know before you turn it on.
   it removes the questions, the answers, and everything derived from them for
   that repository, and it linearizes against in-flight requests, so nothing
   from before the purge can be written after it.
+
+- **Recognising a paraphrase is a model decision, and it sees other callers'
+  questions.** Before a question is investigated, the server embeds it,
+  fetches up to five stored questions nearest to it that were asked about the
+  same repositories — by any caller, since no caller identity is stored with
+  a question — and asks the completion model, in a small separate call,
+  whether the new question is the same question as one of them (or, for a
+  question it has seen before, which of them would help answer it). That
+  call carries question texts only: no stored answer, no source, and no
+  investigation record. A question with no stored predecessor about those
+  repositories makes no such call. Its tokens count in the request's
+  `cost_spent`, and the security guide's
+  [egress table](security.md#network-egress--the-complete-list) lists it.
 
 **Seeing whether it pays.** Every request's audit event carries the full cost
 split — `cost_spent` (what the request actually consumed, model calls and
