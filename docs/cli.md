@@ -329,8 +329,9 @@ lists on stderr (`s0: <owner>/<repo> @ <ref> (commit <sha>)`), and the line
 numbers are at that commit, so you can open exactly what the agent read. If the
 ref moved while the agent was reading it — routine on a busy branch — the scope
 line ends with `moved during the investigation: <sha>`: the line numbers may
-belong to either commit, and the answer is not stored for reuse
-(`scope_moved`). `--json` carries every commit a scope's reads saw under
+belong to either commit and, unless the trees were identical, the answer is
+not stored for reuse (`scope_moved`). `--json` carries every commit a scope's
+reads saw under
 `resolved_scopes[].observed_commit_shas`, the bound commit first.
 
 ```bash
