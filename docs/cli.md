@@ -436,12 +436,15 @@ works: the text is what the agent is told next, not a keyword. What to expect:
 - **The answer may be a question.** When the question is ambiguous in a way
   the code cannot settle, the answer is a short clarifying question headed
   `## Clarification needed`; answer it with `--parent`.
-- **The answer may have gone stale.** A follow-up first re-checks what the
-  earlier investigation read and found. A change that leaves every recorded
-  result the same — the files it read, the hits its searches returned — is
-  fine; a change that alters one fails the command with `parent_outdated`,
-  which lists the conversation's questions in order: ask the first again,
-  then re-issue the follow-ups from each new answer's id.
+- **The answer may have gone stale.** A follow-up first re-reads what the
+  earlier investigation read and found, against the code as it is now. A
+  change that leaves every recorded result the same — the files it read,
+  the hits its searches returned — changes nothing; a change that alters
+  one is shown to the agent as it is now, and the command prints `note: N
+  observation(s) the earlier answer relied on have changed since; this
+  answer re-read them.` on stderr — the earlier answer may be stale on those
+  points, and the new one has seen the current code. `--json` carries the
+  count as `parent_observations_changed`.
 - **An id can stop resolving.** `parent_not_found` means no stored answer
   with that id is available here: a wrong id, an answer the cache has since
   dropped (a repository purge, or the cache rebuilt by an upgrade), one made
@@ -727,9 +730,10 @@ and REST API closely (same capabilities, same scoping).
     context — `repos` is then optional and only picks the refs of the stored
     scope — and a `forced_turns` answer is worth continuing that way. An
     answer may itself be a clarifying question headed `## Clarification
-    needed`; reply the same way. `parent_outdated` means the code changed
-    since: ask the root question again and continue from the new id;
-    `parent_not_found` means no such stored answer is available here
+    needed`; reply the same way. A follow-up re-reads the earlier evidence
+    against the current code and continues either way;
+    `parent_observations_changed` counts what changed. `parent_not_found`
+    means no such stored answer is available here
     ([Follow-ups](#follow-ups---parent)). By default the
     response carries the answer, the resolved scopes, the level, the
     completion, and `answer_id` only; `include_stats: true`
