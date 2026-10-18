@@ -1344,6 +1344,7 @@ audit event carries the same two fields.
 |---|---|
 | `unattested_read` | a read ran while the indexer had not confirmed its ref complete: during an indexer pass, before the ref's first pass finished, or with live indexing (`indexer.cycleSeconds: 0`) |
 | `symbols_not_current` | a symbol lookup used a symbol graph that was partial or built for another commit; `ccx defs` prints a coverage note on stderr when it is |
+| `scope_moved` | the ref moved while the agent was reading it: a later read saw a newer commit than the one the investigation started from. The answer is served and names every commit it saw (`ccx ask` prints `moved during the investigation: <sha>` on the scope line); common on a busy branch |
 | `feature_unavailable` | a tool's index was unavailable |
 | `subquery_failed` | a helper sub-investigation failed |
 | `budget_exhausted` | the question asked for more than 8 helper sub-investigations |
@@ -1362,8 +1363,9 @@ gives the pass time, about `cycleSeconds` − X. A longer
 freshness.
 
 When the reason is what the investigation read or asked for
-(`unattested_read`, `symbols_not_current`, `feature_unavailable`,
-`subquery_failed`, `budget_exhausted`), its steps are still stored. Asking
+(`unattested_read`, `symbols_not_current`, `scope_moved`,
+`feature_unavailable`, `subquery_failed`, `budget_exhausted`), its steps are
+still stored. Asking
 the same question again reruns each step's searches and reads and, while they
 come back unchanged, reuses the model's recorded decisions instead of calling
 it. Over an unchanged index, at the same effort level, the same

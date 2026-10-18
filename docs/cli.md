@@ -326,7 +326,13 @@ server-side agent runs the investigation for you, searching, grepping, reading
 files, and following symbols, then writes up what it found. Each claim carries
 a citation like `[s0:src/app.py#L40-L52]`: `s0` is one of the scopes the command
 lists on stderr (`s0: <owner>/<repo> @ <ref> (commit <sha>)`), and the line
-numbers are at that commit, so you can open exactly what the agent read.
+numbers are at that commit, so you can open exactly what the agent read. If the
+ref moved while the agent was reading it — routine on a busy branch — the scope
+line ends with `moved during the investigation: <sha>`: the line numbers may
+belong to either commit and, unless the trees were identical, the answer is
+not stored for reuse (`scope_moved`). `--json` carries every commit a scope's
+reads saw under
+`resolved_scopes[].observed_commit_shas`, the bound commit first.
 
 ```bash
 ccx ask "how does the indexer decide what to re-embed?"
