@@ -557,6 +557,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Embedding** | `embedding.secretEnv` / `existingSecret`, `embedding.model`, `embedding.env` | **yes** (credential) | `model` defaults to `text-embedding-3-small`; the provider key has no default. **Pin the model version and keep it fixed:** query vectors are only comparable to index vectors from the same model, so changing `embedding.model` (or pointing at an endpoint that swaps models underneath) requires a full reindex — treat a model change as a deliberate operation: update the value, then rebuild the index |
 | **API tokens** | `secrets.apiTokens.{tokens,existingSecret}` | **env lane only** | the shared API token the server accepts and the CLI sends. Required on the **env lane** (`auth.mode: apiKey` with nothing richer set) — empty there means every request is rejected. **Must be empty on the file lane** ([The lane rule](#the-lane-rule)), where rendering fails otherwise and `auth.apiKeys` records replace it. See [Access](#access-authentication--authorization) |
 | **Code hosts** | `codeHosts.<instance>.{provider,baseUrl,indexer,configRepo,caBundleSecret,rateLimit}` | **yes** | one entry per code-host instance (github.com, GHES, gitlab.com, self-managed GitLab — a deployment can span several). `indexer` holds the credential as a **Secret reference** (`appId` + `privateKeySecret` for GitHub; `tokenSecret` for GitLab); `configRepo` names that instance's [index config repo](#index-config-repo) (optional if a [central config repo](#central-config-repo) declares this instance's repos; `scope: central` marks the central one); `caBundleSecret` supplies a private/corporate CA (PEM); `rateLimit` overrides the per-instance API budget. The **map key is the instance's frozen identity** — part of every repo's index identity, so renaming it means a full reindex; `baseUrl` is the mutable connection address |
+| **Extra env** | `indexer.extraEnv`, `queryServer.extraEnv` | optional | verbatim `EnvVar` entries (`name` with `value` or `valueFrom`) appended to the container's env — for overriding what the image pins, such as the allocator's `MALLOC_ARENA_MAX` while measuring memory ([Indexer memory sizing](#indexer-memory-sizing)); a product setting has its own value |
 | **Local config lane** | `localConfig.{checkout,gitRef,dir}` + `indexer.{extraVolumes,extraVolumeMounts}` | optional | config for locally-mounted (`local_path`) repos, read from an operator-mounted checkout; omit unless you index local checkouts |
 | **Images** | `images.{indexer,queryServer}.{repository,tag,pullPolicy}`, `imagePullSecrets` | default | default to the published GHCR images at the chart version; override `repository` for a [mirror](#air-gapped--relocate-images) |
 | **Auth** (who may call) | `auth.mode` (`apiKey` / `oidc` / `none` dev), `auth.apiKeys`, `auth.oidc` | default (`apiKey`) | never expose with `none`; `oidc` = company-IdP SSO for engineers; `auth.apiKeys` = attributable, individually revocable key records — usable **with or without** `oidc`, and distinct from the shared `secrets.apiTokens` above. See [Access](#access-authentication--authorization), [SSO login (OIDC)](#sso-login-oidc), and [sso.md](sso.md) for provider recipes |
@@ -846,6 +847,18 @@ figure to the step's then.
   resolved that day are resolved again as a check (1.2 GiB there), and the
   first pass after an upgrade that changes symbol resolution resolves
   everything.
+- **A step's memory is given back when the step ends** (from 0.1.66). Up
+  to 0.1.65 the memory a symbol step's tree read took stayed with the
+  process after the step: the C library kept what the step freed in the
+  arena of the thread that read the tree, where nothing reused it, so the
+  figure on `Cycle finished` climbed by roughly one tree per step on large
+  C, C++ and C# refs and reached the limit in hours — the sizing above
+  then held only for the first few passes. The indexer now returns that
+  memory after each step and at the end of each pass, and the images bound
+  the C library's arenas; the `Cycle finished` figure is the floor again.
+  If it still climbs pass after pass, report it with the lines below: a
+  `heap trimmed` line that gives back little while the figure keeps rising
+  is memory the indexer holds, not residue.
 
 Where the walk's memory goes:
 
@@ -887,12 +900,16 @@ indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 
 - **Other lines end with the same figure.** Each ref's walk, the first time
   the indexer walks the ref after it starts and again whenever the ref's
   content changes; the symbol step's lines
-  ([Symbol index](#symbol-index)); and each pass's last line, which shows
-  the memory a finished pass leaves behind for the next one:
+  ([Symbol index](#symbol-index)); the line after each symbol step and
+  each pass that says how much freed memory the indexer gave back to the
+  kernel; and each pass's last line, which shows the memory a finished
+  pass leaves behind for the next one:
 
   ```
   walk: github:github.com:4242 heads/main at 3f2a9c1d7e4b finished in 312.4s; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
-  Cycle finished; attested 3 ref(s); memory 1.1 GiB used (cgroup; peak 1.6 GiB). Next cycle in 240.0s.
+  symbol graph: github:github.com:4242 heads/main: step over; heap trimmed from 2.1 GiB to 1.2 GiB used (cgroup; peak 2.1 GiB)
+  Pass finished; heap trimmed from 1.3 GiB to 1.1 GiB used (cgroup; peak 2.1 GiB).
+  Cycle finished; attested 3 ref(s); memory 1.1 GiB used (cgroup; peak 2.1 GiB). Next cycle in 240.0s.
   ```
 
 - **When you report an OOM kill**, send every line carrying the figure from
