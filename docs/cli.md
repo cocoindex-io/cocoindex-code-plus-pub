@@ -161,10 +161,13 @@ ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l 
 
 # Symbol navigation: definitions & references (resolved, not text matches)
 ccx defs QueryService                             # where is this symbol DEFINED?
+ccx defs Repo.find                                # a member with its qualifier: every definition
+                                                  #   whose qualified name ends with it (C++/Rust: Store::fetch)
 ccx defs python:db.Repo.find                      # exact qualified name (the ':' selects the mode)
 ccx defs lookup:withDefault:                      # an Objective-C method: its full selector
 ccx defs Config --kind class --lang python        # filter by kind / language / --path
 ccx refs QueryService                             # where is it USED? (by name, broad)
+ccx refs Repo.find                                # uses of every definition matching the dotted name
 ccx refs python:db.Repo.find                      # every use of this exact qualified name
 ccx refs src/db.py Repo.find                      # exactly this one definition — paste the
                                                   #   `uses: ccx refs …` command a defs row prints
@@ -232,8 +235,11 @@ src/db.py:42:4 [method] python:db.Repo.find
 
 — and running that `uses: …` command returns exactly that definition's uses
 (it carries any `--repo`/`--git-ref`/`--server` flags you passed, so it
-re-queries the same scope). Three precisions of `ccx refs`, broad to exact: a
-bare `ccx refs NAME` casts a wide net by unqualified name; the headline's
+re-queries the same scope). Four precisions of `ccx refs`, broad to exact: a
+bare `ccx refs NAME` casts a wide net by unqualified name; a **dotted name**
+(`ccx refs Repo.find`, `ccx refs db.Repo.find`, or C++/Rust
+`ccx refs Store::fetch`) covers every definition whose qualified name ends
+with it — the natural spelling of a member, no tag needed; the headline's
 **qualified name** (`python:db.Repo.find` — every qualified name opens with
 its language tag, `python:` / `tsjs:` / `cpp:` / `csharp:` / `rust:`, and
 TS/JS and Rust names carry a second `:` between the file path and the entity)
@@ -257,10 +263,14 @@ those rows unless you pass `--no-include-unresolved` — so read them before
 concluding a symbol has no callers.
 
 A member written with its qualifier but no language tag, as in
-`ccx defs Repo.find` or C++/Rust `ccx defs Store::fetch`, usually finds
-nothing. The CLI then prints a `warning:` line on stderr naming the base name
-to look up instead (`find`, `fetch`), and the MCP response carries it as
-`warnings`.
+`ccx defs Repo.find` or C++/Rust `ccx defs Store::fetch`, matches every
+definition whose qualified name ends with it on segment boundaries
+(`python:db.Repo.find`; `cpp:app.Store.fetch` and `rust:src/store:Store.fetch`
+alike) — `ccx defs find` alone is the bare base name, and `-b Repo.find`
+forces the dotted text to be looked up as one. When a lookup is forced onto
+a selector it cannot match (`-b Repo.find`, `-q Store::fetch`), the CLI
+prints a `warning:` line on stderr naming the lookup to run instead, and the
+MCP response carries it as `warnings`.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
@@ -683,23 +693,29 @@ and REST API closely (same capabilities, same scoping).
     limit?, offset?)` → plain-text regex matches over every file of the ref
     (filename, 1-based line, line text), no language named; `case` is `smart`
     (default) / `sensitive` / `insensitive`.
-  - `find_definitions(name, repo, qualified?, git_ref?, kinds?, languages?, paths?,
-    limit?, offset?)` → where a symbol is defined (path, span, kind, qualified
-    name, `entity_id`); the response's `coverage` states how complete the symbol
-    index is for the ref, and `warnings` explains a miss on a member written
-    with its qualifier (e.g. `Repo.find` or `Store::fetch`; the warning names the
-    base name to look up instead).
-  - `find_references(repo, path?+entity_id?|qualified_name?|base_name?, git_ref?,
-    roles?, include_unresolved?, limit?, offset?)` → where a symbol is used —
-    one exact definition (`path` + `entity_id` from `find_definitions`), every
-    occurrence under a pack-tagged `qualified_name` (e.g. `python:db.Repo.find`),
-    or by `base_name`; rows carry `resolution` (`resolved` / `ambiguous` /
-    `name_only`) and a reference role (`roles` filters on those, a different
-    vocabulary from `find_definitions.kinds`), plus the same `coverage`. A
-    target that matches no definition fails with `target_not_found`; when a
-    `qualified_name` lacks its pack tag (e.g. `Store::fetch`), the error names
-    the base name to look up with `find_definitions` (`suggested_base_name` in
-    its metadata) and says to pass a result's `path` + `entity_id`.
+  - `find_definitions(repo, name?|name_path?, qualified?, git_ref?, kinds?,
+    languages?, paths?, limit?, offset?)` → where a symbol is defined (path,
+    span, kind, qualified name, `entity_id`). `name` is a base name, or with
+    `qualified` a pack-tagged qualified name; `name_path` is a member with its
+    qualifier (`Repo.find`, `db.Repo.find`, `Store::fetch`) and matches every
+    definition whose qualified name ends with it. The response's `coverage`
+    states how complete the symbol index is for the ref, and `warnings`
+    explains a miss on a dotted `name` sent as a base name (naming the
+    `name_path` lookup to run instead).
+  - `find_references(repo, path?+entity_id?|qualified_name?|name_path?|base_name?,
+    git_ref?, roles?, include_unresolved?, limit?, offset?)` → where a symbol is
+    used — one exact definition (`path` + `entity_id` from `find_definitions`),
+    every occurrence under a pack-tagged `qualified_name` (e.g.
+    `python:db.Repo.find`), every definition a `name_path` matches (e.g.
+    `Repo.find`), or by `base_name`; rows carry `resolution` (`resolved` /
+    `ambiguous` / `name_only`) and a reference role (`roles` filters on those, a
+    different vocabulary from `find_definitions.kinds`), plus the same
+    `coverage`. An exact or qualified target that matches no definition fails
+    with `target_not_found` (a `name_path` or `base_name` answers an empty
+    list); when a `qualified_name` lacks its pack tag (e.g. `Store::fetch`), the
+    error says to pass it as `name_path`, or to look its base name up with
+    `find_definitions` (`suggested_base_name` in its metadata) and pass a
+    result's `path` + `entity_id`.
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and

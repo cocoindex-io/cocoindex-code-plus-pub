@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself in the middle of an implementation task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented; code matching a concept with no exact term to grep; code with a particular syntactic shape; how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, or to read several files to see how something works; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
 metadata:
-  ccx-skill-revision: "2026-10-18.1"
+  ccx-skill-revision: "2026-10-19.1"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-18.1`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-19.1`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -264,10 +264,12 @@ other languages fall back to `grep`/`search`.
 
 ```bash
 ccx defs QueryService                        # definitions of the base name
+ccx defs Repo.find                           # a member with its qualifier (C++/Rust: Store::fetch)
 ccx defs python:db.Repo.find                 # exact qualified name (the ':' selects the mode)
 ccx defs lookup:withDefault:                 # an Objective-C method: its full selector
 ccx defs Config --kind class --lang python   # filter: --kind / --lang / --path
 ccx refs QueryService                        # uses, by base name (broad recall)
+ccx refs Repo.find                           # uses of every definition the dotted name matches
 ccx refs python:db.Repo.find                 # every use of this exact qualified name
 ccx refs src/db.py Repo.find                 # uses of EXACTLY this definition (see below)
 ccx refs QueryService --role call            # only calls (roles: call, import, type_use, …)
@@ -288,10 +290,14 @@ src/api.py:88:12 [call]
   resolved  → src/db.py Repo.find  in handle_get
 ```
 
-Three precisions of `ccx refs`, broad to exact:
+Four precisions of `ccx refs`, broad to exact:
 
 - **Bare name** — `ccx refs NAME`: every definition with that unqualified
   name, plus unresolved mentions.
+- **Dotted name** — `ccx refs Repo.find`, `ccx refs db.Repo.find`, C++/Rust
+  `ccx refs Store::fetch`: every definition whose qualified name ends with it
+  (`python:db.Repo.find`), plus unresolved mentions of its last segment. The
+  natural spelling of a member; no tag, no flag.
 - **Qualified name** — `ccx refs python:db.Repo.find`: the name a `ccx defs`
   headline shows, every occurrence and overload under it. Every qualified name
   opens with its language tag (the CLI's errors say "pack-tagged"), so the `:`
@@ -301,15 +307,15 @@ Three precisions of `ccx refs`, broad to exact:
 Run the printed command — don't compose the second token yourself: the
 headline's qualified name (`python:db.Repo.find`, module-qualified) is **not**
 the entity id (`Repo.find`, file-relative). A lone argument that looks like half
-of a forgotten pair (a path, or a dotted / `#`-suffixed id) errors with the fix
-instead of running a broad query you didn't intend (`--base-name` forces name
-mode when a base name genuinely contains such characters).
+of a forgotten pair (a path, or a `#`-suffixed id) errors with the fix instead
+of running a broad query you didn't intend (`--base-name` forces name mode when
+a base name genuinely contains such characters).
 
-A dotted name without its tag (`Repo.find`, `QueryService.search`) is read by
-`defs` as a base name and finds nothing: use the bare base name (`find`, with
-`--kind method` to narrow) or the tagged name (`python:db.Repo.find`). Both
-verbs page like `grep` (`-k`/`--limit`, default 100, and `--offset`); `refs`
-has no `--path`, so set test files aside by eye.
+`ccx defs` takes the same spellings: `ccx defs Repo.find` lists every
+definition whose qualified name ends with `Repo.find`, where `ccx defs find` is
+the bare base name (narrow with `--kind method`). Both verbs page like `grep`
+(`-k`/`--limit`, default 100, and `--offset`); `refs` has no `--path`, so set
+test files aside by eye.
 
 Reading `refs` output — each row carries:
 
