@@ -26,8 +26,11 @@ Each object prints under a header, `<path>  <kind> <layer-path>  L<start>-L<end>
 whose provenance is `working tree`, `working tree, differs from indexed <ref>@<sha>`
 (your file is not what the index holds) or `indexed <ref>@<sha>`. The body's gutter
 marks each line: `N:` an exact source line, `N|` a frame (an enclosing scope's head),
-`N~` a trimmed doc line, ` ~` a cue. A `... N more lines` cue inside a large type
-folds that type's own lines; `ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
+`N~` derived text anchored at line N (a folded row such as `def f(a): ... 12 lines`,
+which spans lines N to N+11; a doc's first line), ` ~` a cue. A `... N more lines` cue
+inside a large type folds that type's own lines; `ccx show -s <name>` or
+`ccx show PATH:LINE` shows it whole, its doc included. On an import line,
+`ccx show PATH:LINE` prints the imports.
 
 The working tree is the source whenever the file is there; a stderr note says when the
 index served instead (the file is not on disk, is over the 256 KiB request bound, or

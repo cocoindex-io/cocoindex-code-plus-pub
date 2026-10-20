@@ -333,13 +333,21 @@ numbers show where the window ended.
 
 ### `ccx show` — a file's outline, or one definition's body
 
-`ccx show PATH` prints a file as an outline: every function's signature and
-every type's head at its exact line, bodies folded to a `...` cue, docs
-trimmed to their first paragraph — the IDE outline view in a terminal. It
-reads the file from your **working tree** when it is there (inside or outside
-a checkout; outside one no repo is needed), so it is right on the branch you
-are on; the index serves only the fallbacks below. `-e/--expand` renders
-everything verbatim.
+`ccx show PATH` prints a file as an outline, the IDE outline view in a
+terminal:
+
+- **Each function is one row at its line**: its signature joined onto one
+  line, then how many lines it spans from there.
+- **Each type shows its head and fields**, with its methods as rows.
+- **Docs and comment blocks show their first line.**
+- **The imports are one row**, `... N import lines`.
+- **No blank lines.** The line numbers carry the gaps.
+
+It reads the file from your **working tree** when it is there (inside or
+outside a checkout; outside one no repo is needed), so it is right on the
+branch you are on; the index serves only the fallbacks below. `ccx show
+PATH:LINE` renders one definition whole, its doc included; on an import line
+it prints the imports. `-e/--expand` renders everything verbatim.
 
 ```bash
 ccx show src/app.py                        # the outline
@@ -357,16 +365,47 @@ Every object prints under a header,
 provenance is `working tree`, `working tree, differs from indexed <ref>@<sha>`
 (your file is not what the index holds) or `indexed <ref>@<sha>`. The body
 uses the shared gutter: `N:` an exact source line, `N|` a frame (an enclosing
-scope's head), `N~` a trimmed doc line, ` ~` a cue.
+scope's head), `N~` derived text anchored at line N (a folded row, a doc's
+first line), ` ~` a cue. A row `... 16 lines` at line 27 spans lines 27 to
+42.
 
 ```text
-$ ccx show src/db.py:42
-src/db.py  method Repo.find  L42-L50  (working tree)
-12| class Repo:
-42:     def find(self, key: str) -> Row | None:
-43~         Look a row up by its key.
-  ~         ...
-50:         return row
+$ ccx show src/db.py
+src/db.py  file  L1-L47  (working tree)
+ 1: """Row storage for the API: a keyed cache in front of Postgres."""
+ 3~ ... 6 import lines
+11: @dataclass
+12: class Row:
+13:     key: str
+14:     value: bytes
+17: class Repo:
+18~     """Rows by key, cached in memory. …
+23~     def __init__(self, pool: Pool) -> None: ... 3 lines
+27~     async def find(self, key: str, *, refresh: bool = False) -> Row | None: ... 16 lines
+33~         """Look a row up by its key. …
+44~     async def put(self, row: Row) -> None: ... 4 lines
+45:         """Write a row through to Postgres."""
+
+$ ccx show src/db.py:27
+src/db.py  method Repo.find  L27-L42  (working tree)
+17| class Repo:
+  ~     ...
+27:     async def find(
+28:         self,
+29:         key: str,
+30:         *,
+31:         refresh: bool = False,
+32:     ) -> Row | None:
+33:         """Look a row up by its key.
+34:
+35:         Returns None when the key is absent.
+36:         """
+37:         if not refresh and key in self.cache:
+38:             return self.cache[key]
+39:         row = await self.pool.fetch_row(key)
+40:         if row is not None:
+41:             self.cache[key] = row
+42:         return row
 ```
 
 **Where the text comes from.** The working tree is the default source; the
