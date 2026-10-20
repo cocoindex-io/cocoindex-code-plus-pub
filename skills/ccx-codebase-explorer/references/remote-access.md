@@ -20,6 +20,7 @@ ccx show -e src/app.py                                  # everything verbatim: t
 ccx show -s QueryService                                # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py                # -s narrowed by kind and to one file; -q/-b as on `ccx defs`
 ccx show --git-ref main src/app.py                      # the indexed copy at that ref, never the working tree
+ccx show src/app.py --repo acme/api                     # that repo's indexed copy: --repo, too, never reads the working tree
 ```
 
 Each object prints under a header, `<path>  <kind> <layer-path>  L<start>-L<end>  (<provenance>)`,
@@ -32,12 +33,12 @@ inside a large type folds that type's own lines; `ccx show -s <name>` or
 `ccx show PATH:LINE` shows it whole, its doc included. On an import line,
 `ccx show PATH:LINE` prints the imports.
 
-The working tree is the source whenever the file is there; a stderr note says when the
-index served instead (the file is not on disk, is over the 256 KiB request bound, or
-`--git-ref` was given). `-s NAME` renders up to five definitions in full; six or more
-are **listed** in the `ccx defs` row format, exit 0, and a stderr note says to narrow
-with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on one headline. `-s`
-with no match exits 1 (unlike `ccx defs`, whose empty page is a result) and prints the
+The working tree is the source whenever the file is there; the header says `indexed`
+when the index served instead (the file is not on disk, is over the 256 KiB request
+bound, or `--repo` or `--git-ref` was given). `-s NAME` renders up to five definitions
+in full; six or more are **listed** in the `ccx defs` row format, exit 0, and a stderr
+note says to narrow with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on
+one headline. `-s` with no match exits 1 (unlike `ccx defs`, whose empty page is a result) and prints the
 server's warning when the name was spelled for another selector. A `no structure for
 this language` note means the whole file was shown, numbered.
 

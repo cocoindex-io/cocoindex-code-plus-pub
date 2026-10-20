@@ -409,10 +409,10 @@ src/db.py  method Repo.find  L27-L42  (working tree)
 ```
 
 **Where the text comes from.** The working tree is the default source; the
-index serves the file when it is not on disk, when `--git-ref` names a ref,
-or when the file is over the request-body bound (256 KiB) — a stderr note
-says which, and the header says `indexed`. `-s NAME` resolves the name in the
-index (as `ccx defs` does), then renders each definition from your
+index serves the file when it is not on disk, when `--git-ref` names a ref or
+`--repo` a repo, or when the file is over the request-body bound (256 KiB) — a
+stderr note says which, and the header says `indexed`. `-s NAME` resolves the
+name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
