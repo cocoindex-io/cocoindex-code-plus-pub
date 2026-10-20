@@ -176,6 +176,9 @@ ccx refs QueryService --role call                 # restrict to a reference role
 # File access (ref-scoped; repo + ref auto-detected like search)
 ccx read-file README.md                          # print a file's contents
 ccx read-file src/app.py --offset 40 --limit 20  # 20 lines from line 40 (--offset = 1-based line)
+ccx show src/app.py                              # the file's outline: every definition at its line, bodies folded (working tree first)
+ccx show src/app.py:142                          # the definition at line 142, framed by its enclosing scopes
+ccx show -s QueryService                         # the definitions of a name, rendered; -e expands, --git-ref reads the index
 ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
 
@@ -327,6 +330,70 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 `read-file` returns at most **5 000 lines** (and at most 1 MiB of content) per
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
+
+### `ccx show` — a file's outline, or one definition's body
+
+`ccx show PATH` prints a file as an outline: every function's signature and
+every type's head at its exact line, bodies folded to a `...` cue, docs
+trimmed to their first paragraph — the IDE outline view in a terminal. It
+reads the file from your **working tree** when it is there (inside or outside
+a checkout; outside one no repo is needed), so it is right on the branch you
+are on; the index serves only the fallbacks below. `-e/--expand` renders
+everything verbatim.
+
+```bash
+ccx show src/app.py                        # the outline
+ccx show src/app.py:142                    # the innermost definition at line 142, its enclosing scopes as frames
+ccx show src/app.py:142:8                  # a pasted `ccx defs` headline (path:line:col) works as a target
+ccx show src/app.py:142-150                # a pasted `ccx grep` headline too (the first line is used)
+ccx show -e src/app.py                     # the whole file, numbered
+ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
+ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
+ccx show --git-ref main src/app.py         # the indexed copy at that ref, never the working tree
+```
+
+Every object prints under a header,
+`<path>  <kind> <layer-path>  L<start>-L<end>  (<provenance>)`, whose
+provenance is `working tree`, `working tree, differs from indexed <ref>@<sha>`
+(your file is not what the index holds) or `indexed <ref>@<sha>`. The body
+uses the shared gutter: `N:` an exact source line, `N|` a frame (an enclosing
+scope's head), `N~` a trimmed doc line, ` ~` a cue.
+
+```text
+$ ccx show src/db.py:42
+src/db.py  method Repo.find  L42-L50  (working tree)
+12| class Repo:
+42:     def find(self, key: str) -> Row | None:
+43~         Look a row up by its key.
+  ~         ...
+50:         return row
+```
+
+**Where the text comes from.** The working tree is the default source; the
+index serves the file when it is not on disk, when `--git-ref` names a ref,
+or when the file is over the request-body bound (256 KiB) — a stderr note
+says which, and the header says `indexed`. `-s NAME` resolves the name in the
+index (as `ccx defs` does), then renders each definition from your
+working-tree file **by structure**, so lines that shifted since the indexed
+commit do not matter; where the name is ambiguous in the local file, or the
+file is absent, the indexed definition is shown instead and a note says so.
+Up to five definitions render in full; six or more are listed in the `ccx
+defs` row format for you to pick one (`ccx show PATH:LINE`), exit 0. A
+`... N more lines` cue inside a large type folds that type's own lines;
+`ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
+
+**What leaves your machine.** Showing a working-tree file sends its content,
+uncommitted edits included, to your deployment's own query server — the same
+party that holds the index. The server parses and renders it in memory for
+the request, stores nothing, writes no content to its logs or error messages,
+and the audit record holds the path and a count. Nothing is sent for a file
+over the bound or when `--git-ref` is given; a file with NUL bytes is refused
+as binary.
+
+Exit codes: 0 with output (the listing included); 1 when `-s` matches
+nothing, when the path is on neither side (not on disk, not in the ref), or
+on a usage error such as `-s` together with a `PATH:LINE`; 2 on a malformed
+command line.
 
 ### `ccx ask` — ask a question, get an answer
 
@@ -571,8 +638,9 @@ has been checked against the repositories in question.
      agent's own decision to grep in the middle of a task, in subagents too.
      Its hooks add one line of context, once per agent, when the checkout is
      indexed: at the first repository-wide grep or `rg` (naming `ccx defs`,
-     `refs`, `search` and `ask` with what each answers, the indexed commit's
-     position relative to `HEAD`, and which local files still need grep); at
+     `refs`, `search`, `ask` and `show` with what each answers, the indexed
+     commit's position relative to `HEAD`, and which local files still need
+     grep); at
      a grep that found nothing or far too much; and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
@@ -716,6 +784,17 @@ and REST API closely (same capabilities, same scoping).
     error says to pass it as `name_path`, or to look its base name up with
     `find_definitions` (`suggested_base_name` in its metadata) and pass a
     result's `path` + `entity_id`.
+  - `show_code(repo, path, git_ref?, line?, col?, layer_path?, start_line?,
+    end_line?, expand?)` → the MCP form of
+    [`ccx show`](#ccx-show--a-files-outline-or-one-definitions-body) over
+    the indexed source: the file's outline with no target, the innermost
+    object at `line` (and `col`), a layer by `layer_path`, or a verbatim
+    `start_line`–`end_line` span; `expand` renders everything verbatim. Each
+    object carries its span and gutter-rendered `code`; `structural` is false
+    when the language has no structural model (the file is shown whole) and
+    `counted_cue` says a large type's own lines were folded to a
+    `... N more lines` cue. A `find_definitions` row's `path`, `start_line`,
+    `start_col` and `end_line` are its natural arguments.
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.
   - `list_git_refs(repo)` → the repo's indexed refs + each ref's commit sha, and
