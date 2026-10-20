@@ -1,9 +1,9 @@
 ---
 name: ccx-codebase-explorer
-description: "Explore, navigate, and explain a codebase through the ccx CLI, which queries a server-side code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself in the middle of an implementation task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented; code matching a concept with no exact term to grep; code with a particular syntactic shape; how a feature, request, or subsystem works end to end; a walkthrough or onboarding tour of a repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Also use it whenever ccx, cocoindex-code-plus, or the query server or its MCP endpoint is mentioned. Skip it only for a literal string in a file already at hand."
-when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, or to read several files to see how something works; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z', 'ccx', 'cocoindex-code-plus'."
+description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
+when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
 metadata:
-  ccx-skill-revision: "2026-10-20.2"
+  ccx-skill-revision: "2026-10-20.3"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-20.2`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-20.3`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -57,10 +57,26 @@ ccx show <file>                       # the file's outline, every definition at 
 ccx ask "<question>"                  # a cited written answer
 ```
 
-Local tools stay the right choice for exactly two things: reading a line window
-of a file already at hand (a whole file gets its `ccx show` outline first —
-*Reading files* below), and the files you edited or added since the indexed
-commit (the snapshot rule below). A bare identifier is not a reason to grep locally;
+**Opening a file: pick by what you hold.** `ccx show` reads your working tree,
+so it is right on your branch, uncommitted edits included:
+
+- **A window you can name** — lines a hit or a match already printed, an edit
+  you just made → your own file read of that window.
+- **A line, and you need the definition around it** — a search or grep hit, a
+  traceback line → `ccx show PATH:LINE`: that definition whole, under its
+  enclosing scopes, instead of a guessed window.
+- **A name**, or a hit or `ccx defs` row in a file you have edited since the
+  indexed commit (its line numbers have moved) → `ccx show -s NAME`: found by
+  structure in your working tree.
+- **Only the file** — named in the task, unfamiliar, or of unknown length →
+  `ccx show PATH` (its header's `L1-L<n>` gives the length), then one of the
+  above. A file you know is under about 200 lines: read it whole.
+- **Not on disk, or at another ref** → the same targets with `--repo` or
+  `--git-ref`, which read the index (*Files at a ref you don't have* below).
+
+Local tools stay the right choice for exactly two things: the reads the list
+above gives them, and searching the files you edited or added since the
+indexed commit (the snapshot rule below). A bare identifier is not a reason to grep locally;
 ask which question it stands for. A *symbol* question — its definition, or its
 true use sites rather than every textual occurrence — goes to `ccx defs` /
 `ccx refs`, which answer it where `rg` cannot. A *text* question — an exact
@@ -145,12 +161,8 @@ ccx search parse config --lang python --path 'src/**'
 ```
 
 Each result prints `[score] <repo> <file>` and the code with a line-number
-gutter. To read more context around a hit, open the file with your normal file
-tools at a window around the hit's lines. Before reading any file whole — on a
-checked-out repo too — outline it first: `ccx show <file>` prints every
-definition at its exact line with bodies folded, so you then read only the
-window you need (or `ccx show -e <file>` for the whole file, numbered). For a
-ref you don't have checked out, `ccx read-file` — see *Reading files* below.
+gutter. To read past a hit, *Opening a file* above applies: `ccx show PATH:LINE`
+renders the whole definition around it.
 
 ## AST structural grep
 
@@ -294,6 +306,9 @@ $ ccx refs src/db.py Repo.find --role call
 src/api.py:88:12 [call]
   resolved  → src/db.py Repo.find  in handle_get
 ```
+
+For the definition's body rather than its uses, `ccx show -s NAME` renders
+what `ccx defs NAME` lists (*Opening a file* above).
 
 Four precisions of `ccx refs`, broad to exact:
 
@@ -444,17 +459,15 @@ over.
   other commands for this question — at most one later retry, narrower or at
   `--effort high` for the longer deadline, never a loop.
 
-## Reading files: outline first, then a window
+## Reading files: what `ccx show` prints
 
-Before any whole-file read — on a checked-out repo too — run `ccx show <file>`:
-the file's outline, each function one row at its line —
+*Opening a file* above says when; this is how to read the output. The outline
+gives each function one row at its line —
 `44~     async def put(self, row: Row) -> None: ... 4 lines` spans lines 44 to
 47 — each type with its fields, docs by their first line, the imports as one
-row.
-It renders your **working tree** when the file is there (the header says
-`working tree`; `indexed <ref>@<sha>` when it had to use the index), so it is
-right on your branch. Then read the window you need with your normal file
-tools, or render one definition:
+row. Each header ends with where the text came from: `working tree`,
+`working tree, differs from indexed <ref>@<sha>` (index line numbers for this
+file have moved), or `indexed <ref>@<sha>`.
 
 ```bash
 ccx show src/app.py                    # the outline: every def and class at its line
@@ -463,11 +476,9 @@ ccx show -s QueryService               # a definition by name (what `ccx defs` f
 ccx show -e src/app.py                 # the whole file, numbered
 ```
 
-A line window you already know — a search hit's lines, a grep match, an edit
-you just made — needs no outline: read it directly. Pasted headlines work as
-targets (`path:line:col` from `ccx defs`, `path:line-line` from `ccx grep`).
-Flags, the `-s` listing rule and the header forms:
-[references/remote-access.md](references/remote-access.md).
+Pasted headlines work as targets (`path:line:col` from `ccx defs`,
+`path:line-line` from `ccx grep`). Flags, the `-s` listing rule and the
+gutter: [references/remote-access.md](references/remote-access.md).
 
 ### Files at a ref you don't have: `ccx read-file` / `ccx find-files`
 
@@ -475,9 +486,11 @@ Flags, the `-s` listing rule and the header forms:
 ref. They're for code you **don't have on disk** — a repo not checked out locally,
 or a **different ref** than your working tree. **When the repo is checked out at
 the ref you care about, use your normal file tools instead** (faster, same bytes),
-after the `ccx show` outline above for a whole file; nothing below applies then.
+routed by *Opening a file* above; nothing below applies then. There, too, a
+whole file gets its outline first:
 
 ```bash
+ccx show src/app.py --repo acme/api --git-ref v1.2        # its outline at that ref, from the index
 ccx read-file src/app.py --repo acme/api --git-ref v1.2   # a file at a ref you don't have on disk
 ccx find-files 'src/*.py' --repo acme/api --git-ref v1.2  # paths there, by glob (`*` spans `/`)
 ```
@@ -504,7 +517,9 @@ to stderr and results to stdout — read both. Server and environment failures �
 `HTTP 503` (index tables not built yet), `HTTP 401`, an expired login (the
 error says `Run ccx login`), a connection error, or `ccx` not installed — are
 the user's environment, not something to work around: **never invent a server
-URL or token**; tell the user which piece is missing.
+URL or token**; tell the user which piece is missing. A command this skill
+names that your `ccx` lacks (`No such command`) means the CLI predates this
+copy of the skill: do that step with your own tools and tell the user once.
 [references/management.md](references/management.md) has the symptom table,
 and the mapping to the server's MCP tools for agents that have those instead
 (`ccx ask` is `ask_codebase`).

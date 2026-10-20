@@ -409,10 +409,10 @@ src/db.py  method Repo.find  L27-L42  (working tree)
 ```
 
 **Where the text comes from.** The working tree is the default source; the
-index serves the file when it is not on disk, when `--git-ref` names a ref,
-or when the file is over the request-body bound (256 KiB) — a stderr note
-says which, and the header says `indexed`. `-s NAME` resolves the name in the
-index (as `ccx defs` does), then renders each definition from your
+index serves the file when it is not on disk, when `--git-ref` names a ref or
+`--repo` a repo, or when the file is over the request-body bound (256 KiB) — a
+stderr note says which, and the header says `indexed`. `-s NAME` resolves the
+name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
@@ -663,7 +663,8 @@ has been checked against the repositories in question.
      its own grep and file reads whenever it, or you, need to find or
      understand code — where a symbol is defined and used, code matching a
      concept, how something works — including the searches the agent starts
-     itself in the middle of an implementation task. Expect it to fire on a
+     itself in the middle of an implementation task, and to outline a long
+     file with `ccx show` before reading it whole. Expect it to fire on a
      minority of those: a skill that overlaps the host's built-in grep is
      consulted only sometimes, and a machine with dozens of skills can lose
      the description entirely (Claude Code budgets about 1% of the context
@@ -720,7 +721,7 @@ has been checked against the repositories in question.
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
      ```markdown
-     To find or understand code in this repo — including the searches you start yourself mid-task — run `ccx` (search / grep / defs / refs / ask) before grepping or reading files; grep only the files you changed since the indexed commit. See the `ccx-codebase-explorer` skill.
+     To find or understand code in this repo — including the searches you start yourself mid-task — run `ccx` (search / grep / defs / refs / show / ask) before grepping or reading files; grep only the files you changed since the indexed commit. See the `ccx-codebase-explorer` skill.
      ```
 
      Codex follows such a line at once; Claude Code treats it as a preference
