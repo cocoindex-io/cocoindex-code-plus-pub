@@ -1,15 +1,42 @@
-# `ccx read-file` / `find-files` — read & list files at an indexed ref
+# Reading files — `ccx show`, `ccx read-file`, `ccx find-files`
 
-These fetch file **contents** and **paths** exactly as they exist in an indexed
-ref, over HTTP, for code you **don't have on disk** — a repo that isn't checked
-out locally, or a **different ref** than your working tree.
-
-**When you already have the repo checked out at the ref you care about, use your
-normal file tools instead** — they're faster (no round-trip) and read the same
-bytes.
+`ccx show` renders a file's **outline** or one definition's **body** from your
+working tree (the index only when it must); `ccx read-file` and `ccx find-files`
+fetch file **contents** and **paths** exactly as they exist in an indexed ref,
+over HTTP, for code you **don't have on disk** — a repo that isn't checked out
+locally, or a **different ref** than your working tree.
 
 Repo and ref are auto-detected like every query command (`--repo` / `--git-ref`
-to override).
+to override); a `ccx show` of a file outside any checkout needs no repo.
+
+## show
+
+```bash
+ccx show src/app.py                                     # the outline: every definition at its line, bodies folded
+ccx show src/app.py:142                                 # the innermost definition at line 142, enclosing scopes as frames
+ccx show src/app.py:142:8                               # a pasted `ccx defs` headline (path:line:col)
+ccx show src/app.py:142-150                             # a pasted `ccx grep` headline (the first line is used)
+ccx show -e src/app.py                                  # everything verbatim: the numbered file
+ccx show -s QueryService                                # the definitions `ccx defs QueryService` finds, rendered
+ccx show -s find --kind method src/db.py                # -s narrowed by kind and to one file; -q/-b as on `ccx defs`
+ccx show --git-ref main src/app.py                      # the indexed copy at that ref, never the working tree
+```
+
+Each object prints under a header, `<path>  <kind> <layer-path>  L<start>-L<end>  (<provenance>)`,
+whose provenance is `working tree`, `working tree, differs from indexed <ref>@<sha>`
+(your file is not what the index holds) or `indexed <ref>@<sha>`. The body's gutter
+marks each line: `N:` an exact source line, `N|` a frame (an enclosing scope's head),
+`N~` a trimmed doc line, ` ~` a cue. A `... N more lines` cue inside a large type
+folds that type's own lines; `ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
+
+The working tree is the source whenever the file is there; a stderr note says when the
+index served instead (the file is not on disk, is over the 256 KiB request bound, or
+`--git-ref` was given). `-s NAME` renders up to five definitions in full; six or more
+are **listed** in the `ccx defs` row format, exit 0, and a stderr note says to narrow
+with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on one headline. `-s`
+with no match exits 1 (unlike `ccx defs`, whose empty page is a result) and prints the
+server's warning when the name was spelled for another selector. A `no structure for
+this language` note means the whole file was shown, numbered.
 
 ## read-file
 

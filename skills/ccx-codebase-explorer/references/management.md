@@ -49,7 +49,9 @@ refs are indexed and at which commit.
 
 The same query server exposes an MCP endpoint at `<CCX_SERVER_URL>/mcp` with
 tools at parity with the CLI: `code_search`, `code_grep`, `text_grep`, `find_definitions`,
-`find_references`, `read_file`, `find_files`, `list_git_refs`, `list_repos`, and
+`find_references`, `show_code` (= `ccx show` over the indexed source: a file's
+outline, or the object at a `find_definitions` row's `path`, `start_line` and
+`start_col`), `read_file`, `find_files`, `list_git_refs`, `list_repos`, and
 `ask_codebase` (= `ccx ask`; always advertised, failing with
 `agent_query_unavailable` unless the deployment enables it). There is no
 checkout auto-detection: every tool names its repo, and an omitted `git_ref`
