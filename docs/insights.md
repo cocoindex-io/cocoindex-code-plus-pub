@@ -103,10 +103,26 @@ rather than typing the bare address, and don't share it: it is what stops
 another process on your machine from driving the proxy. `--no-open` prints
 the URL instead of launching a browser.
 
-Four views: **Overview** (headline savings and spend), **Repositories** (per
-repository, no entitlement needed), **Indexing** (cycles, freshness,
+Four views: **Overview** (usage, savings, cost and health), **Repositories**
+(per repository, no entitlement needed), **Indexing** (cycles, freshness,
 footprint), and **Queries & agents** (operations, latency, agent reuse,
-errors).
+`ccx show`, errors).
+
+**The Overview has no single headline number.** It is three groups of equal
+tiles. *Usage*: active developers, queries, agent queries, answer-cache hit
+rate. *Savings*: three figures in three units, never added together — model
+cost saved by reuse, agent time saved, and potential tokens saved by `ccx
+show` — each with a caption that says what it counts. *Cost and health*:
+estimated model cost, error rate, index footprint.
+
+**Potential tokens saved** is the text `ccx show` folded out of its output
+— the bodies an outline left out of a file, in estimated tokens. An agent can
+still ask for that text, so the saving is potential, and it is never added to
+the two measured savings. Queries & agents shows what produced it: the show
+requests, the tokens sent and folded per day, the folded share, the requests
+per view (an expanded view or a line range folds nothing, so their share says
+how often agents needed the full text), and the folded tokens priced once at
+the coding agent's input rate, labelled as potential.
 
 **Each detail view is a superset of the Overview for its subject**: the same
 headline figures, plus the day-by-day series and the breakdowns behind them.
@@ -118,11 +134,14 @@ that continued a stored answer; Indexing splits the work into what was
 embedded and what reuse skipped.
 
 **Repositories** gives each repository you can read its own row: queries,
-developers, agent queries, estimated model cost and what reuse saved, and
+developers, agent queries, estimated model cost and what reuse saved,
 **agent time saved** — the waiting the answer cache removed for queries
-naming that repository. A small figure reads in minutes, so a few minutes
-saved shows as minutes rather than `0.0 h`. Each row also names the commit
-the index is at:
+naming that repository — and **potential tokens saved**, the text `ccx show`
+folded on that repository's files. A small time figure reads in minutes, so
+a few minutes saved shows as minutes rather than `0.0 h`. A `ccx show` on a
+file outside any indexed repository counts only in the organization's total,
+so the tokens column can sum to less than the Overview's tile. Each row also
+names the commit the index is at:
 
 - **Commit** is the default branch at the commit indexed for it, or the
   first ref when the default branch is not indexed, with `+N` for the
@@ -135,7 +154,8 @@ the index is at:
 
 Clicking a row opens that repository on its own: its figures, the
 operations it served, its days — queries, agent queries live vs cached,
-agent time saved, chunks embedded — and its refs right now. Each ref the
+agent time saved, chunks embedded, `ccx show` tokens sent vs folded — and its
+refs right now. Each ref the
 index holds is listed at the commit indexed for it, plus any the indexer is
 still working on or failed to index. Each has its own freshness and a
 *Head* column: the newer head the indexer has seen and how long ago, or
@@ -223,6 +243,9 @@ usageAnalytics:
     agent_input_per_mtok: 3.00
     agent_output_per_mtok: 15.00
     tokens_per_chunk: 260     # drives embedding tokens from chunk counts
+    chars_per_token: 3.5      # turns ccx show's character counts into tokens
+    coding_agent_input_per_mtok: 3.00   # what the agent running ccx show pays;
+                                        # prices the potential figure only
 ```
 
 Every key is optional; unset ones keep the built-in illustrative value. The
@@ -249,6 +272,7 @@ releases, the views are not.
 | `v_requests_daily` | day × route × operation × client × status × error code |
 | `v_repo_activity_daily` | day × repository × operation |
 | `v_agent_daily` | day × repository, plus the organization row |
+| `v_show_daily` | day × repository, plus the organization row: `ccx show` requests by view, lines and characters sent and folded |
 | `v_indexing_daily` | day × repository, plus the deployment row with cycle stats |
 | `v_footprint_daily` | day × grain × group |
 | `v_error_codes_daily` | day × error code × status |
@@ -333,6 +357,11 @@ settled:
   time on both sides of the subtraction — the stored original's duration less
   what serving from cache actually took. There is no productivity multiplier
   anywhere, and the figure is a lower bound by construction.
+- **Potential is labelled potential.** "Potential tokens saved" counts what
+  `ccx show` folded out of its output; whether the agent would have read that
+  text, and whether it asked for it later, is not measured. The figure is
+  kept in tokens beside the dollar savings, never added to them, and its
+  one dollar form is labelled with the rate it used.
 - **Rates are labelled** as illustrative until you configure them.
 - **Cost means model cost.** Agent and embedding model calls at your rates;
   compute and storage are not priced, they are on your cloud bill.
