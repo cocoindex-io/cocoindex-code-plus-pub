@@ -34,7 +34,7 @@ inside a large type folds that type's own lines; `ccx show -s <name>` or
 `ccx show PATH:LINE` prints the imports.
 
 The working tree is the source whenever the file is there; the header says `indexed`
-when the index served instead (the file is not on disk, is over the 256 KiB request
+when the index served instead (the file is not on disk, is over the 8 MiB request
 bound, or `--repo` or `--git-ref` was given). `-s NAME` renders up to five definitions
 in full; six or more are **listed** in the `ccx defs` row format, exit 0, and a stderr
 note says to narrow with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on
