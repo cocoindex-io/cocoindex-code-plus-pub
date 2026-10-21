@@ -7,7 +7,7 @@ ladder; this is the full pattern language, with the gotchas that turn a
 correct-looking pattern into a silent zero.
 
 ```bash
-ccx grep '<pattern>' -l <language> [--repo o/r] [--git-ref <ref>] [--path 'glob'] [-k N] [--offset N]
+ccx grep '<pattern>' -l <language> [--repo o/r] [--git-ref <ref>] [--path 'glob'] [-k N] [--cursor <c>]
 ```
 
 Only `-l/--language` is required; repo and ref are auto-detected like every query

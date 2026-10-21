@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
 metadata:
-  ccx-skill-revision: "2026-10-21.1"
+  ccx-skill-revision: "2026-10-21.2"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-21.1`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-21.2`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -169,8 +169,11 @@ renders the whole definition around it.
 `ccx grep` matches a **by-example pattern against the code's syntax tree (AST)**,
 not text — so it ignores formatting and never matches code inside comments.
 Requires `-l/--language`; `--path '<glob>'` narrows (repeatable); `-k`/`--limit`
-(default 100) and `--offset` page, and a truncation note on stderr means there
-are more matches. (For the text itself — comments and docs included — see
+(default 100) bounds the page. Files are scanned in a fixed shuffled order, so a
+page is a sample of the repo, not its first files; a stderr note ending in
+`--cursor <c>` means the scan stopped short — the page filled, or the server
+stopped ahead of its deadline — and the same command with that `--cursor`
+continues it. (For the text itself — comments and docs included — see
 *Plain-text grep* below.)
 
 ```bash
@@ -268,9 +271,17 @@ ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l i
   in `rg`; lookarounds and backreferences also work (plain `rg` has neither);
   `\p{…}` classes do not exist. A plain word needs no escaping.
 - **Cost**: a pattern with literal text in it is prefiltered in SQL and cheap;
-  one with none (`.*`, a class alone) scans every file of the ref — add
-  `--path` on a large repository, and page with `--offset` when the truncation
-  note appears.
+  one with none (`.*`, a class alone), or whose only literal is in most files
+  (`return`), scans every file of the ref — add `--path` on a large
+  repository, and pass `-s` when case does not matter to the question (smart
+  case folds a pattern with no uppercase letter, and that scan costs several
+  times more).
+- **A stderr note ending in `--cursor <c>`** means the scan stopped short:
+  `more matches` when the page filled, `scan incomplete` (with a `warning:`
+  line) when the server stopped ahead of its deadline — the matches you got
+  are a sample of the repo. Rerun the same command with that `--cursor` to
+  continue, or narrow it. An empty result with a `scan incomplete` note is not
+  "no matches".
 
 ## Symbol navigation (`ccx defs` / `ccx refs`)
 

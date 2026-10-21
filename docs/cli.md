@@ -158,6 +158,8 @@ ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 ccx grep --text 'retry_budget'                    # a word or phrase anywhere; smart case
 ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (Python re syntax), scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l is an optional filter
+ccx grep --text -s 'return\s+\d{7};' --path 'src/*' # -s: case-sensitive (cheaper on a large repo); -i: insensitive
+ccx grep --text 'retry' --cursor <c>              # continue a scan where its stderr note stopped
 
 # Symbol navigation: definitions & references (resolved, not text matches)
 ccx defs QueryService                             # where is this symbol DEFINED?
@@ -313,17 +315,39 @@ against the text of **every** file in the ref — comments, docs, config and
 languages the structural grep cannot parse included — so it needs no `-l`
 (with `--text`, `-l` is an optional, repeatable filter by language). Case is
 **smart** by default (case-insensitive unless the pattern has an uppercase
-letter; `--case sensitive|insensitive` forces it); `-w/--word` matches whole
-words only. Output is one `path:line:text` line per match, ordered by path
-then line; the line number is the one `read-file --offset` takes. A pattern
-with literal text in it is cheap: the server prefilters on that text in SQL,
-and reads only the files holding it when the deployment has the
-[text search index](deploy.md#text-search-index); one with none — `.*`, a
-character class alone — scans every file of the ref, so add `--path` on a
-large repository.
+letter; `--case sensitive|insensitive` forces it, and `-s` / `-i` are the
+short forms); `-w/--word` matches whole words only. Output is one
+`path:line:text` line per match; the line number is the one `read-file
+--offset` takes. A pattern with literal text in it is cheap: the server
+prefilters on that text in SQL, and reads only the files holding it when the
+deployment has the [text search index](deploy.md#text-search-index); one with
+none — `.*`, a character class alone — or whose only literal is in most files
+(`return`) scans every file of the ref, so add `--path` on a large repository,
+and prefer `-s` when case does not matter to the question (the
+case-insensitive scan costs several times more).
 
-`--offset` differs by command: for `read-file` it's a **1-based line number**; for
-`grep` and `find-files` it's a **skip count** for paginating results.
+**Grep pages by cursor, in a shuffled scan order.** Both grep modes scan files
+in a fixed shuffled order (by a hash of the path), so a page is a sample of
+the ref rather than its alphabetically-first subtree. When a scan stops short
+of the ref's end, the CLI prints one stderr line with the cursor to continue:
+
+```text
+… more matches; continue with --cursor 3f2a…c1.0        # the page filled
+… scan incomplete; continue with --cursor 3f2a…c1.end   # the server stopped ahead of its deadline
+```
+
+The second case comes with a `warning:` line saying how far the scan got and
+what to do: continue with the cursor, or narrow with `--path`, a rarer
+literal, or `-s`. The same command with that `--cursor` resumes exactly where
+the scan stopped and does not read the files already scanned. The exit code
+is 0 either way; a scan that could not finish inside the server's deadline
+no longer fails with a `503`. The branch may move between pages: each page
+reads the ref as it is at that moment, and the cursor stays valid (a file
+added since the last page is scanned when the chain reaches it).
+
+`--offset` differs by command: for `read-file` it's a **1-based line number**;
+for `find-files` it's a **skip count** for paginating results. `grep` has no
+`--offset`: it pages with `--cursor`.
 
 **Server limits.** Requests are bounded server-side with clear `400`s when
 exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤ 8 KB.
@@ -797,14 +821,19 @@ and REST API closely (same capabilities, same scoping).
     cross-repo-ranked list of code chunks (repo, filename, line range, code,
     score). `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
     at its own ref; `resolved_scopes` reports every scope's resolution.
-  - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, offset?)` → AST
+  - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, cursor?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars),
     plus `warnings` (e.g. a pattern in ast-grep's `$NAME` / `$$$` dialect, which
-    ccx matches literally; the warning shows the ccx form).
+    ccx matches literally; the warning shows the ccx form). Files are scanned
+    in a fixed shuffled order; `next_cursor` set means the scan stopped short
+    — the page filled (`truncated`) or the server stopped ahead of its
+    deadline (a `warnings` entry says so) — and passing it back as `cursor`
+    continues from there.
   - `text_grep(pattern, repo, git_ref?, paths?, languages?, case?, whole_word?,
-    limit?, offset?)` → plain-text regex matches over every file of the ref
+    limit?, cursor?)` → plain-text regex matches over every file of the ref
     (filename, 1-based line, line text), no language named; `case` is `smart`
-    (default) / `sensitive` / `insensitive`.
+    (default) / `sensitive` / `insensitive`; `next_cursor` and `warnings` as
+    for `code_grep`.
   - `find_definitions(repo, name?|name_path?, qualified?, git_ref?, kinds?,
     languages?, paths?, limit?, offset?)` → where a symbol is defined (path,
     span, kind, qualified name, `entity_id`). `name` is a base name, or with

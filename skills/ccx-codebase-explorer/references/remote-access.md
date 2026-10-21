@@ -51,7 +51,7 @@ ccx read-file src/app.py --git-ref v1.2                 # the file as of another
 ```
 
 `--offset` is a **1-based line number** here and `--limit` a line count (a
-window), unlike `grep`/`find-files` where `--offset` is a pagination skip count.
+window), unlike `find-files` where `--offset` is a pagination skip count (`grep` pages with `--cursor`).
 A long file comes back one bounded window at a time; a stderr note says
 `(showing lines A-B of N; continue with --offset B+1)`.
 
