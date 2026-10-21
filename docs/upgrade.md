@@ -57,6 +57,10 @@ Nothing is required in the deployment: upgrade normally, and upgrade the
   responses gain `warnings` (`code_grep` already had it).
 - **`-i` / `-s`** are new short forms of `--case insensitive` / `sensitive`
   on `ccx grep --text`.
+- **Inside `ccx ask`, one grep tool call scans for at most 30 s**
+  (`agentQuery.grepCallBudgetSeconds`; see [deploy.md](deploy.md#agentic-query))
+  and then returns its matches so far with a cursor; the agent continues or
+  narrows. Before, such a call could run until the whole query's deadline.
 
 ### What to do
 
