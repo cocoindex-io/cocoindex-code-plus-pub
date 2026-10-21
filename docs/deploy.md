@@ -570,7 +570,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentRequestsPerPrincipal,busyRetryAfterSeconds,maxConcurrentModelCalls,modelCallTimeoutSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentRequestsPerPrincipal,busyRetryAfterSeconds,maxConcurrentModelCalls,modelCallTimeoutSeconds,grepCallBudgetSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 ### Secrets: inline or existingSecret
 
@@ -1259,6 +1259,13 @@ rateLimit:
   completions across every running query. Raise it with
   `maxConcurrentRequests` if your provider quota allows, or each query waits
   longer for its turns.
+- **One grep inside a query is bounded on its own.** A `code_grep` or
+  `text_grep` tool call scans for at most `agentQuery.grepCallBudgetSeconds`
+  (default 30), then returns what it has with a cursor, and the agent
+  continues or narrows. Without that bound one broad pattern on a large
+  repository could hold a pod's scan for the whole query deadline. Keep it
+  above 5 s (the grep's stop margin) and under every
+  `effort.<level>.deadlineSeconds`; the server refuses to start otherwise.
 
 #### Answer cache (optional)
 
