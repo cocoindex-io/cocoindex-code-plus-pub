@@ -34,6 +34,42 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far
+
+Nothing is required in the deployment: upgrade normally, and upgrade the
+`ccx` CLI with it. Read on if a script or an MCP client of yours pages
+`ccx grep`, `code_grep` or `text_grep` results.
+
+### What changed
+
+- **Paging is by cursor.** `--offset` is gone from `ccx grep` (both modes);
+  the CLI prints `… continue with --cursor <c>` on stderr when a scan stopped
+  short, and the same command with that `--cursor` resumes it. The REST
+  bodies and MCP tools `code_grep` / `text_grep` take `cursor` instead of
+  `offset` and answer `next_cursor` (`null` once the ref is scanned). A
+  request body still carrying `offset` is refused with `400`, not ignored.
+- **Matches come in a fixed shuffled order** (files by a hash of the path,
+  lines in file order), not by path. A page is a sample of the ref; sort the
+  output yourself when you want path order.
+- **A grep that cannot finish inside the server's deadline answers with its
+  matches so far**, a `next_cursor` and a `warnings` entry naming the levers
+  (a `--path` glob, a rarer literal, `-s`), instead of a `503`. `text_grep`
+  responses gain `warnings` (`code_grep` already had it).
+- **`-i` / `-s`** are new short forms of `--case insensitive` / `sensitive`
+  on `ccx grep --text`.
+
+### What to do
+
+- Scripts that page `ccx grep` with `--offset`: read the cursor from the
+  stderr note (or `next_cursor` from the API) and pass it back.
+- Agents using the MCP tools pick the change up from the tool descriptions;
+  the published skill is updated with this release.
+
+### Verify
+
+`ccx grep --text 'return' -k 5 --path '*'` on a large repository returns in
+about a second with a `… more matches; continue with --cursor …` line.
+
 ## v0.1.60 — Objective-C symbols; the indexer no longer reuses config-walk cache entries from before v0.1.54
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it
