@@ -564,6 +564,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc`, operator attestations, and **an `authz.codeHosts` block for every registry instance** (`identityMapping: publicOnly` declares one with no linkage to mirror). The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}`, `database.provisioning.adminExistingSecret` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod, with a one-time role setup you run once or hand to the chart via `provisioning.adminExistingSecret` — see [Production Postgres](#production-postgres-cloud-sql--external) |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
+| **DB slow-statement plans** | `database.bundled.autoExplainMinDuration` | default (`5s`) | plans of statements slower than this go to the Postgres log (`auto_explain`, plan only); `""` disables — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
@@ -774,6 +775,17 @@ seconds. Rules of thumb:
   the pod, so set `database.bundled.resources` accordingly.
 - **External / Cloud SQL:** set the `shared_buffers` / `effective_cache_size`
   flags on the instance with the same sizing.
+- **pgvector 0.8.0 or newer** on an external database: the query server uses
+  its iterative HNSW scans so a search scoped by `paths`, `languages` or a ref
+  still fills `top_k` results. On an older pgvector a scoped search can
+  return fewer results (the server logs this once at its first search).
+- **Slow-statement plans:** the bundled Postgres loads `auto_explain` and
+  writes the plan of any statement slower than
+  `database.bundled.autoExplainMinDuration` (default `5s`; set `""` to
+  disable) to its log — `kubectl logs` on the postgres pod. Include those
+  lines when you report a slow search. On an external database set
+  `shared_preload_libraries=auto_explain` and `auto_explain.log_min_duration`
+  on the instance for the same effect.
 - The query server also **pre-warms** every vector index into the database
   cache at startup (best-effort), so a freshly started server doesn't serve a
   slow first search. It needs the **`pg_prewarm` extension provisioned at DB
