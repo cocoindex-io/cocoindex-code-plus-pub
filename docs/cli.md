@@ -425,9 +425,13 @@ defs` row format for you to pick one (`ccx show PATH:LINE`), exit 0. A
 uncommitted edits included, to your deployment's own query server — the same
 party that holds the index. The server parses and renders it in memory for
 the request, stores nothing, writes no content to its logs or error messages,
-and the audit record holds the path and a count. Nothing is sent for a file
-over the bound or when `--git-ref` is given; a file with NUL bytes is refused
-as binary.
+and the audit record holds the path, counts (objects rendered, lines and
+characters sent and folded) and, inside a checkout, the repository the file
+belongs to: the CLI sends the repository it detected as a hint, the server
+authorizes it as it authorizes any repository, and usage analytics attributes
+the request to it — nothing else depends on the hint. Nothing is sent for a
+file over the bound or when `--git-ref` is given; a file with NUL bytes is
+refused as binary.
 
 Exit codes: 0 with output (the listing included); 1 when `-s` matches
 nothing, when the path is on neither side (not on disk, not in the ref), or
