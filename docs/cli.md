@@ -325,6 +325,8 @@ ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (singl
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
+ccx search retry --tests                         # include tests in similarity order
+ccx search retry --no-tests                      # exclude test candidates
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)
@@ -539,6 +541,14 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
+By default, semantic search prefers implementation code over test code.
+Queries containing test or regression words keep similarity order. This
+includes identifiers such as `test_retry` and `TestRetry`. `--tests` forces
+similarity order with tests included. `--no-tests` excludes test candidates.
+The server reads up to 20,000 candidates to fill a page; a page can be short
+when the index or that limit is reached. Returned scores remain raw cosine
+similarities, so default results need not have descending scores.
+
 ### `ccx show` — a file's outline, or one definition's body
 
 `ccx show PATH` prints a file as an outline, the IDE outline view in a
@@ -691,6 +701,16 @@ ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored ans
 ccx ask "what are the main components?" --trace   # show the investigation as a tree
 ccx ask "what are the main components?" --json    # exact response model
 ```
+
+Citations use spans supplied by indexed chunks, definitions, matches, or file
+windows. A narrower model-written range expands to the smallest observed
+span that contains it. Unsupported ranges display `line range unverified`.
+A valid span does not prove the answer's claim.
+
+When a cited file differs in your local checkout, the CLI places
+`working tree differs from indexed <sha>` beside that citation. It also
+marks unavailable local comparisons. These notes include uncommitted edits.
+`--json` preserves the server answer without local notes.
 
 Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The

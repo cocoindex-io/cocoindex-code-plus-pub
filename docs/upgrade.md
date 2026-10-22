@@ -4,6 +4,18 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Test-aware search and grounded answer citations
+
+Search now prefers implementation code unless the query asks about tests.
+Use `ccx search --tests` to keep similarity order with tests included, or
+`--no-tests` to exclude test candidates. REST and MCP expose nullable `tests`.
+Scores remain raw cosine similarities; default ordering can differ from them.
+
+Agent answers now use observed citation spans. Unsupported coordinates become
+`line range unverified`. The CLI marks citations for changed local files.
+The answer-cache logic epoch advances; older answers are recomputed. Stored
+usage history remains intact. No operator migration is required.
+
 ## The normal upgrade
 
 Every release ships as a new chart version with matching images. The upgrade
