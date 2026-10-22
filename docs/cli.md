@@ -403,6 +403,13 @@ minute to an hour depending on how recent the tip is; `--refresh` asks now,
 `--json` emits the facts as one object. `ccx git-refs` for the current repo
 also refreshes it.
 
+Rust navigation puts the type definition before its impl fragments.
+`ccx defs` collapses impl fragments into one `[impl]` summary with complete
+counts. A page-limit note says when more definitions exist.
+`ccx refs PATH NAME` resolves a bare method name within that file, or lists
+exact commands when several methods match. Name-only reference output groups
+uses by definition and lists unresolved mentions separately.
+
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
 alias- and re-export-aware — not from text matching. It covers **Python,
@@ -623,6 +630,11 @@ src/db.py  method Repo.find  L27-L42  (working tree)
 42:         return row
 ```
 
+A position inside a local binding opens the enclosing function, method, or
+type. Rust structural grep `SessionView { \* }` excludes impl and type
+declarations. Each grep hit displays at most 40 lines and 4096 bytes. A note
+names a cut; the hit retains its full line bounds for `ccx show PATH:LINE`.
+
 **Where the text comes from.** The working tree is the default source; the
 index serves the file when it is not on disk, when `--git-ref` names a ref or
 `--repo` a repo, or when the file is over the request-body bound (8 MiB) — a
@@ -631,8 +643,9 @@ name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
-Up to five definitions render in full; six or more are listed in the `ccx
-defs` row format for you to pick one (`ccx show PATH:LINE`), exit 0. A
+One unique definition renders in full. Several definitions list their paths
+and exact commands for you to pick one (`ccx show PATH:LINE`), exit 0.
+Add a file path after `-s NAME` to restrict lookup to that file. A
 `... N more lines` cue inside a large type folds that type's own lines;
 `ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
 

@@ -61,6 +61,18 @@ Read the error detail for the file, reason, and local grep fallback.
 Explicit change queries retain freshness notes even for empty results.
 See [When an index cannot answer](cli.md#when-an-index-cannot-answer).
 
+## Next release — Rust navigation and bounded grep output
+
+Upgrade the CLI and server together. `ccx show -s NAME` now lists ambiguous
+matches instead of rendering several bodies. Add a file path after the name,
+or open one listed position with `ccx show PATH:LINE`.
+
+Structural grep now caps each displayed hit at 40 lines and 4096 bytes.
+API consumers use `code_truncated` to detect a cut; `start_line` and `end_line`
+still describe the complete match. File-scoped reference lookup can return
+`candidates` when a bare method name has several definitions. Select a candidate
+and retry its exact `path` and `entity_id`.
+
 ## Next release — change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.

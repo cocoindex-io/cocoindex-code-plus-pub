@@ -40,8 +40,9 @@ outline is N rows; …`), never when you passed `--depth`.
 
 The working tree is the source whenever the file is there; the header says `indexed`
 when the index served instead (the file is not on disk, is over the 8 MiB request
-bound, or `--repo` or `--git-ref` was given). `-s NAME` renders up to five definitions
-in full; six or more are **listed** in the `ccx defs` row format, exit 0, and a stderr
+bound, or `--repo` or `--git-ref` was given). `-s NAME` renders one unique definition.
+Several matches are **listed** with paths; pick one with `ccx show PATH:LINE`,
+or add a file path after `-s NAME` to narrow the lookup. A stderr
 note says to narrow with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on
 one headline. `-s` with no match exits 1 (unlike `ccx defs`, whose empty page is a result) and prints the
 server's warning when the name was spelled for another selector. A `no structure for
