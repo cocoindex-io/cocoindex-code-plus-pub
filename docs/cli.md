@@ -1207,3 +1207,20 @@ The CLI remembers shown and followed record identifiers in its disposable
 cache when a session identifier exists. Claude Code's SessionStart hook sets
 `CCX_SESSION_ID` through its environment file; Codex supplies `CODEX_THREAD_ID`.
 The cache stores no record text, credential, or URL.
+
+
+### A file has no indexed text
+
+`show --repo`, `show --git-ref`, and `read-file` read the indexed ref.
+A missing-file response includes one of these reasons:
+
+- `not_on_ref`: the stored tree does not contain a file at that path.
+  Check the path and ref, or read the file locally.
+- `not_indexed`: the stored tree contains the file, but the index has no text.
+  Read the file locally. Size limits, exclusions, binary files, or Git LFS can cause this.
+
+The index does not store the exact skip reason. A branch-only file or an
+excluded subtree can also produce `not_on_ref`.
+
+Use `ccx show FILE:LINE` without `--repo` or `--git-ref` for a local file.
+The CLI sends its working-tree text. The indexed file size limit does not apply.
