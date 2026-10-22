@@ -154,7 +154,7 @@ Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
 The server health sets the exit code: 0 means healthy, 1 means unreachable.
 A credential warning or unfinished first pass keeps exit 0.
 If health fails, the command skips the progress request.
-The `Indexer:` line says `running`, `live mode`, or `last run finished`.
+The `Indexer:` line says `running` (with the version and `cycle mode` or `live mode`) or `last run finished`.
 A yellow `no indexer has reported` or `not reporting since` line names the next command.
 
 The index rows use these states:
@@ -716,7 +716,8 @@ has been checked against the repositories in question.
 |---|---|
 | `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` names the credential in use but does not validate it against the server. |
 | `login: expired and could not be refreshed` (in `ccx status`), or `Your login for … has expired and could not be refreshed` (from any other command) | Your cached SSO login aged out — the IdP's session lifetime, so an overnight gap can do it. The server itself is fine (`status` still reports it healthy). Run `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN`. |
-| `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
+| `HTTP 503` ending in `is being indexed: …` | The repo (or the ref you named) is in its first pass, or committed but not queryable yet. `ccx status --watch` follows it; retry after the `retry in …` the error names, and use your native tools meanwhile. |
+| any other `HTTP 503` | Index not built yet — the indexer hasn't populated the table; `ccx status` says whether an indexer has reported; retry once it has (ask your platform team if it persists). |
 | connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. Run `ccx config` to see the server it resolved and where that came from. |
 | talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
 | `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
