@@ -564,6 +564,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Authz** (what they see) | `authz.mode` (`indexScope` / `codeHostMirrored`), `authz.attestations`, `authz.codeHosts.<instance>.{identityMapping,mappingClaim,permissionCredential,identityMappingCredential,approvedOrgs}` | default (`indexScope`) | `indexScope` = every authenticated caller reads everything indexed; `codeHostMirrored` mirrors each signed-in engineer's real code-host permissions and requires `auth.mode: oidc`, operator attestations, and **an `authz.codeHosts` block for every registry instance** (`identityMapping: publicOnly` declares one with no linkage to mirror). The credentials here are **Secret references projected into the query server only** — separate from the indexer's, though the same GitHub App by default. See [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 | **Database** | `database.bundled.enabled`, `database.{target,internal}.{url,existingSecret,schema}`, `database.provisioning.adminExistingSecret` | default (bundled) / **if prod** | bundled Postgres for test; external (Cloud SQL) for prod, with a one-time role setup you run once or hand to the chart via `provisioning.adminExistingSecret` — see [Production Postgres](#production-postgres-cloud-sql--external) |
 | **DB memory** | `database.bundled.{sharedBuffers,effectiveCacheSize,shmSize}` | default (1GB / 2GB / 256Mi) | size `sharedBuffers` ≈ your vector-index set so searches stay in memory — see [Postgres memory sizing](#postgres-memory-sizing) |
+| **DB slow-statement plans** | `database.bundled.autoExplainMinDuration` | default (`5s`) | plans of statements slower than this go to the Postgres log (`auto_explain`, plan only); `""` disables — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
@@ -774,6 +775,17 @@ seconds. Rules of thumb:
   the pod, so set `database.bundled.resources` accordingly.
 - **External / Cloud SQL:** set the `shared_buffers` / `effective_cache_size`
   flags on the instance with the same sizing.
+- **pgvector 0.8.0 or newer** on an external database: the query server uses
+  its iterative HNSW scans so a search scoped by `paths`, `languages` or a ref
+  still fills `top_k` results. On an older pgvector a scoped search can
+  return fewer results (the server logs this once at its first search).
+- **Slow-statement plans:** the bundled Postgres loads `auto_explain` and
+  writes the plan of any statement slower than
+  `database.bundled.autoExplainMinDuration` (default `5s`; set `""` to
+  disable) to its log — `kubectl logs` on the postgres pod. Include those
+  lines when you report a slow search. On an external database set
+  `shared_preload_libraries=auto_explain` and `auto_explain.log_min_duration`
+  on the instance for the same effect.
 - The query server also **pre-warms** every vector index into the database
   cache at startup (best-effort), so a freshly started server doesn't serve a
   slow first search. It needs the **`pg_prewarm` extension provisioned at DB
@@ -1748,6 +1760,12 @@ credential; naming one is rejected at startup rather than sitting inert.
 
 Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant.
 
+- **Organization → Members: Read-only makes `ccx repos` fast.** With it the
+  walk answers the engineer's permission on up to a hundred repos per
+  request instead of one call per repo ([Behavior to expect](#behavior-to-expect)
+  below); without it everything still works, one call per private repo,
+  and the server logs one warning per installation. Org-level SAML mapping
+  requires the same permission.
 - **Org-level SAML mapping needs two org permissions** — **Organization →
   Members: Read-only** and **Organization → Administration: Read-only**.
   GitHub's docs suggest members-read suffices for `externalIdentities`, but
@@ -1960,14 +1978,28 @@ and id-verify the repo, resolve the id to a login, read the collaborator
 permission — plus, once per engineer per mapping TTL, the identity lookup (2
 calls on the GHES SCIM route). A public repo settles in 2. Within the decision
 TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
-worst case is ~40 calls fully cold and zero warm; `ccx repos` checks each
-indexed repo once per TTL window, at most `authz.listReposCheckConcurrency`
-(default 10) in flight. It looks up its private and internal repos in
-batches, one GraphQL request per approved org per batch, so each of those
-costs a single call there (its collaborator permission); public repos keep
-their 2. Size the envelope as active engineers × indexed repos per TTL
-window. On GHES the ceiling is your instance's own rate-limit setting (often
-disabled by default) rather than a per-installation hourly quota.
+worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
+Insights views that list repositories) checks each indexed repo once per TTL
+window. It looks the repos up in batches — one GraphQL request per 32
+candidates under one installation, up to 8 requests in flight per code host,
+all installations at once: public repos cost nothing there, and when the
+installation grants **Organization → Members: Read-only** the same request
+answers the engineer's permission on each private or internal repo they can
+read, so those cost nothing either. What still costs one call each: every
+repo the engineer cannot read (the batch never settles a denial), and every
+private or internal repo under an installation without that grant; those
+per-repo calls run at most `authz.listReposCheckConcurrency` (default 10) at
+a time. The query server logs, once per installation, whether the grant is
+present; a missing one reads `grants no Organization Members (read)` and
+names the fix. What a cold walk takes is a few round trips, not one per
+repository: each installation's setup (locate, mint, map the engineer, read
+their login), one or two rounds of batched requests, then the refusals. The
+audit line's `provider_busy_ms` against `provider_ms` shows whether a slow
+request waited in series or in parallel
+([security.md](security.md#logging--audit)). Size the envelope as active
+engineers × indexed repos per TTL window. On GHES the ceiling is your
+instance's own rate-limit setting (often disabled by default) rather than a
+per-installation hourly quota.
 
 #### Pre-flight check
 

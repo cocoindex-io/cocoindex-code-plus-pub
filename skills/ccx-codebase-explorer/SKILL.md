@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
 metadata:
-  ccx-skill-revision: "2026-10-21.2"
+  ccx-skill-revision: "2026-10-21.3"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-21.2`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-21.3`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -478,7 +478,13 @@ gives each function one row at its line —
 47 — each type with its fields, docs by their first line, the imports as one
 row. Each header ends with where the text came from: `working tree`,
 `working tree, differs from indexed <ref>@<sha>` (index line numbers for this
-file have moved), or `indexed <ref>@<sha>`.
+file have moved), or `indexed <ref>@<sha>`. A stderr note
+`outline folded to depth 1: the full outline is N rows` means the file is
+large and you got its items only, each container collapsed to its head and a
+`// members:` roster: open one object with `ccx show PATH:LINE` next, or
+`ccx show --depth 2 PATH` for one more level, rather than re-running with
+`-e`. Test code (`#[cfg(test)]`, `Test*` classes, names with a test word) is
+collapsed the same way in every outline.
 
 ```bash
 ccx show src/app.py                    # the outline: every def and class at its line

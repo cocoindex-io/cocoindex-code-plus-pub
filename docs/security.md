@@ -213,7 +213,7 @@ processed input's real decision while the caller sees one indistinguishable
 ```json
 {"event":"repo_decision","ts":"2026-09-02T09:14:22.402Z","correlation_id":"f9045689f8cb46b68a50066784612758","principal":"ccx:apikey/analytics-team","operation":"semantic_search","outcome":"allow","repo_key":"github:github.com:6105489"}
 {"event":"repo_decision","ts":"2026-09-02T09:14:22.404Z","correlation_id":"f9045689f8cb46b68a50066784612758","principal":"ccx:apikey/analytics-team","operation":"semantic_search","outcome":"deny","repo_key":"github:github.com:6105490","reason":"not_allowlisted"}
-{"event":"request","ts":"2026-09-02T09:14:22.418Z","correlation_id":"f9045689f8cb46b68a50066784612758","route_class":"code","operation":"semantic_search","status":404,"duration_ms":31,"authn_outcome":"success","principal":"ccx:apikey/analytics-team","principal_kind":"api_key","client_kind":"cli","client_version":"0.1.40","error_code":"repo_not_found","named_input_count":2,"resolved_repo_keys":["github:github.com:6105489"],"free_text":{"query":"[redacted]"}}
+{"event":"request","ts":"2026-09-02T09:14:22.418Z","correlation_id":"f9045689f8cb46b68a50066784612758","route_class":"code","operation":"semantic_search","status":404,"duration_ms":31,"provider_calls":0,"provider_ms":0,"provider_busy_ms":0,"authn_outcome":"success","principal":"ccx:apikey/analytics-team","principal_kind":"api_key","client_kind":"cli","client_version":"0.1.40","error_code":"repo_not_found","named_input_count":2,"resolved_repo_keys":["github:github.com:6105489"],"free_text":{"query":"[redacted]"}}
 ```
 
 `operation` is `semantic_search`, `code_grep`, `read_file`, `find_files`,
@@ -230,6 +230,19 @@ cost split, and a `finish` code; never prompts, snippets, or model text. One
 rule worth a SIEM alert: MCP reports a tool failure *inside* a successful
 response, so a failed MCP call carries `status: 200` with an `error_code`,
 not an HTTP error status.
+
+Three fields are always present and measure the request's wait on the code
+host (zero when the request made no code-host call — every mode but
+`authz.mode: codeHostMirrored`, and cache hits within it):
+
+- `provider_calls` is the number of code-host HTTP calls the request made —
+  permission checks, identity lookups, token mints, failed attempts included.
+- `provider_ms` is the sum of those calls' durations: how much of the
+  request's `duration_ms` was spent waiting on the code host.
+- `provider_busy_ms` is the wall-clock time during which at least one of
+  those calls was in flight: it matches `provider_ms` when the calls ran in
+  series and stays near one call's latency when they ran in parallel, which
+  is how a slow `ccx repos` shows whether its provider work was serialized.
 
 ### The Claude Code plugin's probe
 
