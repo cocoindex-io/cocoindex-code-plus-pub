@@ -31,7 +31,9 @@ esac
 
 state="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/ccx-claude-hook}/markers"
 mkdir -p "$state" 2>/dev/null || exit 0
-prefix="$state/${session:-nosession}-${agent:-main}"
+# Older scripts set all five hint markers after a 404. A new namespace
+# leaves those final markers behind without confusing them with earned hints.
+prefix="$state/${session:-nosession}-${agent:-main}-v2"
 
 # Compaction summarises earlier context away and /clear empties it: let
 # every hint fire again.
