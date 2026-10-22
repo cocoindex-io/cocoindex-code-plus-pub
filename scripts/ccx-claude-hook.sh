@@ -57,7 +57,9 @@ esac
 
 state="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/ccx-claude-hook}/markers"
 mkdir -p "$state" 2>/dev/null || exit 0
-prefix="$state/${session:-nosession}-${agent:-main}"
+# Older scripts set all five hint markers after a 404. A new namespace
+# leaves those final markers behind without confusing them with earned hints.
+prefix="$state/${session:-nosession}-${agent:-main}-v2"
 
 # Compaction summarises earlier context away and /clear empties it: let
 # every hint fire again.
@@ -71,6 +73,13 @@ marker="$prefix-$kind"
 # not at every search.
 retry="$prefix-retry"
 if [ -e "$retry" ] && [ -n "$(find "$retry" -mmin -5 2>/dev/null)" ]; then
+  exit 0
+fi
+
+# An absent repository may be added by the operator. Keep its retry window
+# separate from the cannot-tell window.
+absent_retry="$prefix-not-indexed-retry"
+if [ -e "$absent_retry" ] && [ -n "$(find "$absent_retry" -mmin -15 2>/dev/null)" ]; then
   exit 0
 fi
 
@@ -94,8 +103,8 @@ case "$status" in
     fi
     ;;
   1)
-    # Not indexed: final for this agent, whatever the event.
-    for k in grep result start subagent_start indexing change; do : >"$prefix-$k"; done
+    # Leave every hint available when the repository becomes indexed.
+    : >"$absent_retry"
     ;;
   *)
     : >"$retry"
