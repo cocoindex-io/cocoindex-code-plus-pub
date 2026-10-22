@@ -74,7 +74,8 @@ ccx status        # server reachable + healthy (and which one), then the credent
 server version, uptime, and credential in one header. It adds the CLI version
 only when it differs. An older CLI shows the upgrade command.
 The credential describes the next request; it does not test the token.
-An unknown auth mode retains the login hint. A server that reports auth off needs no login.
+A successful status request without a credential shows `auth off`.
+A 401 or 403 with no credential earns a separate login hint.
 The exit code follows server health, even when a credential warning appears.
 Use `ccx config show` to inspect where the server URL comes from.
 
@@ -131,7 +132,7 @@ an hour to appear while server-side caches refresh.
 `ccx status` prints the server and credential block, then the indexer and index blocks:
 
 ```text
-ccx 127.0.0.1:8080: healthy, credential: none — run `ccx login` or export CCX_API_TOKEN, 0.1.70, up 18 min
+ccx 127.0.0.1:8080: healthy, auth off, 0.1.70, up 18 min
 indexer: working, cycle mode, 1 ref in progress
 acme/library main: current at 3f2a1c9e04b7, indexed 6 min ago
 acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago
@@ -143,20 +144,26 @@ Each ref occupies one line, without colors, bars, or column padding.
 A terminal shows REPO, REF, STATE, COMMIT, and INDEXED columns.
 Green `✓ current` means queries read the displayed commit.
 Cyan marks work, dim marks queued refs, and red marks failures or a silent indexer.
+Yellow `! not reporting` marks stale work that needs attention.
+Failure labels keep their scope: first pass, update, or repository check.
 A complete row stays green after its reporting indexer stops.
 Details appear under STATE. One footer gives `N of M ready` and an unfinished report's watch command.
 Widths below 80 columns, or overflowing rows, select the pipe format.
 `NO_COLOR` removes colors. Non-UTF-8 terminals use ASCII marks and bars.
 
 The header shows the server version and a duration such as `28 min` or `1 h 15 min`.
-It adds the CLI version only when it differs. A server that advertises disabled auth shows `auth off`.
-Servers without that metadata retain the credential hint.
+It adds the CLI version only when it differs. A successful anonymous status request shows `auth off`.
+A 401 or 403 establishes that auth is required. A missing credential then earns a separate yellow login hint.
+The terminal header drops uptime first, then version, to fit its width.
 A healthy server exits 0 even while indexing. An unreachable server exits 1.
 Unqueryable refs, missing progress, stalled work, errors, and serving commits remain explicit.
 No next-check time or log command is invented.
 
 - `ccx status --watch` redraws a terminal table every 10 seconds.
-  Plain watch prints the header once, then UTC timestamped lines for changed refs and ready counts.
+  Plain watch prints the header once, then UTC timestamped lines for changed refs, folding counts, and ready counts.
+  Ref identities include the repository key, so names across instances do not collide.
+  Semantic field changes, including progress and phase timestamps, print a new line.
+  Clock passage and idle-check timestamps alone do not print a ref line.
   After a minute without changes, it prints one idle notice.
   It exits 0 when every repository is ready, and 1 on SIGINT or SIGTERM.
   Request failures remain visible. A 429 or 503 respects `Retry-After`.
