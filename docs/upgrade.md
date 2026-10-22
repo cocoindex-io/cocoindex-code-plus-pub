@@ -4,6 +4,18 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Test-aware search and grounded answer citations
+
+Search now prefers implementation code unless the query asks about tests.
+Use `ccx search --tests` to keep similarity order with tests included, or
+`--no-tests` to exclude test candidates. REST and MCP expose nullable `tests`.
+Scores remain raw cosine similarities; default ordering can differ from them.
+
+Agent answers now use observed citation spans. Unsupported coordinates become
+`line range unverified`. The CLI marks citations for changed local files.
+The answer-cache logic epoch advances; older answers are recomputed. Stored
+usage history remains intact. No operator migration is required.
+
 ## The normal upgrade
 
 Every release ships as a new chart version with matching images. The upgrade
@@ -33,6 +45,45 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - **A release without an entry needs nothing but the command above.**
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
+
+## Next release — index files up to 4 MiB
+
+The default indexed file size increases from 1 MiB to 4 MiB.
+The first pass reads newly admitted files and embeds their chunks.
+The symbol extraction ceiling also changes, so existing files extract symbols
+once more. Existing content-keyed embeddings remain reusable.
+
+No manual data migration is required. To retain the previous size policy, set
+`indexer.maxFileSizeBytes: 1048576` before upgrading. Repo `max_file_size`
+values still override this default. Read larger files through `read-file`
+`--offset` / `--limit` windows; each window keeps its 1 MiB content cap.
+
+## Next release — query coverage notes
+
+Upgrade the CLI and server together. No manual database step is required.
+The indexer adds a nullable column for file-gap diagnostics at startup.
+Existing rows remain valid; older rows can report an unavailable skip reason.
+The next walk fills diagnostics without re-embedding unchanged code.
+The derived answer-cache logic epoch advances, so old answers are not reused.
+Collected usage history remains in place.
+
+Exact skipped-file queries now return `file_not_found` with reason
+`not_indexed`, instead of a successful empty match or definition page.
+Read the error detail for the file, reason, and local grep fallback.
+Explicit change queries retain freshness notes even for empty results.
+See [When an index cannot answer](cli.md#when-an-index-cannot-answer).
+
+## Next release — Rust navigation and bounded grep output
+
+Upgrade the CLI and server together. `ccx show -s NAME` now lists ambiguous
+matches instead of rendering several bodies. Add a file path after the name,
+or open one listed position with `ccx show PATH:LINE`.
+
+Structural grep now caps each displayed hit at 40 lines and 4096 bytes.
+API consumers use `code_truncated` to detect a cut; `start_line` and `end_line`
+still describe the complete match. File-scoped reference lookup can return
+`candidates` when a bare method name has several definitions. Select a candidate
+and retry its exact `path` and `entity_id`.
 
 ## Next release — change ingest budget validation
 

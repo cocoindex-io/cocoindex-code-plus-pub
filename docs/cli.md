@@ -325,6 +325,8 @@ ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (singl
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
+ccx search retry --tests                         # include tests in similarity order
+ccx search retry --no-tests                      # exclude test candidates
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)
@@ -402,6 +404,13 @@ commit than the cached one re-asks at once, otherwise the entry lives from a
 minute to an hour depending on how recent the tip is; `--refresh` asks now,
 `--json` emits the facts as one object. `ccx git-refs` for the current repo
 also refreshes it.
+
+Rust navigation puts the type definition before its impl fragments.
+`ccx defs` collapses impl fragments into one `[impl]` summary with complete
+counts. A page-limit note says when more definitions exist.
+`ccx refs PATH NAME` resolves a bare method name within that file, or lists
+exact commands when several methods match. Name-only reference output groups
+uses by definition and lists unresolved mentions separately.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
@@ -532,6 +541,14 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
+By default, semantic search prefers implementation code over test code.
+Queries containing test or regression words keep similarity order. This
+includes identifiers such as `test_retry` and `TestRetry`. `--tests` forces
+similarity order with tests included. `--no-tests` excludes test candidates.
+The server reads up to 20,000 candidates to fill a page; a page can be short
+when the index or that limit is reached. Returned scores remain raw cosine
+similarities, so default results need not have descending scores.
+
 ### `ccx show` — a file's outline, or one definition's body
 
 `ccx show PATH` prints a file as an outline, the IDE outline view in a
@@ -623,6 +640,11 @@ src/db.py  method Repo.find  L27-L42  (working tree)
 42:         return row
 ```
 
+A position inside a local binding opens the enclosing function, method, or
+type. Rust structural grep `SessionView { \* }` excludes impl and type
+declarations. Each grep hit displays at most 40 lines and 4096 bytes. A note
+names a cut; the hit retains its full line bounds for `ccx show PATH:LINE`.
+
 **Where the text comes from.** The working tree is the default source; the
 index serves the file when it is not on disk, when `--git-ref` names a ref or
 `--repo` a repo, or when the file is over the request-body bound (8 MiB) — a
@@ -631,8 +653,9 @@ name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
-Up to five definitions render in full; six or more are listed in the `ccx
-defs` row format for you to pick one (`ccx show PATH:LINE`), exit 0. A
+One unique definition renders in full. Several definitions list their paths
+and exact commands for you to pick one (`ccx show PATH:LINE`), exit 0.
+Add a file path after `-s NAME` to restrict lookup to that file. A
 `... N more lines` cue inside a large type folds that type's own lines;
 `ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
 
@@ -678,6 +701,16 @@ ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored ans
 ccx ask "what are the main components?" --trace   # show the investigation as a tree
 ccx ask "what are the main components?" --json    # exact response model
 ```
+
+Citations use spans supplied by indexed chunks, definitions, matches, or file
+windows. A narrower model-written range expands to the smallest observed
+span that contains it. Unsupported ranges display `line range unverified`.
+A valid span does not prove the answer's claim.
+
+When a cited file differs in your local checkout, the CLI places
+`working tree differs from indexed <sha>` beside that citation. It also
+marks unavailable local comparisons. These notes include uncommitted edits.
+`--json` preserves the server answer without local notes.
 
 Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
@@ -1224,3 +1257,28 @@ excluded subtree can also produce `not_on_ref`.
 
 Use `ccx show FILE:LINE` without `--repo` or `--git-ref` for a local file.
 The CLI sends its working-tree text. The indexed file size limit does not apply.
+
+
+## When an index cannot answer
+
+An empty result is useful only when the index covers the requested files.
+`defs`, `refs`, and symbol `show` name up to three relevant skipped or failed
+files, with reasons and a local grep fallback. They print this note for
+empty results or nearby file paths, rather than on every successful lookup.
+Older index rows can report an unavailable skip reason. This does not mean
+that the file fails to parse.
+
+An exact `grep --text --path <file>`, file-scoped `show -s`, or `read-file`
+request reports a known skipped file as `<file> is not indexed (<reason>); grep it locally`.
+Read or grep the working-tree file to continue.
+
+`search --kind change`, `search --kind all`, and `refs --kind change` keep
+the freshness line even when their results are empty. `changes: insufficient`
+means the backfill cannot settle absence. With no index, the line says
+`no change index for <repo>; absence proves nothing — use gh/git log`.
+
+`ask` reads one indexed commit per ref on each code read. It cannot read git
+history, blame, or commit diffs. It must not infer which PR introduces code
+from the current file. Its last line names relevant files it cannot read,
+then says `history questions: use git log / ccx --kind change`.
+Check change coverage before you use its results as evidence.
