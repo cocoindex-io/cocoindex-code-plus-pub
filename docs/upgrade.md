@@ -34,11 +34,12 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far
+## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far; `ccx repos` batches GitHub permission checks
 
 Nothing is required in the deployment: upgrade normally, and upgrade the
 `ccx` CLI with it. Read on if a script or an MCP client of yours pages
-`ccx grep`, `code_grep` or `text_grep` results.
+`ccx grep`, `code_grep` or `text_grep` results, or if `ccx repos` and the
+Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
 
 ### What changed
 
@@ -61,6 +62,17 @@ Nothing is required in the deployment: upgrade normally, and upgrade the
   (`agentQuery.grepCallBudgetSeconds`; see [deploy.md](deploy.md#agentic-query))
   and then returns its matches so far with a cursor; the agent continues or
   narrows. Before, such a call could run until the whole query's deadline.
+- **`ccx repos` under `codeHostMirrored` on GitHub settles most permission
+  checks in its batched lookup.** When the authz App's installation grants
+  **Organization → Members: Read-only**, one GraphQL request per hundred
+  repositories answers the caller's permission on each, so a cold walk over
+  repositories the caller can read makes a handful of calls instead of one
+  per repository; public repositories cost nothing either way. Without the
+  grant the walk behaves as before (one permission call per private
+  repository) and the query server logs one warning per installation naming
+  the grant. [deploy.md § App permissions](deploy.md#app-permissions) has
+  the details; the Insights views that list repositories share the walk and
+  speed up with it.
 
 ### What to do
 
@@ -68,6 +80,10 @@ Nothing is required in the deployment: upgrade normally, and upgrade the
   stderr note (or `next_cursor` from the API) and pass it back.
 - Agents using the MCP tools pick the change up from the tool descriptions;
   the published skill is updated with this release.
+- Optional, GitHub `codeHostMirrored` deployments: grant the authz App
+  **Organization → Members: Read-only** on each approved org (org-level SAML
+  mapping already requires it) and approve the updated permission on the
+  installation. No restart is needed: the next token mint sees the grant.
 
 ### Verify
 
