@@ -156,14 +156,21 @@ acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; 
 
 Pipes and `--plain` use this format. MCP status text uses the same ref lines.
 Each ref occupies one line, without colors, bars, or column padding.
-A terminal shows REPO, REF, STATE, and INDEXED AGE / COMMIT columns.
-Green `✓ current` means queries read the displayed commit.
+A terminal shows REPO, REF, and INDEXED AGE / COMMIT columns.
+A state mark appears before each repository name.
+Green `✓` means queries read the displayed commit.
+The table shows seven SHA characters. Other output formats keep their existing SHA lengths.
+When all repositories share one owner, the REPO header shows the owner once.
+Rows then show bare repository names. Mixed owners keep full names.
 Cyan marks work, dim marks queued refs, and red marks failures or a silent indexer.
-Yellow `! not reporting` marks stale work that needs attention.
+Yellow `!` marks stale work that needs attention.
 Failure labels keep their scope: first pass, update, or repository check.
 A complete row stays green after its reporting indexer stops.
-Details appear under STATE. One footer gives `N of M ready` and an unfinished report's watch command.
+Details appear under the last column. One footer gives `N of M ready` and an unfinished report's watch command.
+The minimum table width is 80 columns.
+Five repositories with one owner, names through 32 characters, and `main` refs fit that width.
 Widths below 80 columns, or overflowing rows, select the pipe format.
+The CLI checks width after adding checkout relations. Long relations can select the pipe format.
 `NO_COLOR` removes colors. Non-UTF-8 terminals use ASCII marks and bars.
 
 Inside a checkout, its repository rows append the indexed commit's local relation after the SHA.
