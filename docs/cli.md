@@ -366,8 +366,10 @@ terminal:
 - **Docs and comment blocks show their first line.**
 - **The imports are one row**, `... N import lines`.
 - **No blank lines.** The line numbers carry the gaps.
-- **Test code is collapsed**: a `#[cfg(test)]` module, a `Test*` class, a
-  container named with `test`, `tests` or `testing` shows its head, a
+- **Test code is collapsed**: a module or type its language marks as test
+  code (`#[cfg(test)]`, a `TestCase` subclass, `@Suite`, `[TestFixture]`)
+  or whose name starts or ends with a test word (`tests`,
+  `integration_tests`, `TestHarness`, `testutil`) shows its head, a
   `// members:` roster of what it holds and a `... N lines` cue. A test
   file itself outlines fully.
 - **A long outline folds to depth 1.** Over about 300 rows, the server
