@@ -146,7 +146,7 @@ Query server: healthy
   cli:     0.1.70  matches the server
   credential: none — run ccx login or export CCX_API_TOKEN
 Indexer: running (0.1.70, cycle mode, started 18 min ago; last tick under a minute ago)
-Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
+Index: 1 of 2 repos ready; 1 first pass — ccx status --watch follows them
   acme/library  heads/main  indexed at 3f2a1c9e04b7 (6 min ago)
   acme/app  heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
 ```
@@ -180,11 +180,19 @@ walking the tree: 1,421 files found so far, 338 of 410 directories listed, about
 
 The estimate starts after 60 seconds of samples and 10% of known directories are listed.
 The directory total can grow. This estimate covers only the walk.
-After the walk, the files estimate uses the recent file rate and says `about N min`.
-It requires 60 seconds of samples. A zero rate shows `no progress for N min`.
+After the walk, the files estimate uses the slower recent or whole-attempt file rate.
+It says `about N min` after 60 seconds of samples with a final file total.
+Without a completed file since the previous sample, it holds the last estimate.
+It appends `no progress for 45 s`, or whole minutes after one minute.
+Without a previous estimate, it shows only the stall age.
+A restart collects fresh samples and discards the previous attempt's estimate.
 The walk uses its average directory rate over the attempt.
 One slow directory can increase the estimate. A minute without directory progress suppresses it.
 A confirmed stall appears even below 10% directory coverage.
+The summary counts first passes and updates separately: `1 first pass, 1 updating`.
+JSON supplies `summary.first_pass` and `summary.updating`; `summary.in_progress` keeps their sum.
+Symbols and finishing show elapsed time: `finishing, 1 min so far`.
+Before one minute, they say `under a minute so far`.
 File estimates can change when file costs change. `about` does not promise an accuracy bound.
 `ccx indexed`, query errors, and MCP carry the same walk estimate.
 The MCP `index_status` tool supplies readable status text and structured progress fields.
