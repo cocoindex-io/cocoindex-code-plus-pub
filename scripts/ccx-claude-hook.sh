@@ -24,7 +24,8 @@ source=$(field source)
 case "$event" in
   PreToolUse) kind=grep ;;
   PostToolUse) kind=result ;;
-  SessionStart | SubagentStart) kind=start ;;
+  SessionStart) kind=start ;;
+  SubagentStart) kind=subagent_start ;;
   *) exit 0 ;;
 esac
 
@@ -57,19 +58,18 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing) marker="$prefix-indexing" ;;
-        grep | result | start | subagent_start) ;;
+        indexing | grep | result | start | subagent_start) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) exit 0 ;;
       esac
-      [ -e "$marker" ] && exit 0
-      : >"$marker"
+      # Claim this (agent, kind) once, even when tool hooks run in parallel.
+      (set -C; : >"$marker") 2>/dev/null || exit 0
       printf '%s\n' "$output"
     fi
     ;;
   1)
     # Not indexed: final for this agent, whatever the event.
-    for k in grep result start; do : >"$prefix-$k"; done
+    for k in grep result start subagent_start indexing; do : >"$prefix-$k"; done
     ;;
   *)
     : >"$retry"

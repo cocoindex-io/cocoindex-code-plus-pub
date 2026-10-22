@@ -186,7 +186,9 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
   It prints the final report once, then exits 0 when ready or 1 at the timeout.
 - `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
   The command reads every page. More than three complete refs fold into a counted line per repository.
-- `--json` prints the heartbeat under `indexer` and the listing under `index`.
+- `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
+  For a paged listing, `index` contains the unchanged responses as an array.
+  The command preserves page cursors and wire timestamps.
 
 ### `ccx indexed` during a first pass
 
