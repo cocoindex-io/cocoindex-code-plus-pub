@@ -70,21 +70,14 @@ export CCX_API_TOKEN=<your-token>               # token deployments only
 ccx status        # server reachable + healthy (and which one), then the credential your next request would use
 ```
 
-`ccx status` reports two facts, separately. The server block — reachable and
-healthy, the URL it resolved and where that came from, version, uptime — is
-probed with no credential (`/health` is auth-exempt), then a `cli:` line
-says how this CLI's version stands to the server's (`matches the server`,
-`newer than the server`, or the warning `older than the server` with the
-upgrade command). The last line is the
-**credential** your next request would use: a cached login (`valid`, or
-`expired and could not be refreshed` with the fix named), `CCX_API_TOKEN`, or
-`none`. That line describes the credential; it does not test it — a token the
-server rejects is only caught by your first real request (`HTTP 401`; see
-[Troubleshooting](#troubleshooting)). The exit code follows the server fact:
-`0` whenever the server is healthy, even when the credential line is a warning,
-so scripts can keep waiting on `ccx status` for a server to come up. (CLIs
-before 0.1.41 print no credential line and fail `status` outright on an
-expired login.)
+`ccx status` probes health without a credential and shows the resolved host,
+server version, uptime, and credential in one header. It adds the CLI version
+only when it differs. An older CLI shows the upgrade command.
+The credential describes the next request; it does not test the token.
+A successful status request without a credential shows `auth off`.
+A 401 or 403 with no credential earns a separate login hint.
+The exit code follows server health, even when a credential warning appears.
+Use `ccx config show` to inspect where the server URL comes from.
 
 **SSO deployments (OIDC).** If your platform team enabled company-IdP sign-in,
 skip `CCX_API_TOKEN` and sign in once:
@@ -139,85 +132,47 @@ an hour to appear while server-side caches refresh.
 `ccx status` prints the server and credential block, then the indexer and index blocks:
 
 ```text
-Query server: healthy
-  url:     http://127.0.0.1:8080  [--server]
-  version: 0.1.70
-  uptime:  41.0s
-  cli:     0.1.70  matches the server
-  credential: none — run ccx login or export CCX_API_TOKEN
-Indexer: running (0.1.70, cycle mode, started 18 min ago; last tick under a minute ago)
-Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
-  acme/library  heads/main  indexed at 3f2a1c9e04b7 (6 min ago)
-  acme/app  heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
+ccx 127.0.0.1:8080: healthy, auth off, 0.1.70, up 18 min
+indexer: working, cycle mode, 1 ref in progress
+acme/library main: current at 3f2a1c9e04b7, indexed 6 min ago
+acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago
+1 of 2 ready. To wait: ccx status --wait-ready --timeout 600
 ```
 
-The server health sets the exit code: 0 means healthy, 1 means unreachable.
-A credential warning or unfinished first pass keeps exit 0.
-If health fails, the command skips the progress request.
-The `Indexer:` line says `running` (with the version and `cycle mode` or `live mode`) or `last run finished`.
-A yellow `no indexer has reported` or `not reporting since` line names the next command.
+Pipes and `--plain` use this format. MCP status text uses the same ref lines.
+Each ref occupies one line, without colors, bars, or column padding.
+A terminal shows REPO, REF, STATE, COMMIT, and INDEXED columns.
+Green `✓ current` means queries read the displayed commit.
+Cyan marks work, dim marks queued refs, and red marks failures or a silent indexer.
+Yellow `! not reporting` marks stale work that needs attention.
+Failure labels keep their scope: first pass, update, or repository check.
+A complete row stays green after its reporting indexer stops.
+Details appear under STATE. One footer gives `N of M ready` and an unfinished report's watch command.
+Widths below 80 columns, or overflowing rows, select the pipe format.
+`NO_COLOR` removes colors. Non-UTF-8 terminals use ASCII marks and bars.
 
-The index rows use these states:
+The header shows the server version and a duration such as `28 min` or `1 h 15 min`.
+It adds the CLI version only when it differs. A successful anonymous status request shows `auth off`.
+A 401 or 403 establishes that auth is required. A missing credential then earns a separate yellow login hint.
+The terminal header drops uptime first, then version, to fit its width.
+A healthy server exits 0 even while indexing. An unreachable server exits 1.
+Unqueryable refs, missing progress, stalled work, errors, and serving commits remain explicit.
+No next-check time or log command is invented.
 
-| State | Meaning |
-|---|---|
-| `indexed at <sha12> (<ago>)` | queries read this commit |
-| `committed at <sha12>, repo not queryable yet` | remaining refs must commit first |
-| `first pass N%` | files are being indexed for the first time |
-| `updating to <sha12>` | queries still read the commit named by `serving … meanwhile` |
-| `walking the tree` | the indexer discovers files and directories |
-| `queued behind <ref>` | another ref runs first |
-| `symbols: N of M modules` or `symbols: waiting for …` | symbol resolution runs or waits |
-| `finishing` | the engine commits the ref |
-| `first pass failed (attempt N)` | the next cycle retries; check the indexer's log |
-| `not reporting since` | the reporting indexer is no longer running |
-
-During the walk, the report can say:
-
-```text
-walking the tree: 1,421 files found so far, 338 of 410 directories listed, about 2 min to finish the walk
-```
-
-The estimate starts after 60 seconds of samples and 10% of known directories are listed.
-The directory total can grow. This estimate covers only the walk.
-After the walk, the files estimate uses the recent file rate and says `about N min`.
-It requires 60 seconds of samples. A zero rate shows `no progress for N min`.
-The walk uses its average directory rate over the attempt.
-One slow directory can increase the estimate. A minute without directory progress suppresses it.
-A confirmed stall appears even below 10% directory coverage.
-File estimates can change when file costs change. `about` does not promise an accuracy bound.
-`ccx indexed`, query errors, and MCP carry the same walk estimate.
-The MCP `index_status` tool supplies readable status text and structured progress fields.
-
-When progress is absent, the report says:
-
-```text
-Indexer: no indexer has reported — start ccx-indexer (the chart's indexer deployment), then ccx status --watch
-Index: no progress reported (the indexer predates 0.1.70, or has never started) — ccx repos lists what is indexed
-```
-
-- `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
-  Pipes, CI, and non-TTY SSH commands receive a complete plain report per tick.
-  Each plain report starts with a UTC timestamp line, such as `2026-10-22T05:00:00Z`.
-  `--plain` selects this format on a terminal, without colors or cursor control sequences.
-  Every report is flushed immediately, including terminal redraws.
-  It exits 0 when every repository is ready, 1 on SIGINT (Ctrl-C) or SIGTERM.
-  An interrupted terminal watch keeps the last report and adds a final newline.
-  The watch does not change cursor visibility or enter an alternate screen.
-  Failed health or status requests print a failure report and keep following.
-  A 429 or 503 response delays the next request by its `Retry-After` value.
-  The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
-- `ccx status --wait-ready --timeout 1800` waits without intermediate output.
-  It prints the final report once, then exits 0 when ready.
-  Non-TTY output and `--plain` use the same timestamped plain format.
-  It exits 1 at the timeout or when failures remain with nothing in progress.
-  `--watch` keeps following failed repositories and shows that they retry next cycle.
-- `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
-  The command reads every page. More than three complete refs fold into a counted line per repository.
-- `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
-  JSON output has no timestamp lines or terminal controls. Error diagnostics go to stderr.
-  For a paged listing, `index` contains the unchanged responses as an array.
-  The command preserves page cursors and wire timestamps.
+- `ccx status --watch` redraws a terminal table every 10 seconds.
+  Plain watch prints the header once, then UTC timestamped lines for changed refs, folding counts, and ready counts.
+  Ref identities include the repository key, so names across instances do not collide.
+  Semantic field changes, including progress and phase timestamps, print a new line.
+  Clock passage and idle-check timestamps alone do not print a ref line.
+  After a minute without changes, it prints one idle notice.
+  It exits 0 when every repository is ready, and 1 on SIGINT or SIGTERM.
+  Request failures remain visible. A 429 or 503 respects `Retry-After`.
+- `ccx status --wait-ready --timeout 600` prints the final report once.
+  It exits 0 when ready, and 1 at timeout or when failures remain without active work.
+- `--all` disables folding. Otherwise, complete refs beyond three per repository fold into a count.
+  Above 50 repositories, all complete refs fold. Every page is read.
+- `--json` preserves the heartbeat and listing responses, including page cursors and wire timestamps.
+  JSON adds no timestamps or terminal controls. Diagnostics go to stderr.
 
 ### `ccx indexed` during a first pass
 
