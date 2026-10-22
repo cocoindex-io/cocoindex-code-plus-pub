@@ -157,13 +157,17 @@ Uptime uses age units, rounded to the nearest minute above one minute: `under a 
 Inside a checkout, its repository rows show the indexed commit's relation to local `HEAD` after the SHA.
 Examples include `(your HEAD)`, `(HEAD~2)`, and `(not in your clone yet; git fetch to compare)`.
 The comparison uses local git only; it never fetches. Other repositories keep their server-only rows.
+The watch caches each SHA comparison and refreshes it when HEAD, its branch ref, or fetched objects change.
 JSON output keeps the server response unchanged.
 
-An auth-off server prints `credential: not needed (server auth: none)`.
+When no credential is configured, an auth-off server prints `credential: not needed (server auth: none)`.
 The CLI first checks protected-resource metadata and confirms anonymous access to the protected status endpoint.
 A missing metadata endpoint alone does not establish anonymous access.
 API key and OIDC servers keep the credential line and its login advice.
 Failed discovery also keeps the credential line.
+Discovery shares a two-second request timeout budget, clipped to `--timeout`.
+Configured tokens and saved logins skip the discovery requests.
+`--json` and `--wait-ready` also skip this advisory discovery.
 
 A credential warning or unfinished first pass keeps exit 0.
 If health fails, the command skips the progress request.
