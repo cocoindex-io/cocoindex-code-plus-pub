@@ -55,6 +55,14 @@ case "$status" in
     # Indexed. Output means this moment earned its hint; silence means it did
     # not (a normal result), and the next such moment may.
     if [ -n "$output" ]; then
+      reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+      case "$reported_kind" in
+        indexing) marker="$prefix-indexing" ;;
+        grep | result | start | subagent_start) ;;
+        "") ;; # Older CLIs identify the kind by the event.
+        *) exit 0 ;;
+      esac
+      [ -e "$marker" ] && exit 0
       : >"$marker"
       printf '%s\n' "$output"
     fi

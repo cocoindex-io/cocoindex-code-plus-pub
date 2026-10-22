@@ -287,10 +287,16 @@ helm install ccx oci://ghcr.io/cocoindex-io/charts/cocoindex-code-plus \
 helm test ccx -n ccx                                   # GET /health
 kubectl -n ccx port-forward svc/ccx-cocoindex-code-plus-query-server 8080:8080
 # then, from a workstation (see cli.md):
-CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<your-token> ccx search "rate limiter"
+CCX_SERVER_URL=http://127.0.0.1:8080 CCX_API_TOKEN=<your-token> ccx status --watch
 ```
 
 The install NOTES print the exact service name + port-forward command.
+
+`ccx status --watch` verifies the deployment and follows its first pass.
+`Query server: healthy` means the query server is up.
+`Indexer: no indexer has reported` means the indexer pod is not up yet.
+`walking the tree` means the first pass has started.
+The command exits when every repository is ready.
 
 ## Index config repo
 

@@ -523,6 +523,8 @@ Note the two different senses of "ref": `ccx git-refs` lists **git** refs
 
 ## When ccx itself fails
 
+On `index_in_progress`, use native tools and do not retry before the time the error names.
+
 Errors exit non-zero; notes (the ref used, subtree scoping, symbol coverage) go
 to stderr and results to stdout — read both. Server and environment failures —
 `HTTP 503` (index tables not built yet), `HTTP 401`, an expired login (the
