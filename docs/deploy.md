@@ -2580,6 +2580,7 @@ GitHub is supported first; GitLab change ingest follows later.
 Content reads use GraphQL batches of up to 25 records.
 Each pull request also needs one REST compare request for its merge base.
 Long discussions need additional GraphQL pages.
+Outdated review threads need REST comment pages to preserve their existing anchors.
 A recorded issue and pull request need 2 requests, versus 9 through REST.
 GraphQL reads honor the host's retry hints and point-budget reset.
 An older GHES schema with missing fields uses REST automatically.
