@@ -181,7 +181,8 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
 
 - `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
   Other outputs receive plain reports. It exits 0 when every repository is ready, 1 on Ctrl-C.
-  A 429 response delays the next request by its `Retry-After` value.
+  A 429 or 503 response delays the next request by its `Retry-After` value.
+  The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
 - `ccx status --wait-ready --timeout 1800` waits without intermediate output.
   It prints the final report once, then exits 0 when ready or 1 at the timeout.
 - `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
@@ -201,7 +202,8 @@ Not indexed: acme/other — ccx status lists the repos this server indexes; add 
 
 An unfinished or failed first pass exits 1. An indexed ref exits 0 during an update.
 `ccx indexed --json` includes the progress snapshot and `queryable`.
-The plugin reports a first pass once per agent, then permits the ordinary hints after it commits.
+The plugin reports a first pass once per agent, then permits ordinary hints when the repository becomes queryable.
+A committed ref whose repository is still blocked earns the same indexing hint, without spending ordinary hint markers.
 
 ## Use
 
