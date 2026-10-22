@@ -145,10 +145,10 @@ Query server: healthy
   uptime:  41.0s
   cli:     0.1.70  matches the server
   credential: none — run ccx login or export CCX_API_TOKEN
-Indexer: running (0.1.70, cycle mode, started 18 min ago; last tick under a minute ago)
+Indexer: pass running for 18 min, 1 ref in progress (0.1.70, cycle mode, up 18 min)
 Index: 1 of 2 repos ready; 1 first pass — ccx status --watch follows them
-  acme/library  heads/main  indexed at 3f2a1c9e04b7 (6 min ago)
-  acme/app  heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
+  acme/library  heads/main  indexed 6 min ago at 3f2a1c9e04b7
+  acme/app      heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
 ```
 
 The server health sets the exit code: 0 means healthy, 1 means unreachable.
@@ -161,10 +161,10 @@ The index rows use these states:
 
 | State | Meaning |
 |---|---|
-| `indexed at <sha12> (<ago>)` | queries read this commit |
-| `committed at <sha12>, repo not queryable yet` | remaining refs must commit first |
+| `indexed <ago> at <sha12>` | queries read this commit |
+| `committed <ago> at <sha12>, repo not queryable yet` | remaining refs must commit first |
 | `first pass N%` | files are being indexed for the first time |
-| `updating to <sha12>` | queries still read the commit named by `serving … meanwhile` |
+| `updating for <elapsed> to <sha12>` | queries still read the commit named by `serving … meanwhile` |
 | `walking the tree` | the indexer discovers files and directories |
 | `queued behind <ref>` | another ref runs first |
 | `symbols: N of M modules` or `symbols: waiting for …` | symbol resolution runs or waits |
@@ -194,6 +194,15 @@ A confirmed stall appears even below 10% directory coverage.
 
 The summary counts first passes and updates separately: `1 first pass, 1 updating`.
 JSON supplies `summary.first_pass` and `summary.updating`; `summary.in_progress` keeps their sum.
+
+The indexed age measures index completion, not the Git commit time.
+Repository and ref columns align in text listings. JSON does not change.
+Above 50 repositories, the footer counts hidden repositories and names `ccx status --all`.
+
+An idle cycle indexer says `Indexer: idle, next cycle in 40 s`.
+The cycle period includes pass time. Older heartbeat rows omit the countdown.
+A running pass says `pass running for 2 min, 1 ref in progress`.
+Live mode says `watching`. Metadata includes the version, mode, and process uptime.
 
 Symbols and finishing show elapsed time: `finishing, 1 min so far`.
 Before one minute, they say `under a minute so far`.
