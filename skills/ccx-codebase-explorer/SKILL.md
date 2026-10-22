@@ -1,9 +1,9 @@
 ---
 name: ccx-codebase-explorer
-description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
-when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
+description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
+when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-21.2"
+  ccx-skill-revision: "2026-10-22.1"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-21.2`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-22.1`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -84,6 +84,22 @@ string, a config key, a log message, a word in a comment or a doc — goes to
 `ccx grep --text`, which searches every file of the indexed repo with no
 language to name. A structural `ccx grep` with no metavariable is neither: it
 floods hits.
+
+## Pull request and issue content
+
+When `ccx indexed --json` carries a `changes` block, use the change index at
+these four moments:
+
+- Before redoing listed work, pass the list to `ccx prior -` on stdin.
+- For a test red on main, run `ccx refs <test> --kind change --since 2d`.
+- For a line that looks wrong, read its `touched by` annotation, then run
+  `ccx refs <symbol> --kind change`.
+- For a symptom, run `ccx search --kind change "<symptom>"`.
+
+Read the freshness line before treating absence as evidence. `insufficient`
+means coverage cannot answer. `near` and `weak` use the server's score floor.
+A change hit records what its author says. Read the current code to check it.
+Use each hit's printed `state:` command for the host's current answer.
 
 ## Repo & ref scoping (applies to every query command)
 
