@@ -13,7 +13,9 @@ set -u
 
 input=$(cat)
 field() {
-  printf '%s' "$input" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
+  # Keep escaped JSON characters inside the value. A quoted directory in a
+  # Bash command must not hide the shell expression that follows it.
+  printf '%s' "$input" | sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"\\]*\(\\.[^"\\]*\)*\)".*/\1/p' | head -n 1
 }
 event=$(field hook_event_name)
 session=$(field session_id)
