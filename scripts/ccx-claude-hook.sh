@@ -38,7 +38,14 @@ case "$event" in
     kind=grep
     # Keep the event marker separate for host-history commands. The CLI
     # classifies their exact command shape and reports the final kind.
-    case "$(field command)" in gh\ *|git\ log\ *) kind=change ;; esac
+    command_text=$(field command)
+    case "$command_text" in gh\ *|git\ log\ *) kind=change ;; esac
+    # A shell expression may earn a different kind from its first command.
+    # Do not let a guessed grep marker hide a later host-history search.
+    # The CLI parses shell segments and claims the returned marker below.
+    case "$command_text" in
+      *'&'*|*'|'*|*';'*|*'$('*|*'`'*|*'\n'*) kind=unknown ;;
+    esac
     ;;
   PostToolUse) kind=result ;;
   SessionStart) kind=start ;;
@@ -57,7 +64,7 @@ if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = cle
 fi
 
 marker="$prefix-$kind"
-[ -e "$marker" ] && exit 0
+[ "$kind" != unknown ] && [ -e "$marker" ] && exit 0
 # "Could not tell" (server down, not logged in) is retried after five minutes,
 # not at every search.
 retry="$prefix-retry"
