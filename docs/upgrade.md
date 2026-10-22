@@ -106,7 +106,9 @@ Then set `changeIndex.enabled: true` and add `changes.enabled: true` to selected
 A local git entry also needs `changes.from`; a code-host entry must omit it.
 See [Change content ingest](deploy.md#change-content-ingest) for settings and exposure rules.
 
-Startup names any missing permission. A refused credential leaves the existing index unchanged.
+The repository's `changes` status row names a missing permission or refused credential.
+The next refresh retries change ingest; code indexing continues for every repository.
+A refused credential leaves the existing change index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
 GitLab change ingest does not ship in this slice.
 
