@@ -156,7 +156,7 @@ ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
 # Plain-text grep (a regex over the text of EVERY file — comments, docs, config; no -l needed)
 ccx grep --text 'retry_budget'                    # a word or phrase anywhere; smart case
-ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (Python re syntax), scoped by path
+ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (ripgrep's dialect), scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l is an optional filter
 ccx grep --text -s 'return\s+\d{7};' --path 'src/*' # -s: case-sensitive (cheaper on a large repo); -i: insensitive
 ccx grep --text 'retry' --cursor <c>              # continue a scan where its stderr note stopped
@@ -310,7 +310,9 @@ usually finds nothing; the CLI then prints a `warning:` line on stderr showing
 the pattern in ccx's forms (the MCP response carries it as `warnings`).
 
 `ccx grep --text` is the **plain-text** mode: the pattern is a regular
-expression (Python `re` syntax; a plain word works as-is) matched line by line
+expression in ripgrep's dialect (what `rg` reads: `\d`, `\w`, `\b`, `\s`, `|`,
+`(?i)`, `[[:alpha:]]`; lookarounds and backreferences work too, on a slower
+engine; a plain word works as-is) matched line by line
 against the text of **every** file in the ref — comments, docs, config and
 languages the structural grep cannot parse included — so it needs no `-l`
 (with `--text`, `-l` is an optional, repeatable filter by language). Case is

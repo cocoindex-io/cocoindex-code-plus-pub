@@ -53,6 +53,12 @@ ending in `after 0 files` whose cursor made no progress.
   of them, for most patterns — cost one search instead of one per line. A
   full scan of a large repository that took a minute takes seconds; the
   deadline stop and the cursor still cover what does not fit.
+- **The pattern is read in ripgrep's dialect.** `ccx grep --text` now matches
+  with the same regex engine `rg` uses: everything `rg` accepts works as
+  there, and the engine never backtracks catastrophically. POSIX classes
+  (`[[:alpha:]]`), `\z` and Unicode classes (`\p{Greek}`) work now; `\Z`
+  does not (write `\z`). A pattern with a lookaround or a backreference still
+  works, matched by the previous engine with a warning that it is slower.
 - **Verify.** `ccx grep --text 'return.*null.*delete.*cast.*assert' --path '*' -k 5`
   on a large repository returns inside the deadline with a cursor, and the
   same command with that `--cursor` scans further.
