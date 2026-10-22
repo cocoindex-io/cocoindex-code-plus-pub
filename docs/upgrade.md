@@ -34,6 +34,29 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
+
+Nothing is required: upgrade normally. Read on if `ccx grep --text` on a
+large repository answered `503 Request deadline exceeded` or a warning
+ending in `after 0 files` whose cursor made no progress.
+
+- **What changed.** The lookup that asks the text search index which files
+  hold the pattern's literals now runs under a budget (a fifth of the time
+  left, at most 10 s). When every literal is in most files, the lookup gives
+  up and the scan takes over with the rest of the deadline, returns its
+  matches so far and a cursor that makes progress. A warning names the
+  abandoned lookup. A scan that could scan nothing in the time left now says
+  that a retry with its cursor repeats the same work, and names the levers
+  (`--path`, a rarer literal, `-s`) instead of advising a retry.
+- **The scan itself is several times faster.** Each file is searched once as
+  a whole before its lines are visited, so files without a match — nearly all
+  of them, for most patterns — cost one search instead of one per line. A
+  full scan of a large repository that took a minute takes seconds; the
+  deadline stop and the cursor still cover what does not fit.
+- **Verify.** `ccx grep --text 'return.*null.*delete.*cast.*assert' --path '*' -k 5`
+  on a large repository returns inside the deadline with a cursor, and the
+  same command with that `--cursor` scans further.
+
 ## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far
 
 Nothing is required in the deployment: upgrade normally, and upgrade the

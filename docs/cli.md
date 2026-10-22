@@ -321,10 +321,13 @@ short forms); `-w/--word` matches whole words only. Output is one
 --offset` takes. A pattern with literal text in it is cheap: the server
 prefilters on that text in SQL, and reads only the files holding it when the
 deployment has the [text search index](deploy.md#text-search-index); one with
-none — `.*`, a character class alone — or whose only literal is in most files
-(`return`) scans every file of the ref, so add `--path` on a large repository,
-and prefer `-s` when case does not matter to the question (the
-case-insensitive scan costs several times more).
+none — `.*`, a character class alone — or whose literals are all in most
+files (`return.*null.*delete`) scans every file of the ref, so add `--path`
+on a large repository, and prefer `-s` when case does not matter to the
+question (the case-insensitive scan costs several times more). The index
+lookup itself is bounded: when every literal is common it gives up after a
+fraction of the request's time and the scan takes over, and the warning says
+so.
 
 **Grep pages by cursor, in a shuffled scan order.** Both grep modes scan files
 in a fixed shuffled order (by a hash of the path), so a page is a sample of
