@@ -73,9 +73,24 @@ ccx status        # server reachable + healthy (and which one), then the credent
 `ccx status` probes health without a credential and shows the resolved host,
 server version, uptime, and credential in one header. It adds the CLI version
 only when it differs. An older CLI shows the upgrade command.
-The credential describes the next request; it does not test the token.
+
+The index-status request tests the resolved credential; only `/health` is anonymous.
+Each observation resolves the credential once, including any login refresh.
+`--wait-ready --timeout S` bounds refresh and listing requests by the remaining time.
+
+A rejected credential shows `auth rejected`, its source, and the fix.
+For `token (CCX_API_TOKEN) rejected`, check the token or run `ccx login`.
+For `login (cached) rejected`, run `ccx login`, or `ccx logout` to use `CCX_API_TOKEN`.
 A successful status request without a credential shows `auth off`.
-A 401 or 403 with no credential earns a separate login hint.
+A 401 or 403 with no credential shows `auth required` and a login hint.
+
+`--watch --plain` and piped watch output print timestamped progress changes.
+Failed polls print errors and credential advice.
+After a failed health or listing request succeeds, watch prints `server reachable again`.
+
+`TERM=dumb` or an unset `TERM` selects plain output without colour or cursor control.
+`NO_COLOR` suppresses colour and selects the same progress log during watch.
+
 The exit code follows server health, even when a credential warning appears.
 Use `ccx config show` to inspect where the server URL comes from.
 
@@ -791,7 +806,7 @@ has been checked against the repositories in question.
 
 | Symptom | Cause / fix |
 |---|---|
-| `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` names the credential in use but does not validate it against the server. |
+| `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` tests the credential with the index-status request and names its source and fix when rejected. |
 | `login: expired and could not be refreshed` (in `ccx status`), or `Your login for … has expired and could not be refreshed` (from any other command) | Your cached SSO login aged out — the IdP's session lifetime, so an overnight gap can do it. The server itself is fine (`status` still reports it healthy). Run `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN`. |
 | `HTTP 503` ending in `is being indexed: …` | The repo (or the ref you named) is in its first pass, or committed but not queryable yet. `ccx status --watch` follows it; retry after the `retry in …` the error names, and use your native tools meanwhile. |
 | any other `HTTP 503` | Index not built yet — the indexer hasn't populated the table; `ccx status` says whether an indexer has reported; retry once it has (ask your platform team if it persists). |
