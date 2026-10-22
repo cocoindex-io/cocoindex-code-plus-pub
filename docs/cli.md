@@ -151,6 +151,11 @@ Details appear under STATE. One footer gives `N of M ready` and an unfinished re
 Widths below 80 columns, or overflowing rows, select the pipe format.
 `NO_COLOR` removes colors. Non-UTF-8 terminals use ASCII marks and bars.
 
+Inside a checkout, its repository rows append the indexed commit's local relation after the SHA.
+Examples include `(your HEAD)`, `(HEAD~2)`, and `(not in your clone yet; git fetch to compare)`.
+The comparison never fetches. Other repositories keep server facts only. JSON stays unchanged.
+Watch caches each SHA comparison until the checkout or object-store metadata changes.
+
 The header shows the server version and a duration such as `28 min` or `1 h 15 min`.
 It adds the CLI version only when it differs. A successful anonymous status request shows `auth off`.
 A 401 or 403 establishes that auth is required. A missing credential then earns a separate yellow login hint.
@@ -165,10 +170,19 @@ No next-check time or log command is invented.
   Semantic field changes, including progress and phase timestamps, print a new line.
   Clock passage and idle-check timestamps alone do not print a ref line.
   After a minute without changes, it prints one idle notice.
-  It exits 0 when every repository is ready, and 1 on SIGINT or SIGTERM.
+  It exits 0 after it observes work and every repository becomes ready.
+  If it starts ready, it waits up to 10 minutes for work to appear.
+  `--idle-timeout S` changes this grace period; `0` exits immediately when ready.
+  Once work appears, the idle timeout no longer applies.
+  Idle expiry prints `Watch stopped: no indexing work observed for 600 seconds.` and exits 0.
+  A successful listing must confirm readiness before idle expiry can end the watch.
+  Read failures do not restart the idle clock. `--timeout S` bounds the whole command and exits 1.
+  JSON suppresses repeated ready reports during idle; the stop line goes to stderr.
+  SIGINT and SIGTERM exit 1.
   Request failures remain visible. A 429 or 503 respects `Retry-After`.
 - `ccx status --wait-ready --timeout 600` prints the final report once.
-  It exits 0 when ready, and 1 at timeout or when failures remain without active work.
+  It exits 0 immediately when ready, and 1 at timeout or when failures remain without active work.
+  `--idle-timeout` does not affect `--wait-ready`.
 - `--all` disables folding. Otherwise, complete refs beyond three per repository fold into a count.
   Above 50 repositories, all complete refs fold. Every page is read.
 - `--json` preserves the heartbeat and listing responses, including page cursors and wire timestamps.
