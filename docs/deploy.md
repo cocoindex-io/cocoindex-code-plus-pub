@@ -2392,6 +2392,91 @@ Search keeps serving the last completed index meanwhile.
 to standard error and collectors stamped the lot `ERROR`: see
 [upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
 
+### Metrics export (OpenTelemetry)
+
+The indexer's engine records what every pipeline component did and how long
+it took: files walked, chunks embedded or reused, rows written to each
+table, why a component was rebuilt, where the time went, whether the
+in-flight limit is the bottleneck, what failed, and when the last pass
+reached ready. It pushes those measurements over OpenTelemetry (OTLP,
+HTTP/protobuf) to the metrics store you already run, and a reference Grafana
+dashboard reads them unmodified.
+
+Export is **off until you name an endpoint**. A bare install exports nothing
+and opens no connection; with an endpoint set, the indexer is the only
+workload that sends, and nothing leaves the deployment except to that
+endpoint. The series carry repository names (the `stats_group` label), so
+pointing them at a hosted store is a data-sharing decision.
+
+```yaml
+metrics:
+  otlp:
+    # An OpenTelemetry Collector, or a Prometheus with its OTLP receiver on
+    # (`--web.enable-otlp-receiver`; the path is /api/v1/otlp).
+    endpoint: http://otel-collector.monitoring.svc:4318
+    # Optional, for an authenticated endpoint (Grafana Cloud, a gateway): a
+    # Secret whose key OTEL_EXPORTER_OTLP_HEADERS holds the request headers.
+    headersSecret: ""
+    # Milliseconds between exports; unset keeps the engine's 60 s.
+    exportIntervalMs: ~
+  resourceAttributes:
+    deployment.environment: prod
+```
+
+```bash
+kubectl -n ccx create secret generic otlp-headers \
+  --from-literal=OTEL_EXPORTER_OTLP_HEADERS='Authorization=Basic <base64-credentials>'
+```
+
+Every series carries `env`, `app` and the resource attributes the chart
+sets (`service.name` = `ccx-indexer`, `service.version` = the release,
+`k8s.namespace.name`). Component-level series add `stats_group` — one per
+indexed repository, titled `repo <owner>/<name> (<repo-key>)` — and
+`processor`, the pipeline step. Prometheus renders the names with
+underscores and a `_total` suffix on counters. The ones to start from:
+
+| Question | Series |
+|---|---|
+| When did the last pass finish? | `cocoindex_run_last_ready_time_seconds`; `cocoindex_runs_total` by `status` |
+| How much changed, per repository? | `cocoindex_component_runs_total` by `stats_group`, `processor`, `outcome` — `declare_chunk_embedding` with `outcome="added"` is embeddings paid for, `unchanged` is embeddings reused |
+| Why did everything re-run? | `cocoindex_component_memo_decisions_total` by `decision` |
+| Where does the time go? | `cocoindex_component_process_duration_seconds` and `cocoindex_component_submit_duration_seconds` histograms |
+| What landed in the tables? | `cocoindex_target_reconciles_total` by `container` (the table partition) and `result`; `cocoindex_target_sink_failures_total` |
+| Is concurrency the limiter? | `cocoindex_admission_available`, `cocoindex_admission_wait_duration_seconds` |
+| What is failing? | `cocoindex_errors_total` by `processor`, `exception_type` |
+
+The full catalog with units and labels is CocoIndex Plus's
+[metrics reference](https://cocoindex.io/docs/advanced_topics/metrics_reference/).
+
+**The dashboard.** The chart ships CocoIndex Plus's reference Grafana
+dashboard. With a Grafana dashboard sidecar (kube-prometheus-stack's
+default), enable the ConfigMap and the dashboard appears on its own:
+
+```yaml
+metrics:
+  grafanaDashboard:
+    enabled: true
+    namespace: monitoring        # where the sidecar watches, if not this namespace
+    annotations:
+      grafana_folder: CocoIndex
+```
+
+Without a sidecar, enable the ConfigMap all the same, take the JSON from it
+and import it (Dashboards, New, Import), then pick your Prometheus
+datasource. With the release `ccx` in namespace `ccx` (substitute yours):
+
+```bash
+kubectl -n ccx get configmap ccx-cocoindex-code-plus-grafana-dashboard \
+  -o jsonpath='{.data.cocoindex\.json}' > cocoindex.json
+```
+
+The dashboard has one section per repository (the stats-group row repeats),
+a freshness row, a targets row and a concurrency row. The indexer runs in
+cycle mode once the answer cache or Insights is on, so the process stays up
+and the freshness series stays current; a one-shot `--once` run flushes its
+final counters at exit and its series then go stale after Prometheus's
+staleness window.
+
 ### Alerting
 
 **A Ready pod does not prove a working deployment.** The indexer can fail
@@ -2405,6 +2490,7 @@ already run:
 | The workloads stay up | a container restarts, or a Deployment stays below its desired available replicas for 15 minutes | crash loops, OOM kills, pods that never become Ready |
 | The indexer applies what it reads | any indexer line contains `component build failed` | a pass that fails part of the index while the pod stays Ready; such a pass publishes no completeness stamps |
 | The query server reports no errors | a query-server line logged at `ERROR` or `CRITICAL` | failures behind requests, such as the IdP's signing keys becoming unreachable |
+| The index converges (with [metrics export](#metrics-export-opentelemetry) on) | `time() - max by (app) (cocoindex_run_last_ready_time_seconds)` exceeds a few cycles | passes that run but never reach ready — a stuck resolve, a provider outage the retries hide |
 
 - **Match the level word, not the severity.** Warnings share standard error
   with errors ([Logs and severity](#logs-and-severity)), so a collector that
