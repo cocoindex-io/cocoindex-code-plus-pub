@@ -2577,6 +2577,14 @@ Each installation must approve the added permissions.
 Startup names a missing permission and refuses the enabled entry.
 GitHub is supported first; GitLab change ingest follows later.
 
+Content reads use GraphQL batches of up to 25 records.
+Each pull request also needs one REST compare request for its merge base.
+Long discussions need additional GraphQL pages.
+A recorded issue and pull request need 2 requests, versus 9 through REST.
+GraphQL reads honor the host's retry hints and point-budget reset.
+An older GHES schema with missing fields uses REST automatically.
+No added permission or client setting is required.
+
 Set `changeIndex.enabled: true` in chart values.
 Then add this mapping to each repository entry in the config repository:
 
