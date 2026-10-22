@@ -2588,6 +2588,8 @@ The operator must approve that exposure for the named change source.
 `changeIndex.maxRecordsPerCycle` defaults to 200.
 `limiterShare` defaults to 0.25 of each instance's source budget.
 `sweepShare` reserves 0.2 of the record budget for comment edits and deletions.
+Enabled budgets must leave at least two reads outside the reserved sweep.
+Increase `changeIndex.maxRecordsPerCycle` or reduce `changeIndex.sweepShare` if startup rejects their combination.
 `sweepDays` defaults to 14.
 `maxTextBytesPerPart` defaults to 8192; longer text keeps its beginning.
 `dropLines` accepts regular expressions.
