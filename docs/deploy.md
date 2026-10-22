@@ -1986,19 +1986,26 @@ calls on the GHES SCIM route). A public repo settles in 2. Within the decision
 TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
 worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
 Insights views that list repositories) checks each indexed repo once per TTL
-window, at most `authz.listReposCheckConcurrency` (default 10) in flight. It
-looks the repos up in batches, one GraphQL request per approved org per
-hundred candidates: public repos cost nothing there, and when the
+window. It looks the repos up in batches — one GraphQL request per 32
+candidates under one installation, up to 8 requests in flight per code host,
+all installations at once: public repos cost nothing there, and when the
 installation grants **Organization → Members: Read-only** the same request
 answers the engineer's permission on each private or internal repo they can
 read, so those cost nothing either. What still costs one call each: every
 repo the engineer cannot read (the batch never settles a denial), and every
-private or internal repo under an installation without that grant. The
-query server logs, once per installation, whether the grant is present; a
-missing one reads `grants no Organization Members (read)` and names the fix.
-Size the envelope as active engineers × indexed repos per TTL window. On GHES
-the ceiling is your instance's own rate-limit setting (often disabled by
-default) rather than a per-installation hourly quota.
+private or internal repo under an installation without that grant; those
+per-repo calls run at most `authz.listReposCheckConcurrency` (default 10) at
+a time. The query server logs, once per installation, whether the grant is
+present; a missing one reads `grants no Organization Members (read)` and
+names the fix. What a cold walk takes is a few round trips, not one per
+repository: each installation's setup (locate, mint, map the engineer, read
+their login), one or two rounds of batched requests, then the refusals. The
+audit line's `provider_busy_ms` against `provider_ms` shows whether a slow
+request waited in series or in parallel
+([security.md](security.md#logging--audit)). Size the envelope as active
+engineers × indexed repos per TTL window. On GHES the ceiling is your
+instance's own rate-limit setting (often disabled by default) rather than a
+per-installation hourly quota.
 
 #### Pre-flight check
 

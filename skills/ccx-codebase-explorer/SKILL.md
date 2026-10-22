@@ -494,7 +494,13 @@ gives each function one row at its line —
 47 — each type with its fields, docs by their first line, the imports as one
 row. Each header ends with where the text came from: `working tree`,
 `working tree, differs from indexed <ref>@<sha>` (index line numbers for this
-file have moved), or `indexed <ref>@<sha>`.
+file have moved), or `indexed <ref>@<sha>`. A stderr note
+`outline folded to depth 1: the full outline is N rows` means the file is
+large and you got its items only, each container collapsed to its head and a
+`// members:` roster: open one object with `ccx show PATH:LINE` next, or
+`ccx show --depth 2 PATH` for one more level, rather than re-running with
+`-e`. Test code (`#[cfg(test)]`, `Test*` classes, names with a test word) is
+collapsed the same way in every outline.
 
 ```bash
 ccx show src/app.py                    # the outline: every def and class at its line
