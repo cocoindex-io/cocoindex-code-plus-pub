@@ -2576,7 +2576,10 @@ The feature stores no record state, review verdict, label, assignee, milestone, 
 
 Before enabling it, give the indexer's GitHub App **Issues: read** and **Pull requests: read**.
 Each installation must approve the added permissions.
-Startup names a missing permission and refuses the enabled entry.
+A missing permission fails only that repository's change ingest.
+The status report shows a failed `changes` row with the error text.
+The next refresh retries it; code indexing continues for every repository.
+The token permission check uses GraphQL, so REST quota exhaustion cannot block it.
 GitHub is supported first; GitLab change ingest follows later.
 
 Content reads use GraphQL batches of up to 25 records.
