@@ -70,21 +70,14 @@ export CCX_API_TOKEN=<your-token>               # token deployments only
 ccx status        # server reachable + healthy (and which one), then the credential your next request would use
 ```
 
-`ccx status` reports two facts, separately. The server block — reachable and
-healthy, the URL it resolved and where that came from, version, uptime — is
-probed with no credential (`/health` is auth-exempt), then a `cli:` line
-says how this CLI's version stands to the server's (`matches the server`,
-`newer than the server`, or the warning `older than the server` with the
-upgrade command). The last line is the
-**credential** your next request would use: a cached login (`valid`, or
-`expired and could not be refreshed` with the fix named), `CCX_API_TOKEN`, or
-`none`. That line describes the credential; it does not test it — a token the
-server rejects is only caught by your first real request (`HTTP 401`; see
-[Troubleshooting](#troubleshooting)). The exit code follows the server fact:
-`0` whenever the server is healthy, even when the credential line is a warning,
-so scripts can keep waiting on `ccx status` for a server to come up. (CLIs
-before 0.1.41 print no credential line and fail `status` outright on an
-expired login.)
+`ccx status` probes health without a credential and shows the resolved host,
+server version, uptime, and credential in one header. It adds the CLI version
+only when it differs. An older CLI shows the upgrade command.
+The credential describes the next request; it does not test the token.
+A successful status request without a credential shows `auth off`.
+A 401 or 403 with no credential earns a separate login hint.
+The exit code follows server health, even when a credential warning appears.
+Use `ccx config show` to inspect where the server URL comes from.
 
 **SSO deployments (OIDC).** If your platform team enabled company-IdP sign-in,
 skip `CCX_API_TOKEN` and sign in once:
@@ -139,25 +132,32 @@ an hour to appear while server-side caches refresh.
 `ccx status` prints the server and credential block, then the indexer and index blocks:
 
 ```text
-Query server: healthy
-  url:     http://127.0.0.1:8080  [--server]
-  version: 0.1.70
-  uptime:  41.0s
-  cli:     0.1.70  matches the server
-  credential: none — run ccx login or export CCX_API_TOKEN
-Indexer: pass running for 18 min, 1 ref in progress (0.1.70, cycle mode, up 18 min)
-Index: 1 of 2 repos ready; 1 first pass — ccx status --watch follows them
-  acme/library  heads/main  indexed 6 min ago at 3f2a1c9e04b7
-  acme/app      heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
+ccx 127.0.0.1:8080: healthy, auth off, 0.1.70, up 18 min
+indexer: pass running for 18 min, 1 ref in progress (0.1.70, cycle mode, up 18 min)
+acme/library main: indexed 6 min ago at 3f2a1c9e04b7
+acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago
+1 of 2 ready. To wait: ccx status --wait-ready --timeout 600
 ```
 
-The server health sets the exit code: 0 means healthy, 1 means unreachable.
-A credential warning or unfinished first pass keeps exit 0.
-If health fails, the command skips the progress request.
-The `Indexer:` line says `running` (with the version and `cycle mode` or `live mode`) or `last run finished`.
-A yellow `no indexer has reported` or `not reporting since` line names the next command.
+Pipes and `--plain` use this format. MCP status text uses the same ref lines.
+Each ref occupies one line, without colors, bars, or column padding.
+A terminal shows REPO, REF, STATE, and INDEXED AGE / COMMIT columns.
+Green `✓ current` means queries read the displayed commit.
+Cyan marks work, dim marks queued refs, and red marks failures or a silent indexer.
+Yellow `! not reporting` marks stale work that needs attention.
+Failure labels keep their scope: first pass, update, or repository check.
+A complete row stays green after its reporting indexer stops.
+Details appear under STATE. One footer gives `N of M ready` and an unfinished report's watch command.
+Widths below 80 columns, or overflowing rows, select the pipe format.
+`NO_COLOR` removes colors. Non-UTF-8 terminals use ASCII marks and bars.
 
-The index rows use these states:
+The header shows the server version and a duration such as `28 min` or `1 h 15 min`.
+It adds the CLI version only when it differs. A successful anonymous status request shows `auth off`.
+A 401 or 403 establishes that auth is required. A missing credential then earns a separate yellow login hint.
+The terminal header drops uptime first, then version, to fit its width.
+A healthy server exits 0 even while indexing. An unreachable server exits 1.
+Unqueryable refs, missing progress, stalled work, errors, and serving commits remain explicit.
+The heartbeat supplies the cycle deadline. No log command is invented.
 
 | State | Meaning |
 |---|---|
@@ -197,8 +197,8 @@ A first pass remains a first pass through symbol waits and finishing until the r
 JSON supplies `summary.first_pass` and `summary.updating`; `summary.in_progress` keeps their sum.
 
 The indexed age measures index completion, not the Git commit time.
-Repository and ref columns align in text listings. JSON values do not change.
-Text rows have no width limit or renderer wrapping.
+Terminal table columns align. Pipe lines use no padding. JSON values do not change.
+Pipe rows have no width limit or renderer wrapping.
 Long names can exceed 100 columns on an 80-column terminal; the terminal controls visual wrapping.
 Above 50 repositories, the footer counts hidden repositories and names `ccx status --all`.
 For example: `… and 12 more repos; ccx status --all lists them`.
@@ -241,28 +241,20 @@ Indexer: no indexer has reported — start ccx-indexer (the chart's indexer depl
 Index: no progress reported (the indexer predates 0.1.70, or has never started) — ccx repos lists what is indexed
 ```
 
-- `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
-  Pipes, CI, and non-TTY SSH commands receive a complete plain report per tick.
-  Each plain report starts with a UTC timestamp line, such as `2026-10-22T05:00:00Z`.
-  `--plain` selects this format on a terminal, without colors or cursor control sequences.
-  Every report is flushed immediately, including terminal redraws.
-  It exits 0 when every repository is ready, 1 on SIGINT (Ctrl-C) or SIGTERM.
-  An interrupted terminal watch keeps the last report and adds a final newline.
-  The watch does not change cursor visibility or enter an alternate screen.
-  Failed health or status requests print a failure report and keep following.
-  A 429 or 503 response delays the next request by its `Retry-After` value.
-  The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
-- `ccx status --wait-ready --timeout 1800` waits without intermediate output.
-  It prints the final report once, then exits 0 when ready.
-  Non-TTY output and `--plain` use the same timestamped plain format.
-  It exits 1 at the timeout or when failures remain with nothing in progress.
-  `--watch` keeps following failed repositories and shows that they retry next cycle.
-- `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
-  The command reads every page. More than three complete refs fold into a counted line per repository.
-- `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
-  JSON output has no timestamp lines or terminal controls. Error diagnostics go to stderr.
-  For a paged listing, `index` contains the unchanged responses as an array.
-  The command preserves page cursors and wire timestamps.
+- `ccx status --watch` redraws a terminal table every 10 seconds.
+  Plain watch prints the header once, then UTC timestamped lines for changed refs, folding counts, and ready counts.
+  Ref identities include the repository key, so names across instances do not collide.
+  Semantic field changes, including progress and phase timestamps, print a new line.
+  Clock passage and idle-check timestamps alone do not print a ref line.
+  After a minute without changes, it prints one idle notice.
+  It exits 0 when every repository is ready, and 1 on SIGINT or SIGTERM.
+  Request failures remain visible. A 429 or 503 respects `Retry-After`.
+- `ccx status --wait-ready --timeout 600` prints the final report once.
+  It exits 0 when ready, and 1 at timeout or when failures remain without active work.
+- `--all` disables folding. Otherwise, complete refs beyond three per repository fold into a count.
+  Above 50 repositories, all complete refs fold. Every page is read.
+- `--json` preserves the heartbeat and listing responses, including page cursors and wire timestamps.
+  JSON adds no timestamps or terminal controls. Diagnostics go to stderr.
 
 ### `ccx indexed` during a first pass
 
@@ -1082,3 +1074,30 @@ advertises standard protected-resource metadata; your IdP admin pre-registers
 each approved MCP client. (Exception: Entra-direct deployments cannot serve
 interactive MCP sign-in — [sso.md → Entra ID](sso.md#entra-id); key records
 still work there.)
+
+## Pull request and issue content
+
+When the repository has a change index, semantic search adds a separate
+change section after the code results. Use `ccx search --kind code` for code
+only, `--kind change` for change records, or `--kind all` for both. `--json`
+keeps the server's change section and freshness data.
+
+Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
+before repeating work from a brief. The command splits bullets, numbered
+lines, and paragraphs into items. It searches once per item, up to 20 items.
+Each item shows its best record and score. `near` and `weak` use the server's
+score floor. These labels describe similarity, not whether work shipped.
+
+Use `ccx refs <name> --kind change --since 2d` for touched and mention groups.
+`ccx show` adds `touched by` when the server supplies an annotation. Change
+text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
+until that slice ships.
+
+Read the freshness line before treating absence as evidence. `insufficient`
+means the index cannot establish absence. Use the printed `state:` command
+to ask the code host about a record's current state.
+
+The CLI remembers shown and followed record identifiers in its disposable
+cache when a session identifier exists. Claude Code's SessionStart hook sets
+`CCX_SESSION_ID` through its environment file; Codex supplies `CODEX_THREAD_ID`.
+The cache stores no record text, credential, or URL.
