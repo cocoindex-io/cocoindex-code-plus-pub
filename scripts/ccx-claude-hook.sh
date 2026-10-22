@@ -48,6 +48,13 @@ if [ -e "$retry" ] && [ -n "$(find "$retry" -mmin -5 2>/dev/null)" ]; then
   exit 0
 fi
 
+# An absent repository may be added by the operator. Keep its retry window
+# separate from the cannot-tell window.
+absent_retry="$prefix-not-indexed-retry"
+if [ -e "$absent_retry" ] && [ -n "$(find "$absent_retry" -mmin -15 2>/dev/null)" ]; then
+  exit 0
+fi
+
 command -v ccx >/dev/null 2>&1 || exit 0
 output=$(printf '%s' "$input" | ccx indexed --claude-hook 2>/dev/null)
 status=$?
@@ -68,8 +75,8 @@ case "$status" in
     fi
     ;;
   1)
-    # Not indexed: final for this agent, whatever the event.
-    for k in grep result start subagent_start indexing; do : >"$prefix-$k"; done
+    # Leave every hint available when the repository becomes indexed.
+    : >"$absent_retry"
     ;;
   *)
     : >"$retry"
