@@ -34,6 +34,13 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## Next release — change ingest budget validation
+
+Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.
+Such budgets previously stall active work or starve one of its passes.
+Increase `changeIndex.maxRecordsPerCycle` or reduce `changeIndex.sweepShare` when startup names this combination.
+The default values remain valid. Disabled change ingest requires no action.
+
 ## Next release — optional change content ingest
 
 The feature defaults to off. Normal upgrades require no change.
