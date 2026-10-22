@@ -2559,3 +2559,43 @@ To verify the rebuild is clean, run one catch-up pass and check its exit code â€
 the pod logs carry `component build failed` lines worth alerting on in any
 deployment; a pass with failures also withholds its index-completeness stamps,
 so the agentic cache never trusts a partially-applied index).
+
+## Change content ingest
+
+Change ingest stores issue and pull request text.
+The feature stores no record state, review verdict, label, assignee, milestone, or check result.
+
+Before enabling it, give the indexer's GitHub App **Issues: read** and **Pull requests: read**.
+Each installation must approve the added permissions.
+Startup names a missing permission and refuses the enabled entry.
+GitHub is supported first; GitLab change ingest follows later.
+
+Set `changeIndex.enabled: true` in chart values.
+Then add this mapping to each repository entry in the config repository:
+
+```yaml
+changes:
+  enabled: true
+  since: 2025-01-01
+  keepBots: ["renovate[bot]"]
+```
+
+A local git entry also requires `from: github.com:owner/repository` inside `changes`.
+A code-host entry must omit `changes.from`.
+Local git content is available to every authenticated caller.
+The operator must approve that exposure for the named change source.
+
+`changeIndex.maxRecordsPerCycle` defaults to 200.
+`limiterShare` defaults to 0.25 of each instance's source budget.
+`sweepShare` reserves 0.2 of the record budget for comment edits and deletions.
+`sweepDays` defaults to 14.
+`maxTextBytesPerPart` defaults to 8192; longer text keeps its beginning.
+`dropLines` accepts regular expressions.
+`generatedMarkers` selects generated fences to remove.
+Code examples in other fences remain unchanged.
+
+The indexer creates all six change tables at startup with additive DDL.
+Turning off an entry removes its change rows on the next config cycle.
+Turning it on again starts a new backfill.
+Changing a local entry's `changes.from` to another repository also starts a new backfill.
+A failed cycle keeps all previous rows and checkpoints.
