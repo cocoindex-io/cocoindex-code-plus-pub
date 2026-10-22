@@ -34,6 +34,18 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## Next release — index files up to 4 MiB
+
+The default indexed file size increases from 1 MiB to 4 MiB.
+The first pass reads newly admitted files and embeds their chunks.
+The symbol extraction ceiling also changes, so existing files extract symbols
+once more. Existing content-keyed embeddings remain reusable.
+
+No manual data migration is required. To retain the previous size policy, set
+`indexer.maxFileSizeBytes: 1048576` before upgrading. Repo `max_file_size`
+values still override this default. Read larger files through `read-file`
+`--offset` / `--limit` windows; each window keeps its 1 MiB content cap.
+
 ## Next release — change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.
