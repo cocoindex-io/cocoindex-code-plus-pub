@@ -1037,3 +1037,30 @@ advertises standard protected-resource metadata; your IdP admin pre-registers
 each approved MCP client. (Exception: Entra-direct deployments cannot serve
 interactive MCP sign-in — [sso.md → Entra ID](sso.md#entra-id); key records
 still work there.)
+
+## Pull request and issue content
+
+When the repository has a change index, semantic search adds a separate
+change section after the code results. Use `ccx search --kind code` for code
+only, `--kind change` for change records, or `--kind all` for both. `--json`
+keeps the server's change section and freshness data.
+
+Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
+before repeating work from a brief. The command splits bullets, numbered
+lines, and paragraphs into items. It searches once per item, up to 20 items.
+Each item shows its best record and score. `near` and `weak` use the server's
+score floor. These labels describe similarity, not whether work shipped.
+
+Use `ccx refs <name> --kind change --since 2d` for touched and mention groups.
+`ccx show` adds `touched by` when the server supplies an annotation. Change
+text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
+until that slice ships.
+
+Read the freshness line before treating absence as evidence. `insufficient`
+means the index cannot establish absence. Use the printed `state:` command
+to ask the code host about a record's current state.
+
+The CLI remembers shown and followed record identifiers in its disposable
+cache when a session identifier exists. Claude Code's SessionStart hook sets
+`CCX_SESSION_ID` through its environment file; Codex supplies `CODEX_THREAD_ID`.
+The cache stores no record text, credential, or URL.

@@ -21,8 +21,22 @@ agent=$(field agent_id)
 source=$(field source)
 [ -n "$event" ] || exit 0
 
+# SessionStart's environment file reaches later Bash commands. Keep the
+# observation cache separate for each Claude Code session, including resume.
+if [ "$event" = SessionStart ] && [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "$session" ]; then
+  case "$session" in
+    *[!a-zA-Z0-9_-]*) ;; # Never put untrusted shell syntax in the env file.
+    *) printf "export CCX_SESSION_ID='%s'\n" "$session" >> "$CLAUDE_ENV_FILE" 2>/dev/null ;;
+  esac
+fi
+
 case "$event" in
-  PreToolUse) kind=grep ;;
+  PreToolUse)
+    kind=grep
+    # Keep the event marker separate for host-history commands. The CLI
+    # classifies their exact command shape and reports the final kind.
+    case "$(field command)" in gh\ *|git\ log\ *) kind=change ;; esac
+    ;;
   PostToolUse) kind=result ;;
   SessionStart) kind=start ;;
   SubagentStart) kind=subagent_start ;;
@@ -58,7 +72,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac
@@ -69,7 +83,7 @@ case "$status" in
     ;;
   1)
     # Not indexed: final for this agent, whatever the event.
-    for k in grep result start subagent_start indexing; do : >"$prefix-$k"; done
+    for k in grep result start subagent_start indexing change; do : >"$prefix-$k"; done
     ;;
   *)
     : >"$retry"
