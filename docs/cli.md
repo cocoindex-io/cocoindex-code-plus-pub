@@ -193,14 +193,20 @@ One slow directory can increase the estimate. A minute without directory progres
 A confirmed stall appears even below 10% directory coverage.
 
 The summary counts first passes and updates separately: `1 first pass, 1 updating`.
+A first pass remains a first pass through symbol waits and finishing until the repository is queryable.
 JSON supplies `summary.first_pass` and `summary.updating`; `summary.in_progress` keeps their sum.
 
 The indexed age measures index completion, not the Git commit time.
-Repository and ref columns align in text listings. JSON does not change.
+Repository and ref columns align in text listings. JSON values do not change.
+Text rows have no width limit or renderer wrapping.
+Long names can exceed 100 columns on an 80-column terminal; the terminal controls visual wrapping.
 Above 50 repositories, the footer counts hidden repositories and names `ccx status --all`.
+For example: `… and 12 more repos; ccx status --all lists them`.
 
 An idle cycle indexer says `Indexer: idle, next cycle in 40 s`.
 The cycle period includes pass time. Older heartbeat rows omit the countdown.
+An older indexer that takes over cannot reuse another writer's cycle period.
+An overdue or exactly due cycle says `Indexer: idle, next cycle due now`.
 A running pass says `pass running for 2 min, 1 ref in progress`.
 Live mode says `watching`. Metadata includes the version, mode, and process uptime.
 
@@ -210,6 +216,23 @@ Before one minute, they say `under a minute so far`.
 File estimates can change when file costs change. `about` does not promise an accuracy bound.
 `ccx indexed`, query errors, and MCP carry the same walk estimate.
 The MCP `index_status` tool supplies readable status text and structured progress fields.
+
+These examples use the shared renderer. Ages describe indexing, not Git commit time:
+
+```text
+indexed 11 min ago at bbbbbbbbbbbb
+committed 11 min ago at bbbbbbbbbbbb, repo not queryable yet
+updating for 11 min to aaaaaaaaaaaa: 37% (742 of 2,004 files, 900 chunks), about 10 min; serving bbbbbbbbbbbb meanwhile — ccx status --watch
+symbols: waiting for heads/other, 1 min so far — ccx status --watch
+symbols: 10 of 20 modules, 1 min so far — ccx status --watch
+finishing, 1 min so far — ccx status --watch
+finishing, under a minute so far — ccx status --watch
+Indexer: idle, next cycle in 40 s (v, cycle mode, up 15 min)
+Indexer: idle, next cycle due now (v, cycle mode, up 15 min)
+Indexer: pass running for 2 min, 1 ref in progress (v, cycle mode, up 15 min)
+Indexer: watching (v, live mode, up 15 min)
+```
+
 
 When progress is absent, the report says:
 
