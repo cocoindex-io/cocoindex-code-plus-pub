@@ -366,6 +366,17 @@ terminal:
 - **Docs and comment blocks show their first line.**
 - **The imports are one row**, `... N import lines`.
 - **No blank lines.** The line numbers carry the gaps.
+- **Test code is collapsed**: a `#[cfg(test)]` module, a `Test*` class, a
+  container named with `test`, `tests` or `testing` shows its head, a
+  `// members:` roster of what it holds and a `... N lines` cue. A test
+  file itself outlines fully.
+- **A long outline folds to depth 1.** Over about 300 rows, the server
+  renders the file's items only, each container collapsed to its head, a
+  `// members: a, b, c, +N more` roster and a `... N lines` cue, and the
+  CLI notes it on stderr: `outline folded to depth 1: the full outline is
+  2,483 rows; ccx show PATH:LINE opens one object, --depth 2 shows one more
+  level, -e everything.` `--depth N` sets the level yourself and is never
+  folded further; `-e` and `--depth` are exclusive.
 
 It reads the file from your **working tree** when it is there (inside or
 outside a checkout; outside one no repo is needed), so it is right on the
@@ -379,6 +390,7 @@ ccx show src/app.py:142                    # the innermost definition at line 14
 ccx show src/app.py:142:8                  # a pasted `ccx defs` headline (path:line:col) works as a target
 ccx show src/app.py:142-150                # a pasted `ccx grep` headline too (the first line is used)
 ccx show -e src/app.py                     # the whole file, numbered
+ccx show --depth 1 src/app.py              # the file's items only, each class or module collapsed to its head and a members roster
 ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
 ccx show --git-ref main src/app.py         # the indexed copy at that ref, never the working tree
