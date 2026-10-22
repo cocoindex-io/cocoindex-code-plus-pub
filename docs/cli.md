@@ -184,7 +184,9 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
   A 429 or 503 response delays the next request by its `Retry-After` value.
   The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
 - `ccx status --wait-ready --timeout 1800` waits without intermediate output.
-  It prints the final report once, then exits 0 when ready or 1 at the timeout.
+  It prints the final report once, then exits 0 when ready.
+  It exits 1 at the timeout or when failures remain with nothing in progress.
+  `--watch` keeps following failed repositories and shows that they retry next cycle.
 - `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
   The command reads every page. More than three complete refs fold into a counted line per repository.
 - `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
