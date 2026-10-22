@@ -132,7 +132,7 @@ an hour to appear while server-side caches refresh.
 
 ```text
 ccx 127.0.0.1:8080: healthy, credential: none — run `ccx login` or export CCX_API_TOKEN, 0.1.70, up 18 min
-indexer: working, cycle mode, 1 refs in progress
+indexer: working, cycle mode, 1 ref in progress
 acme/library main: current at 3f2a1c9e04b7, indexed 6 min ago
 acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago
 1 of 2 ready. To wait: ccx status --wait-ready --timeout 600
