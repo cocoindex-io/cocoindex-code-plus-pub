@@ -536,6 +536,19 @@ terminal:
 - **Docs and comment blocks show their first line.**
 - **The imports are one row**, `... N import lines`.
 - **No blank lines.** The line numbers carry the gaps.
+- **Test code is collapsed**: a module or type its language marks as test
+  code (`#[cfg(test)]`, a `TestCase` subclass, `@Suite`, `[TestFixture]`)
+  or whose name starts or ends with a test word (`tests`,
+  `integration_tests`, `TestHarness`, `testutil`) shows its head, a
+  `// members:` roster of what it holds and a `... N lines` cue. A test
+  file itself outlines fully.
+- **A long outline folds to depth 1.** Over about 300 rows, the server
+  renders the file's items only, each container collapsed to its head, a
+  `// members: a, b, c, +N more` roster and a `... N lines` cue, and the
+  CLI notes it on stderr: `outline folded to depth 1: the full outline is
+  2,483 rows; ccx show PATH:LINE opens one object, --depth 2 shows one more
+  level, -e everything.` `--depth N` sets the level yourself and is never
+  folded further; `-e` and `--depth` are exclusive.
 
 It reads the file from your **working tree** when it is there (inside or
 outside a checkout; outside one no repo is needed), so it is right on the
@@ -549,6 +562,7 @@ ccx show src/app.py:142                    # the innermost definition at line 14
 ccx show src/app.py:142:8                  # a pasted `ccx defs` headline (path:line:col) works as a target
 ccx show src/app.py:142-150                # a pasted `ccx grep` headline too (the first line is used)
 ccx show -e src/app.py                     # the whole file, numbered
+ccx show --depth 1 src/app.py              # the file's items only, each class or module collapsed to its head and a members roster
 ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
 ccx show --git-ref main src/app.py         # the indexed copy at that ref, never the working tree
@@ -654,6 +668,7 @@ ccx ask "compare how these two services authenticate" --repo acme/a --repo acme/
 ccx ask "walk me through the release flow" --git-ref v1.2
 ccx ask "what are the main components?" --effort high
 ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored answer
+ccx ask "what are the main components?" --trace   # show the investigation as a tree
 ccx ask "what are the main components?" --json    # exact response model
 ```
 
@@ -799,6 +814,57 @@ an investigation reuses whatever stored work still applies — whole
 sub-answers, or earlier investigation steps re-checked against the current
 code — and pays live for the rest. `--json` carries the full breakdown under
 `usage.cost` whether or not `--stats` is set.
+
+#### What happened behind the answer: `--trace`
+
+Pass `--trace` to see the investigation as a tree on stderr, after the
+answer: one line per step with the tool call on the left and what it
+returned on the right, the subqueries nested under the calls that asked
+them, and a tag wherever stored work was reused.
+
+```text
+trace: medium effort · 7/30 turns · 18.3s
+  1  find_definitions s0:authorize_repos                   3 definitions · 0.2s
+     "The admission check is the place to start."
+  2  read_file s0:python/query-server/src/…/authz.py#L40-L120   81 lines (L40-L120 of 310) · 0.1s
+  3  2 calls in parallel                                   5.1s
+     "Two separable threads: the middleware order, and the resolver."
+     ├─ ask_subquery "Trace the middleware order…"          live · 4 turns · 5.1s
+     │    1  code_search "auth middleware order"           8 hits in 3 files · 0.3s
+     │    2  read_file s0:python/query-server/src/app.py#L100-L159   60 lines · 0.1s
+     │    3  find_references s0:require_scope              14 references · 0.2s
+     │    4  answer                                        820 tokens · 3.0s
+     └─ ask_subquery "How does _resolve_authorized_repo…"   cached (stored 2026-10-19) · saved 5 model calls, 7 reads
+  4  code_grep s0:'def \_(\*) \*:' (python)               12 matches in 4 files · 0.4s
+  5  read_file s0:service.py#L600-L639                     40 lines · 0.1s · replayed from a stored turn
+  6  answer                                                1,240 tokens · 6.0s
+```
+
+How to read it:
+
+- **The header** is the effort level, the turns used over the allocation and
+  the wall time. An answer that came whole from the cache says so instead
+  (`served from a stored answer (stored <date>) · saved …`), followed by the
+  steps its producer ran.
+- **The quoted lines** are the agent's own words beside its calls: why it
+  did what it did.
+- **A subquery** is its own session, nested: `live · N turns · <time>` when
+  it ran, `cached (stored <date>) · saved …` when a stored answer served it.
+- **Reuse tags**: `replayed from a stored turn` means the decision at that
+  step was taken from storage and only the call reran; `planned from stored
+  subqueries` marks a first step that split the question into sub-questions
+  the cache already had answers for.
+- **Rounds the agent spent without advancing** show as what they were: a
+  repair round (every call it issued was invalid), a confirmation round, or
+  an answer it had to shorten.
+- **A follow-up** (`--parent`) lists the earlier answers it continues, one
+  line each, with how many of their observations the re-read found changed.
+
+With `--json`, the same tree rides the response under `trace` (and nothing
+prints on stderr); without `--trace` the field is `null`. The REST body
+takes `include_trace: "tree"`, or `"full"` to include the text of every
+observation the agent read. The trace is sent to you alone: the server logs
+none of it.
 
 The agent can only read what **you** can already read — it runs under your
 identity and the same repository permissions as every other command, so it

@@ -17,6 +17,7 @@ ccx show src/app.py:142                                 # the innermost definiti
 ccx show src/app.py:142:8                               # a pasted `ccx defs` headline (path:line:col)
 ccx show src/app.py:142-150                             # a pasted `ccx grep` headline (the first line is used)
 ccx show -e src/app.py                                  # everything verbatim: the numbered file
+ccx show --depth 1 src/app.py                           # the file's items only, each container collapsed to its head and a `// members:` roster; -e and --depth are exclusive
 ccx show -s QueryService                                # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py                # -s narrowed by kind and to one file; -q/-b as on `ccx defs`
 ccx show --git-ref main src/app.py                      # the indexed copy at that ref, never the working tree
@@ -31,7 +32,11 @@ marks each line: `N:` an exact source line, `N|` a frame (an enclosing scope's h
 which spans lines N to N+11; a doc's first line), ` ~` a cue. A `... N more lines` cue
 inside a large type folds that type's own lines; `ccx show -s <name>` or
 `ccx show PATH:LINE` shows it whole, its doc included. On an import line,
-`ccx show PATH:LINE` prints the imports.
+`ccx show PATH:LINE` prints the imports. A collapsed container — test code, or
+any container below `--depth` — is its head, `// members: a, b, c, +N more` (every
+direct member) and `... N lines`; the server folds an outline over about 300 rows
+to depth 1 on its own and the CLI notes it (`outline folded to depth 1: the full
+outline is N rows; …`), never when you passed `--depth`.
 
 The working tree is the source whenever the file is there; the header says `indexed`
 when the index served instead (the file is not on disk, is over the 8 MiB request

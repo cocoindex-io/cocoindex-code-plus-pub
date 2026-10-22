@@ -88,16 +88,29 @@ Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
   and then returns its matches so far with a cursor; the agent continues or
   narrows. Before, such a call could run until the whole query's deadline.
 - **`ccx repos` under `codeHostMirrored` on GitHub settles most permission
-  checks in its batched lookup.** When the authz App's installation grants
-  **Organization → Members: Read-only**, one GraphQL request per hundred
-  repositories answers the caller's permission on each, so a cold walk over
-  repositories the caller can read makes a handful of calls instead of one
-  per repository; public repositories cost nothing either way. Without the
-  grant the walk behaves as before (one permission call per private
-  repository) and the query server logs one warning per installation naming
-  the grant. [deploy.md § App permissions](deploy.md#app-permissions) has
-  the details; the Insights views that list repositories share the walk and
-  speed up with it.
+  checks in its batched lookup, and the lookups run in parallel.** When the
+  authz App's installation grants **Organization → Members: Read-only**,
+  one GraphQL request per 32 repositories answers the caller's permission
+  on each, up to 8 requests in flight per code host with every installation
+  at once, so a cold walk takes a few round trips instead of one per
+  repository or one per batch; public repositories cost nothing either way.
+  Without the grant the walk still batches the repository facts (one
+  permission call per private repository remains) and the query server logs
+  one warning per installation naming the grant.
+  [deploy.md § App permissions](deploy.md#app-permissions) has the details;
+  the Insights views that list repositories share the walk and speed up with
+  it.
+- **`authz.listReposCheckConcurrency` now bounds per-repo calls, not
+  checks.** A walk dispatches a whole page of checks at once; the value
+  (default 10) is how many per-repo provider calls — refusals, and private
+  repositories under an installation without the grant — run at a time.
+  Batched lookups are outside it. A value you raised to speed up the walk
+  can go back to the default.
+- **Every audit line carries `provider_calls`, `provider_ms` and
+  `provider_busy_ms`**: how many code-host calls the request made, their
+  summed duration, and the wall time at least one was in flight. A slow
+  request shows at a glance whether it waited on the code host, and whether
+  in series or in parallel ([security.md](security.md#logging--audit)).
 
 ### What to do
 
