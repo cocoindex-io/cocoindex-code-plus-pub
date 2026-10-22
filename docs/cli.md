@@ -182,7 +182,11 @@ The estimate starts after 60 seconds of samples and 10% of known directories are
 The directory total can grow. This estimate covers only the walk.
 After the walk, the files estimate uses the recent file rate and says `about N min`.
 It requires 60 seconds of samples. A zero rate shows `no progress for N min`.
+The walk uses its average directory rate over the attempt.
+One slow directory can increase the estimate. A minute without directory progress suppresses it.
+File estimates can change when file costs change. `about` does not promise an accuracy bound.
 `ccx indexed`, query errors, and MCP carry the same walk estimate.
+The MCP `index_status` tool supplies readable status text and structured progress fields.
 
 When progress is absent, the report says:
 
