@@ -14,10 +14,10 @@ you can tell them precisely.
 - **Which credential.** A cached SSO login (`ccx login`, a browser flow the human
   runs once; refreshed automatically) or `CCX_API_TOKEN` (issued by the platform
   team; what CI and headless agents use — in a human's session an agent usually
-  rides their cached login). `ccx status` probes the server with no
-  credential, then names the credential the next request would use — it
-  describes it, it does not test it; a wrong token is caught by the first real
-  query (`HTTP 401`).
+  rides their cached login). `ccx status` probes `/health` anonymously, then
+  tests the resolved credential with the index-status request. If it shows
+  `auth rejected`, tell the user the named source and fix: check `CCX_API_TOKEN`
+  or run `ccx login`; for a cached login, run `ccx login` again.
 
 **None of this is yours to invent.** If the server URL, a token, or a login is
 missing or expired, stop and tell the user which one — the server URL to export,
