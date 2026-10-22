@@ -374,7 +374,7 @@ erroring.
 | `repo_name` | **yes** | repository name. Any case works for owner and name: users reach the repo whichever case their clone or `--repo` uses, and the spelling here is the one `ccx repos` shows |
 | `branches` / `tags` | **one required** | **regex** ([`re.fullmatch`](https://docs.python.org/3/library/re.html#re.fullmatch)) selecting refs to index — a plain `"main"` matches exactly that ref; the repo is indexed at every matched ref |
 | `included_patterns` / `excluded_patterns` | default: all files | file globs (e.g. `**/*.py`) to include / exclude |
-| `max_file_size` | default: `indexer.maxFileSizeBytes`, else 1 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 1 MiB** — a larger value is rejected at parse time (see below) |
+| `max_file_size` | default: `indexer.maxFileSizeBytes`, else 4 MiB | **bytes**; files whose contents exceed it aren't indexed. Set it per repo to skip generated bundles, vendored blobs and lockfiles you'd rather not pay to embed. Wins over the chart-wide default. **Max 4 MiB** — a larger value is rejected at parse time (see below) |
 | `to_delete` | default `false` | `true` removes the repo's rows on the next poll |
 | `code_host` | central config repos only | which `codeHosts` instance the repo lives on — see [Central config repo](#central-config-repo) |
 | `repos` | — | makes the item a **group**: a list of entries (or groups) that inherit the item's other fields — see [Groups](#groups-write-shared-fields-once) |
@@ -448,11 +448,13 @@ Two facts about exclude patterns, worth knowing when writing a fleet list:
 
 ### File size limits
 
-Every repo has a maximum indexed file size. It defaults to **1 MiB**, which is
-also a hard ceiling: `max_file_size` above it is **rejected** at config-parse
-time rather than quietly clamped, because 1 MiB is the largest response
-`read_file` can return — a bigger file would be indexed but could never be
-read back. Lower it (per repo, or fleet-wide via `indexer.maxFileSizeBytes`)
+Every repo has a maximum indexed file size. The default and hard ceiling are
+**4 MiB** of decoded UTF-8 text. Larger settings fail at startup or config parse.
+`read_file` separately caps each line window at 1 MiB and 5,000 lines.
+Use `offset` / `limit` to read larger files in windows. Reduce `limit` if a
+window exceeds 1 MiB. A single line above 1 MiB cannot be read with `read_file`.
+
+Lower it (per repo, or fleet-wide via `indexer.maxFileSizeBytes`)
 when a repo carries minified bundles, vendored dependencies or generated code
 you don't want to spend embedding budget on. On GitHub the oversized file is
 skipped **before it is downloaded**, so the saving covers API quota as well as
@@ -573,7 +575,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **DB slow-statement plans** | `database.bundled.autoExplainMinDuration` | default (`5s`) | plans of statements slower than this go to the Postgres log (`auto_explain`, plan only); `""` disables — see [Postgres memory sizing](#postgres-memory-sizing) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
-| **File size** | `indexer.maxFileSizeBytes` | default (1 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 1 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
+| **File size** | `indexer.maxFileSizeBytes` | default (4 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. 4 MiB is also the ceiling — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Files in flight** | `indexer.maxFilesInFlight` | default (256) | how many files the indexer works on at once, from parsing until their last chunk is embedded. Lower it if a first pass runs out of memory on a repo with many large files — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
