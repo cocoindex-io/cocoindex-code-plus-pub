@@ -134,6 +134,106 @@ likely never signed into the code host through your company SSO: do that
 once (e.g. the org's SSO page on GitHub) and retry — results can take up to
 an hour to appear while server-side caches refresh.
 
+## `ccx status` — server and index progress
+
+`ccx status` prints the server and credential block, then the indexer and index blocks:
+
+```text
+Query server: healthy
+  url:     http://127.0.0.1:8080  [--server]
+  version: 0.1.70
+  uptime:  41.0s
+  cli:     0.1.70  matches the server
+  credential: none — run ccx login or export CCX_API_TOKEN
+Indexer: running (0.1.70, cycle mode, started 18 min ago; last tick under a minute ago)
+Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
+  acme/library  heads/main  indexed at 3f2a1c9e04b7 (6 min ago)
+  acme/app  heads/main  first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago — ccx status --watch
+```
+
+The server health sets the exit code: 0 means healthy, 1 means unreachable.
+A credential warning or unfinished first pass keeps exit 0.
+If health fails, the command skips the progress request.
+The `Indexer:` line says `running` (with the version and `cycle mode` or `live mode`) or `last run finished`.
+A yellow `no indexer has reported` or `not reporting since` line names the next command.
+
+The index rows use these states:
+
+| State | Meaning |
+|---|---|
+| `indexed at <sha12> (<ago>)` | queries read this commit |
+| `committed at <sha12>, repo not queryable yet` | remaining refs must commit first |
+| `first pass N%` | files are being indexed for the first time |
+| `updating to <sha12>` | queries still read the commit named by `serving … meanwhile` |
+| `walking the tree` | the indexer discovers files and directories |
+| `queued behind <ref>` | another ref runs first |
+| `symbols: N of M modules` or `symbols: waiting for …` | symbol resolution runs or waits |
+| `finishing` | the engine commits the ref |
+| `first pass failed (attempt N)` | the next cycle retries; check the indexer's log |
+| `not reporting since` | the reporting indexer is no longer running |
+
+During the walk, the report can say:
+
+```text
+walking the tree: 1,421 files found so far, 338 of 410 directories listed, about 2 min to finish the walk
+```
+
+The estimate starts after 60 seconds of samples and 10% of known directories are listed.
+The directory total can grow. This estimate covers only the walk.
+After the walk, the files estimate uses the recent file rate and says `about N min`.
+It requires 60 seconds of samples. A zero rate shows `no progress for N min`.
+The walk uses its average directory rate over the attempt.
+One slow directory can increase the estimate. A minute without directory progress suppresses it.
+A confirmed stall appears even below 10% directory coverage.
+File estimates can change when file costs change. `about` does not promise an accuracy bound.
+`ccx indexed`, query errors, and MCP carry the same walk estimate.
+The MCP `index_status` tool supplies readable status text and structured progress fields.
+
+When progress is absent, the report says:
+
+```text
+Indexer: no indexer has reported — start ccx-indexer (the chart's indexer deployment), then ccx status --watch
+Index: no progress reported (the indexer predates 0.1.70, or has never started) — ccx repos lists what is indexed
+```
+
+- `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
+  Pipes, CI, and non-TTY SSH commands receive a complete plain report per tick.
+  Each plain report starts with a UTC timestamp line, such as `2026-10-22T05:00:00Z`.
+  `--plain` selects this format on a terminal, without colors or cursor control sequences.
+  Every report is flushed immediately, including terminal redraws.
+  It exits 0 when every repository is ready, 1 on SIGINT (Ctrl-C) or SIGTERM.
+  An interrupted terminal watch keeps the last report and adds a final newline.
+  The watch does not change cursor visibility or enter an alternate screen.
+  Failed health or status requests print a failure report and keep following.
+  A 429 or 503 response delays the next request by its `Retry-After` value.
+  The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
+- `ccx status --wait-ready --timeout 1800` waits without intermediate output.
+  It prints the final report once, then exits 0 when ready.
+  Non-TTY output and `--plain` use the same timestamped plain format.
+  It exits 1 at the timeout or when failures remain with nothing in progress.
+  `--watch` keeps following failed repositories and shows that they retry next cycle.
+- `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
+  The command reads every page. More than three complete refs fold into a counted line per repository.
+- `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
+  JSON output has no timestamp lines or terminal controls. Error diagnostics go to stderr.
+  For a paged listing, `index` contains the unchanged responses as an array.
+  The command preserves page cursors and wire timestamps.
+
+### `ccx indexed` during a first pass
+
+```text
+Not indexed yet: acme/app, first pass 37% (742 of 2,004 files), about 10 min left — ccx status --watch follows it
+Not indexed yet: acme/app, first pass failed (attempt 2): connection failed — retrying next cycle
+Indexed: acme/app at heads/main@3f2a1c9e04b7 (your HEAD); updating to 9b81d0c2aa15, 37%, about 10 min
+Not indexed: acme/other — ccx status lists the repos this server indexes; add it to the config repo to index it
+```
+
+An unfinished or failed first pass exits 1 for humans. The hook retries a failed first pass later.
+An indexed ref exits 0 during an update.
+`ccx indexed --json` includes the progress snapshot and `queryable`.
+The plugin reports a first pass once per agent, then permits ordinary hints when the repository becomes queryable.
+A committed ref whose repository is still blocked earns the same indexing hint, without spending ordinary hint markers.
+
 ## Use
 
 ```bash
@@ -642,7 +742,8 @@ has been checked against the repositories in question.
 |---|---|
 | `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` names the credential in use but does not validate it against the server. |
 | `login: expired and could not be refreshed` (in `ccx status`), or `Your login for … has expired and could not be refreshed` (from any other command) | Your cached SSO login aged out — the IdP's session lifetime, so an overnight gap can do it. The server itself is fine (`status` still reports it healthy). Run `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN`. |
-| `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
+| `HTTP 503` ending in `is being indexed: …` | The repo (or the ref you named) is in its first pass, or committed but not queryable yet. `ccx status --watch` follows it; retry after the `retry in …` the error names, and use your native tools meanwhile. |
+| any other `HTTP 503` | Index not built yet — the indexer hasn't populated the table; `ccx status` says whether an indexer has reported; retry once it has (ask your platform team if it persists). |
 | connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. Run `ccx config` to see the server it resolved and where that came from. |
 | talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
 | `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
