@@ -133,15 +133,15 @@ an hour to appear while server-side caches refresh.
 
 ```text
 ccx 127.0.0.1:8080: healthy, auth off, 0.1.70, up 18 min
-indexer: working, cycle mode, 1 ref in progress
-acme/library main: current at 3f2a1c9e04b7, indexed 6 min ago
+indexer: pass running for 18 min, 1 ref in progress (0.1.70, cycle mode, up 18 min)
+acme/library main: indexed 6 min ago at 3f2a1c9e04b7
 acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; started 18 min ago
 1 of 2 ready. To wait: ccx status --wait-ready --timeout 600
 ```
 
 Pipes and `--plain` use this format. MCP status text uses the same ref lines.
 Each ref occupies one line, without colors, bars, or column padding.
-A terminal shows REPO, REF, STATE, COMMIT, and INDEXED columns.
+A terminal shows REPO, REF, STATE, and INDEXED AGE / COMMIT columns.
 Green `✓ current` means queries read the displayed commit.
 Cyan marks work, dim marks queued refs, and red marks failures or a silent indexer.
 Yellow `! not reporting` marks stale work that needs attention.
@@ -162,7 +162,89 @@ A 401 or 403 establishes that auth is required. A missing credential then earns 
 The terminal header drops uptime first, then version, to fit its width.
 A healthy server exits 0 even while indexing. An unreachable server exits 1.
 Unqueryable refs, missing progress, stalled work, errors, and serving commits remain explicit.
-No next-check time or log command is invented.
+The heartbeat supplies the cycle deadline. No log command is invented.
+
+| State | Meaning |
+|---|---|
+| `indexed <ago> at <sha12>` | queries read this commit |
+| `committed <ago> at <sha12>, repo not queryable yet` | remaining refs must commit first |
+| `first pass N%` | files are being indexed for the first time |
+| `updating for <elapsed> to <sha12>` | queries still read the commit named by `serving … meanwhile` |
+| `walking the tree` | the indexer discovers files and directories |
+| `queued behind <ref>` | another ref runs first |
+| `symbols: N of M modules` or `symbols: waiting for …` | symbol resolution runs or waits |
+| `finishing` | the engine commits the ref |
+| `first pass failed (attempt N)` | the next cycle retries; check the indexer's log |
+| `not reporting since` | the reporting indexer is no longer running |
+
+During the walk, the report can say:
+
+```text
+walking the tree: 1,421 files found so far, 338 of 410 directories listed, about 2 min to finish the walk
+```
+
+The estimate starts after 60 seconds of samples and 10% of known directories are listed.
+The directory total can grow. This estimate covers only the walk.
+
+After the walk, the files estimate uses the slower recent or whole-attempt file rate.
+It says `about N min` after 60 seconds of samples with a final file total.
+Without a completed file since the previous sample, it holds the last estimate.
+It appends `no progress for 45 s`, or whole minutes after one minute.
+Without a previous estimate, it shows only the stall age.
+A restart collects fresh samples and discards the previous attempt's estimate.
+
+The walk uses its average directory rate over the attempt.
+One slow directory can increase the estimate. A minute without directory progress suppresses it.
+A confirmed stall appears even below 10% directory coverage.
+
+The summary counts first passes and updates separately: `1 first pass, 1 updating`.
+A first pass remains a first pass through symbol waits and finishing until the repository is queryable.
+JSON supplies `summary.first_pass` and `summary.updating`; `summary.in_progress` keeps their sum.
+
+The indexed age measures index completion, not the Git commit time.
+Terminal table columns align. Pipe lines use no padding. JSON values do not change.
+Pipe rows have no width limit or renderer wrapping.
+Long names can exceed 100 columns on an 80-column terminal; the terminal controls visual wrapping.
+Above 50 repositories, the footer counts hidden repositories and names `ccx status --all`.
+For example: `… and 12 more repos; ccx status --all lists them`.
+
+An idle cycle indexer says `Indexer: idle, next cycle in 40 s`.
+The cycle period includes pass time. Older heartbeat rows omit the countdown.
+An older indexer that takes over cannot reuse another writer's cycle period.
+An overdue or exactly due cycle says `Indexer: idle, next cycle due now`.
+A running pass says `pass running for 2 min, 1 ref in progress`.
+Live mode says `watching`. Metadata includes the version, mode, and process uptime.
+
+Symbols and finishing show elapsed time: `finishing, 1 min so far`.
+Before one minute, they say `under a minute so far`.
+
+File estimates can change when file costs change. `about` does not promise an accuracy bound.
+`ccx indexed`, query errors, and MCP carry the same walk estimate.
+The MCP `index_status` tool supplies readable status text and structured progress fields.
+
+These examples use the shared renderer. Ages describe indexing, not Git commit time:
+
+```text
+indexed 11 min ago at bbbbbbbbbbbb
+committed 11 min ago at bbbbbbbbbbbb, repo not queryable yet
+updating for 11 min to aaaaaaaaaaaa: 37% (742 of 2,004 files, 900 chunks), about 10 min; serving bbbbbbbbbbbb meanwhile — ccx status --watch
+symbols: waiting for heads/other, 1 min so far — ccx status --watch
+symbols: 10 of 20 modules, 1 min so far — ccx status --watch
+finishing, 1 min so far — ccx status --watch
+finishing, under a minute so far — ccx status --watch
+Indexer: idle, next cycle in 40 s (v, cycle mode, up 15 min)
+Indexer: idle, next cycle due now (v, cycle mode, up 15 min)
+Indexer: pass running for 2 min, 1 ref in progress (v, cycle mode, up 15 min)
+Indexer: watching (v, live mode, up 15 min)
+```
+
+
+When progress is absent, the report says:
+
+```text
+Indexer: no indexer has reported — start ccx-indexer (the chart's indexer deployment), then ccx status --watch
+Index: no progress reported (the indexer predates 0.1.70, or has never started) — ccx repos lists what is indexed
+```
 
 - `ccx status --watch` redraws a terminal table every 10 seconds.
   Plain watch prints the header once, then UTC timestamped lines for changed refs, folding counts, and ready counts.
