@@ -46,6 +46,21 @@ No manual data migration is required. To retain the previous size policy, set
 values still override this default. Read larger files through `read-file`
 `--offset` / `--limit` windows; each window keeps its 1 MiB content cap.
 
+## Next release — query coverage notes
+
+Upgrade the CLI and server together. No manual database step is required.
+The indexer adds a nullable column for file-gap diagnostics at startup.
+Existing rows remain valid; older rows can report an unavailable skip reason.
+The next walk fills diagnostics without re-embedding unchanged code.
+The derived answer-cache logic epoch advances, so old answers are not reused.
+Collected usage history remains in place.
+
+Exact skipped-file queries now return `file_not_found` with reason
+`not_indexed`, instead of a successful empty match or definition page.
+Read the error detail for the file, reason, and local grep fallback.
+Explicit change queries retain freshness notes even for empty results.
+See [When an index cannot answer](cli.md#when-an-index-cannot-answer).
+
 ## Next release — change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.
