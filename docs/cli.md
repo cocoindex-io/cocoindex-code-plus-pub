@@ -169,7 +169,9 @@ Widths below 80 columns, or overflowing rows, select the pipe format.
 Inside a checkout, its repository rows append the indexed commit's local relation after the SHA.
 Examples include `(your HEAD)`, `(HEAD~2)`, and `(not in your clone yet; git fetch to compare)`.
 The comparison never fetches. Other repositories keep server facts only. JSON stays unchanged.
-Watch caches each SHA comparison until the checkout or object-store metadata changes.
+Watch caches each SHA comparison until checkout, git ref, or object-store metadata changes.
+Local HEAD and ref-name changes print the affected checkout row again.
+Update rows retain the relation beside their serving commit, including terminal detail lines.
 
 The header shows the server version and a duration such as `28 min` or `1 h 15 min`.
 It adds the CLI version only when it differs. A successful anonymous status request shows `auth off`.
@@ -274,7 +276,9 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
   Idle expiry prints `Watch stopped: no indexing work observed for 600 seconds.` and exits 0.
   A successful listing must confirm readiness before idle expiry can end the watch.
   Read failures do not restart the idle clock. `--timeout S` bounds the whole command and exits 1.
-  JSON suppresses repeated ready reports during idle; the stop line goes to stderr.
+  JSON suppresses unchanged ready reports during idle; new SHAs or repositories still print.
+  Heartbeat and ref-check timestamps alone do not repeat an idle report.
+  The stop line goes to stderr.
   SIGINT and SIGTERM exit 1.
   Request failures remain visible. A 429 or 503 respects `Retry-After`.
 - `ccx status --wait-ready --timeout 600` prints the final report once.
