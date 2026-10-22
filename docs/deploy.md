@@ -2562,7 +2562,7 @@ so the agentic cache never trusts a partially-applied index).
 
 ## Change content ingest
 
-Change ingest stores issue and pull request text. Search support follows in a later release.
+Change ingest stores issue and pull request text.
 The feature stores no record state, review verdict, label, assignee, milestone, or check result.
 
 Before enabling it, give the indexer's GitHub App **Issues: read** and **Pull requests: read**.
@@ -2577,7 +2577,7 @@ Then add this mapping to each repository entry in the config repository:
 changes:
   enabled: true
   since: 2025-01-01
-  keepBots: [renovate[bot]]
+  keepBots: ["renovate[bot]"]
 ```
 
 A local git entry also requires `from: github.com:owner/repository` inside `changes`.

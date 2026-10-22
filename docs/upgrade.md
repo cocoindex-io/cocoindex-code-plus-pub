@@ -37,7 +37,7 @@ prints the upgrade command, so no announcement is needed for the CLI.
 ## Next release — optional change content ingest
 
 The feature defaults to off. Normal upgrades require no change.
-The indexer creates six additional tables when `changeIndex.enabled` is true.
+The indexer creates six change content tables when `changeIndex.enabled` is true.
 Existing code rows, usage history, and answer cache rows remain in place.
 A startup marker records the embedding model and vector dimension.
 Changing them requires a change-vector migration; startup names the previous model and refuses mixed vectors.
@@ -50,7 +50,7 @@ See [Change content ingest](deploy.md#change-content-ingest) for settings and ex
 
 Startup names any missing permission. A refused credential leaves the existing index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
-GitLab change ingest and change search do not ship in this slice.
+GitLab change ingest does not ship in this slice.
 
 ## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far; `ccx repos` batches GitHub permission checks
 
