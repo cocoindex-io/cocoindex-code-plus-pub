@@ -142,9 +142,9 @@ an hour to appear while server-side caches refresh.
 Query server: healthy
   url:     http://127.0.0.1:8080  [--server]
   version: 0.1.70
-  uptime:  41.0s
+  uptime:  under a minute
   cli:     0.1.70  matches the server
-  credential: none — run ccx login or export CCX_API_TOKEN
+  credential: not needed (server auth: none)
 Indexer: running (0.1.70, cycle mode, started 18 min ago; last tick under a minute ago)
 Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
   acme/library  heads/main  indexed at 3f2a1c9e04b7 (6 min ago)
@@ -152,6 +152,19 @@ Index: 1 of 2 repos ready; 1 in progress — ccx status --watch follows them
 ```
 
 The server health sets the exit code: 0 means healthy, 1 means unreachable.
+Uptime uses age units, rounded to the nearest minute above one minute: `under a minute`, `21 min`, or `2 h 5 min`.
+
+Inside a checkout, its repository rows show the indexed commit's relation to local `HEAD` after the SHA.
+Examples include `(your HEAD)`, `(HEAD~2)`, and `(not in your clone yet; git fetch to compare)`.
+The comparison uses local git only; it never fetches. Other repositories keep their server-only rows.
+JSON output keeps the server response unchanged.
+
+An auth-off server prints `credential: not needed (server auth: none)`.
+The CLI first checks protected-resource metadata and confirms anonymous access to the protected status endpoint.
+A missing metadata endpoint alone does not establish anonymous access.
+API key and OIDC servers keep the credential line and its login advice.
+Failed discovery also keeps the credential line.
+
 A credential warning or unfinished first pass keeps exit 0.
 If health fails, the command skips the progress request.
 The `Indexer:` line says `running` (with the version and `cycle mode` or `live mode`) or `last run finished`.
@@ -197,14 +210,21 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
 ```
 
 - `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
-  Pipes, CI, and non-TTY SSH commands receive complete plain reports.
+  Pipes, CI, and non-TTY SSH commands receive incremental plain reports.
+  The first report includes the server block and all visible repository rows.
+  Later ticks print the timestamp, `Indexer:` line, `Index:` summary, and changed repository rows.
+  Changes to age text alone do not repeat a repository row.
+  Every five minutes, and whenever the summary changes, the watch prints a full report again.
+  A removed row or an error transition also triggers a full report.
+  Terminal redraws keep the full report on every tick.
   Each plain report starts with a UTC timestamp line, such as `2026-10-22T05:00:00Z`.
   `--plain` selects this format on a terminal, without colors or cursor control sequences.
   Every report is flushed immediately, including terminal redraws.
   After it observes indexing work, it exits 0 when every repository is ready.
   If every repository is ready at the start, it polls for work for 600 seconds.
   `--idle-timeout S` sets this grace period; `0` restores immediate exit when ready.
-  Idle polls do not repeat the report. Work disables the idle timeout for the rest of the watch.
+  Plain idle ticks keep the small timestamp and summary report; JSON idle polls suppress repeated ready reports.
+  Work disables the idle timeout for the rest of the watch.
   An idle exit prints `Watch stopped: no indexing work observed for 600 seconds.` and exits 0.
   `--timeout S` limits the whole watch and exits 1, even during the idle grace period.
   Read failures print diagnostics and keep following; they do not restart the idle clock.
