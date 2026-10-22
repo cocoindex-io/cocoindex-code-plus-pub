@@ -1224,3 +1224,28 @@ excluded subtree can also produce `not_on_ref`.
 
 Use `ccx show FILE:LINE` without `--repo` or `--git-ref` for a local file.
 The CLI sends its working-tree text. The indexed file size limit does not apply.
+
+
+## When an index cannot answer
+
+An empty result is useful only when the index covers the requested files.
+`defs`, `refs`, and symbol `show` name up to three relevant skipped or failed
+files, with reasons and a local grep fallback. They print this note for
+empty results or nearby file paths, rather than on every successful lookup.
+Older index rows can report an unavailable skip reason. This does not mean
+that the file fails to parse.
+
+An exact `grep --text --path <file>`, file-scoped `show -s`, or `read-file`
+request reports a known skipped file as `<file> is not indexed (<reason>); grep it locally`.
+Read or grep the working-tree file to continue.
+
+`search --kind change`, `search --kind all`, and `refs --kind change` keep
+the freshness line even when their results are empty. `changes: insufficient`
+means the backfill cannot settle absence. With no index, the line says
+`no change index for <repo>; absence proves nothing — use gh/git log`.
+
+`ask` reads one indexed commit per ref on each code read. It cannot read git
+history, blame, or commit diffs. It must not infer which PR introduces code
+from the current file. Its last line names relevant files it cannot read,
+then says `history questions: use git log / ccx --kind change`.
+Check change coverage before you use its results as evidence.
