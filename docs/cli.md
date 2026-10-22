@@ -180,16 +180,25 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
 ```
 
 - `ccx status --watch` redraws the whole report every 10 seconds on a terminal.
-  Other outputs receive plain reports. It exits 0 when every repository is ready, 1 on Ctrl-C.
+  Pipes, CI, and non-TTY SSH commands receive a complete plain report per tick.
+  Each plain report starts with a UTC timestamp line, such as `2026-10-22T05:00:00Z`.
+  `--plain` selects this format on a terminal, without colors or cursor control sequences.
+  Every report is flushed immediately, including terminal redraws.
+  It exits 0 when every repository is ready, 1 on SIGINT (Ctrl-C) or SIGTERM.
+  An interrupted terminal watch keeps the last report and adds a final newline.
+  The watch does not change cursor visibility or enter an alternate screen.
+  Failed health or status requests print a failure report and keep following.
   A 429 or 503 response delays the next request by its `Retry-After` value.
   The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
 - `ccx status --wait-ready --timeout 1800` waits without intermediate output.
   It prints the final report once, then exits 0 when ready.
+  Non-TTY output and `--plain` use the same timestamped plain format.
   It exits 1 at the timeout or when failures remain with nothing in progress.
   `--watch` keeps following failed repositories and shows that they retry next cycle.
 - `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
   The command reads every page. More than three complete refs fold into a counted line per repository.
 - `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
+  JSON output has no timestamp lines or terminal controls. Error diagnostics go to stderr.
   For a paged listing, `index` contains the unchanged responses as an array.
   The command preserves page cursors and wire timestamps.
 
