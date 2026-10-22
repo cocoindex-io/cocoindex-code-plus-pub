@@ -34,6 +34,24 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## Next release — optional change content ingest
+
+The feature defaults to off. Normal upgrades require no change.
+The indexer creates six change content tables when `changeIndex.enabled` is true.
+Existing code rows, usage history, and answer cache rows remain in place.
+A startup marker records the embedding model and vector dimension.
+Changing them requires a change-vector migration; startup names the previous model and refuses mixed vectors.
+
+Before enabling change ingest, add **Issues: read** and **Pull requests: read**
+to the indexer's GitHub App. Approve the added permissions on each installation.
+Then set `changeIndex.enabled: true` and add `changes.enabled: true` to selected repository entries.
+A local git entry also needs `changes.from`; a code-host entry must omit it.
+See [Change content ingest](deploy.md#change-content-ingest) for settings and exposure rules.
+
+Startup names any missing permission. A refused credential leaves the existing index unchanged.
+Turning off an entry removes its change rows; re-enabling starts a new backfill.
+GitLab change ingest does not ship in this slice.
+
 ## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far; `ccx repos` batches GitHub permission checks
 
 Nothing is required in the deployment: upgrade normally, and upgrade the
