@@ -172,6 +172,23 @@ The index rows use these states:
 | `first pass failed (attempt N)` | the next cycle retries; check the indexer's log |
 | `not reporting since` | the reporting indexer is no longer running |
 
+During the walk, the report can say:
+
+```text
+walking the tree: 1,421 files found so far, 338 of 410 directories listed, about 2 min to finish the walk
+```
+
+The estimate starts after 60 seconds of samples and 10% of known directories are listed.
+The directory total can grow. This estimate covers only the walk.
+After the walk, the files estimate uses the recent file rate and says `about N min`.
+It requires 60 seconds of samples. A zero rate shows `no progress for N min`.
+The walk uses its average directory rate over the attempt.
+One slow directory can increase the estimate. A minute without directory progress suppresses it.
+A confirmed stall appears even below 10% directory coverage.
+File estimates can change when file costs change. `about` does not promise an accuracy bound.
+`ccx indexed`, query errors, and MCP carry the same walk estimate.
+The MCP `index_status` tool supplies readable status text and structured progress fields.
+
 When progress is absent, the report says:
 
 ```text
