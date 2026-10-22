@@ -1766,6 +1766,12 @@ credential; naming one is rejected at startup rather than sitting inert.
 
 Reusing the indexer App is the default: every GitHub App already carries the `Metadata: read` the permission checks need, one installation covers both roles, and adding a repo stays a single grant.
 
+- **Organization → Members: Read-only makes `ccx repos` fast.** With it the
+  walk answers the engineer's permission on up to a hundred repos per
+  request instead of one call per repo ([Behavior to expect](#behavior-to-expect)
+  below); without it everything still works, one call per private repo,
+  and the server logs one warning per installation. Org-level SAML mapping
+  requires the same permission.
 - **Org-level SAML mapping needs two org permissions** — **Organization →
   Members: Read-only** and **Organization → Administration: Read-only**.
   GitHub's docs suggest members-read suffices for `externalIdentities`, but
@@ -1978,14 +1984,21 @@ and id-verify the repo, resolve the id to a login, read the collaborator
 permission — plus, once per engineer per mapping TTL, the identity lookup (2
 calls on the GHES SCIM route). A public repo settles in 2. Within the decision
 TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
-worst case is ~40 calls fully cold and zero warm; `ccx repos` checks each
-indexed repo once per TTL window, at most `authz.listReposCheckConcurrency`
-(default 10) in flight. It looks up its private and internal repos in
-batches, one GraphQL request per approved org per batch, so each of those
-costs a single call there (its collaborator permission); public repos keep
-their 2. Size the envelope as active engineers × indexed repos per TTL
-window. On GHES the ceiling is your instance's own rate-limit setting (often
-disabled by default) rather than a per-installation hourly quota.
+worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
+Insights views that list repositories) checks each indexed repo once per TTL
+window, at most `authz.listReposCheckConcurrency` (default 10) in flight. It
+looks the repos up in batches, one GraphQL request per approved org per
+hundred candidates: public repos cost nothing there, and when the
+installation grants **Organization → Members: Read-only** the same request
+answers the engineer's permission on each private or internal repo they can
+read, so those cost nothing either. What still costs one call each: every
+repo the engineer cannot read (the batch never settles a denial), and every
+private or internal repo under an installation without that grant. The
+query server logs, once per installation, whether the grant is present; a
+missing one reads `grants no Organization Members (read)` and names the fix.
+Size the envelope as active engineers × indexed repos per TTL window. On GHES
+the ceiling is your instance's own rate-limit setting (often disabled by
+default) rather than a per-installation hourly quota.
 
 #### Pre-flight check
 
