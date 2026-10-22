@@ -185,7 +185,9 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
   `--plain` selects this format on a terminal, without colors or cursor control sequences.
   Every report is flushed immediately, including terminal redraws.
   It exits 0 when every repository is ready, 1 on SIGINT (Ctrl-C) or SIGTERM.
-  An interrupted terminal watch keeps the last report, restores the cursor, and adds a final newline.
+  An interrupted terminal watch keeps the last report and adds a final newline.
+  The watch does not change cursor visibility or enter an alternate screen.
+  Failed health or status requests print a failure report and keep following.
   A 429 or 503 response delays the next request by its `Retry-After` value.
   The value can contain seconds or an HTTP-date. Waits stay interruptible and respect `--timeout`.
 - `ccx status --wait-ready --timeout 1800` waits without intermediate output.
@@ -196,7 +198,7 @@ Index: no progress reported (the indexer predates 0.1.70, or has never started) 
 - `--all` shows complete rows for every repository. By default, reports above 50 repositories fold complete rows into the summary.
   The command reads every page. More than three complete refs fold into a counted line per repository.
 - `--json` prints the heartbeat under `indexer` and the unchanged listing response under `index`.
-  JSON output has no timestamp lines.
+  JSON output has no timestamp lines or terminal controls. Error diagnostics go to stderr.
   For a paged listing, `index` contains the unchanged responses as an array.
   The command preserves page cursors and wire timestamps.
 
