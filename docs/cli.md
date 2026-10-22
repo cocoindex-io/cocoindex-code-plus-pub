@@ -202,7 +202,8 @@ Indexed: acme/app at heads/main@3f2a1c9e04b7 (your HEAD); updating to 9b81d0c2aa
 Not indexed: acme/other — ccx status lists the repos this server indexes; add it to the config repo to index it
 ```
 
-An unfinished or failed first pass exits 1. An indexed ref exits 0 during an update.
+An unfinished or failed first pass exits 1 for humans. The hook retries a failed first pass later.
+An indexed ref exits 0 during an update.
 `ccx indexed --json` includes the progress snapshot and `queryable`.
 The plugin reports a first pass once per agent, then permits ordinary hints when the repository becomes queryable.
 A committed ref whose repository is still blocked earns the same indexing hint, without spending ordinary hint markers.

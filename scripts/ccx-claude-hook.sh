@@ -60,7 +60,7 @@ case "$status" in
       case "$reported_kind" in
         indexing | grep | result | start | subagent_start) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
-        *) exit 0 ;;
+        *) ;; # Newer CLIs fall back to the event marker.
       esac
       # Claim this (agent, kind) once, even when tool hooks run in parallel.
       (set -C; : >"$marker") 2>/dev/null || exit 0
