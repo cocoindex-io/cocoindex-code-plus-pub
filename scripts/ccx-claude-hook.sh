@@ -20,6 +20,9 @@ session=$(field session_id)
 agent=$(field agent_id)
 source=$(field source)
 [ -n "$event" ] || exit 0
+# IDs become file names and compaction glob prefixes. Reject path and glob syntax.
+case "$session" in *[!a-zA-Z0-9_-]*) exit 0 ;; esac
+case "$agent" in *[!a-zA-Z0-9_-]*) exit 0 ;; esac
 
 # SessionStart's environment file reaches later Bash commands. Keep the
 # observation cache separate for each Claude Code session, including resume.
