@@ -2766,6 +2766,7 @@ The server supplies the relevance labels; `score` remains vector similarity.
 |---|---|---|
 | `changeIndex.retrieval` | `CCX_CHANGE_INDEX_RETRIEVAL` | `auto` |
 | `changeIndex.changesNear` | `CCX_CHANGE_INDEX_CHANGES_NEAR` | `0.5` |
+| `changeIndex.recencyTiebreak` | `CCX_CHANGE_INDEX_RECENCY_TIEBREAK` | `true` |
 | `changeIndex.nearGap` | `CCX_CHANGE_INDEX_NEAR_GAP` | `0` |
 | `changeIndex.rerank` | `CCX_CHANGE_INDEX_RERANK` | `false` |
 | `changeIndex.rerankModel` | `CCX_CHANGE_INDEX_RERANK_MODEL` | `openai/gpt-4.1-mini` |
@@ -2782,3 +2783,10 @@ The model assesses only the first twenty records before pagination.
 The vector floor remains provisional. A long exact error can qualify below
 that floor. A nonzero `nearGap` also requires a lead over the next record.
 The available evaluation does not support enabling a gap by default.
+
+### Change search lexical ties
+
+Hybrid change retrieval prefers newer creation times when lexical scores are equal.
+The vector score keeps its meaning. Set `changeIndex.recencyTiebreak: false`
+to order lexical ties by repository and record number. This setting adds no
+model call and requires no database change.
