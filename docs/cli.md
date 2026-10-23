@@ -360,8 +360,14 @@ ccx read-file src/app.py --offset 40 --limit 20  # 20 lines from line 40 (--offs
 ccx show src/app.py                              # the file's outline: every definition at its line, bodies folded (working tree first)
 ccx show src/app.py:142                          # the definition at line 142, framed by its enclosing scopes
 ccx show -s QueryService                         # the definitions of a name, rendered; -e expands, --git-ref reads the index
+ccx show --at HEAD~3 src/app.py                  # the file as a commit of your clone holds it (read from local git)
 ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
+
+# Commit history (from your clone, up to HEAD)
+ccx log QueryService                             # the commits that changed the symbol's lines: sha, date, PR, +X/-Y, subject
+ccx log QueryService --patch -n 20               # each commit's diff within the symbol, 20 commits
+ccx log -S 'MAX_RETRIES = 5'                     # the commits that added or removed a text, and their files
 
 # Repo / ref metadata
 ccx git-refs                                     # the current repo's indexed refs + commit shas (+ where each sits relative to your HEAD)
@@ -675,6 +681,36 @@ Exit codes: 0 with output (the listing included); 1 when `-s` matches
 nothing, when the path is on neither side (not on disk, not in the ref), or
 on a usage error such as `-s` together with a `PATH:LINE`; 2 on a malformed
 command line.
+
+### `ccx log` — a symbol's commit history
+
+The index holds one commit per ref and no history; your clone holds all of
+it. `ccx log SYMBOL [PATH]` finds the definition through the index (the
+`ccx defs` selectors: `-q/-b`, `--kind`, a PATH), places its lines in
+HEAD's copy of the file — by structure, else by name, when the file has
+changed since the indexed commit — and runs `git log -L` on them:
+
+```
+$ ccx log FEATURES_10
+crates/store/src/schema.rs  constant FEATURES_10  L386-L386  (HEAD 007448888a1c)
+fc5dcc10b8c8  2026-10-22  #2814   added +1  Fix session service placement  (LJ)
+```
+
+One line per commit, newest first: the short sha, the date, the pull
+request number from a `(#N)` subject suffix, the lines added and removed
+within the symbol (`added +N` for the commit that brought it in), the
+subject and the author. `-n` (default 10) and `--since` (`2d`, `1w`, or a
+date) bound the walk; `--patch` adds each diff within the symbol.
+
+`ccx log -S TEXT [PATH…]` is `git log -S`: the commits that added or
+removed TEXT (`adds`, `removes`, `moves`) and the files they touched. Use it
+for a symbol the index no longer holds, or any string.
+
+`ccx show --at COMMIT PATH` (or `-s NAME`) shows a file or a definition as
+any commit of your clone holds it: a sha, `HEAD~3`, a branch. The text is
+read with git and rendered as a working-tree file is; the header says
+`(read from local git at <sha>, not indexed)`. Nothing here reaches
+commits you have not fetched.
 
 ### `ccx ask` — ask a question, get an answer
 
