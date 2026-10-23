@@ -4,6 +4,13 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Hybrid change search lexical ties
+
+Hybrid retrieval now prefers newer creation times when lexical scores are equal.
+Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
+order. Vector retrieval and automatic reranking keep their current defaults.
+No schema migration or index rebuild is required.
+
 ## Local fallback after an indexed file miss
 
 Upgrade the CLI and query server together. `ccx show PATH` now uses the
