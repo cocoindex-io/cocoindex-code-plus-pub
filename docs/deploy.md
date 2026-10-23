@@ -951,6 +951,23 @@ says what a killed pass keeps and what it leaves for later). Alternatively,
 add the largest repositories to the [index config](#index-config-repo) first
 and the rest once their first pass is done.
 
+### Query server CPU
+
+A structural `ccx grep` parses every candidate file the index could not
+rule out, on one thread per CPU the query server's container may use (its
+cgroup limit, else the node's count). Parsing is the whole cost of a grep
+whose pattern carries no identifier, so the CPU limit is what sets its speed:
+
+- **Give the query server the CPUs a large grep should use.** With
+  `queryServer.resources.limits.cpu: "1"` a grep parses one file at a time,
+  about 150 files per second; a limit of 4 to 8 is reasonable on a monorepo
+  where agents grep often. Without a limit the server uses the node's cores.
+- **`CCX_GREP_PARSE_THREADS`** (through `queryServer.extraEnv`) caps the
+  parse threads below the limit when the server shares its CPUs with other
+  work; `1` or more.
+- A grep that reaches the request deadline answers the files it scanned and
+  a cursor to continue from, with a warning that says so ([cli.md](cli.md)).
+
 ### Symbol index
 
 Alongside the vector index, the indexer builds a **resolved symbol graph** per

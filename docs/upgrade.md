@@ -69,6 +69,18 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
   disk no longer sends a request. Nothing changes for a cluster whose
   containers start empty. `COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds;
   `0` restores a request at every start) tunes it — [License key](deploy.md#license-key).
+- **Structural `ccx grep` is faster, and its parallelism follows the query
+  server's CPUs.** The server parses candidate files on one thread per CPU
+  the container may use (its cgroup limit, else the node's count; before, a
+  flat eight), and reads the next batch of files while the current one is
+  being parsed. A pattern whose only literal is a keyword (`catch (\_ \_) { }`,
+  `for (int \_ = 0; \_ < \_; \_++) { delete \_; }`) no longer parses every
+  file of the language: a file without the keyword is skipped before the
+  parse. **What to check:** a `queryServer.resources.limits.cpu` of `1`
+  now means one parse thread; give the query server the CPUs you want a
+  large grep to use (4 to 8 on a monorepo). `CCX_GREP_PARSE_THREADS` through
+  `queryServer.extraEnv` caps the threads below the limit when the server
+  shares its CPUs — [Query server CPU](deploy.md#query-server-cpu).
 
 ## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
 
