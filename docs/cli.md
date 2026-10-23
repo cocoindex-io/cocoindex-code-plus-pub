@@ -335,9 +335,10 @@ ccx grep 'isinstance(\X, \Y)' -l python --path 'src/*.py'
 
 # Plain-text grep (a regex over the text of EVERY file — comments, docs, config; no -l needed)
 ccx grep --text 'retry_budget'                    # a word or phrase anywhere; smart case
-ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (Python re syntax), scoped by path
+ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (ripgrep's dialect), scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l is an optional filter
 ccx grep --text -s 'return\s+\d{7};' --path 'src/*' # -s: case-sensitive (cheaper on a large repo); -i: insensitive
+ccx grep --text -U '\)\s*\{' -l c++               # -U: a match may span lines (rg -U); each covered line prints with its own number
 ccx grep --text 'retry' --cursor <c>              # continue a scan where its stderr note stopped
 
 # Symbol navigation: definitions & references (resolved, not text matches)
@@ -541,21 +542,30 @@ usually finds nothing; the CLI then prints a `warning:` line on stderr showing
 the pattern in ccx's forms (the MCP response carries it as `warnings`).
 
 `ccx grep --text` is the **plain-text** mode: the pattern is a regular
-expression (Python `re` syntax; a plain word works as-is) matched line by line
+expression in ripgrep's dialect (what `rg` reads: `\d`, `\w`, `\b`, `\s`, `|`,
+`(?i)`, `[[:alpha:]]`; lookarounds and backreferences work too, on a slower
+engine; a plain word works as-is) matched line by line
 against the text of **every** file in the ref — comments, docs, config and
 languages the structural grep cannot parse included — so it needs no `-l`
 (with `--text`, `-l` is an optional, repeatable filter by language). Case is
 **smart** by default (case-insensitive unless the pattern has an uppercase
 letter; `--case sensitive|insensitive` forces it, and `-s` / `-i` are the
-short forms); `-w/--word` matches whole words only. Output is one
-`path:line:text` line per match; the line number is the one `read-file
---offset` takes. A pattern with literal text in it is cheap: the server
+short forms); `-w/--word` matches whole words only. `-U/--multiline` is
+ripgrep's `-U`: a match may span lines — `^` / `$` still mean line bounds and
+`.` still stops at a newline, so only a consuming class (`\s`, `[^;]`, `\n`)
+crosses one — for a brace on the next line (`\)\s*\{`) or a signature wrapped
+over two lines. Output is one `path:line:text` line per matched line (a `-U`
+match prints each line it covers with its own number); the line number is the
+one `read-file --offset` takes. A pattern with literal text in it is cheap: the server
 prefilters on that text in SQL, and reads only the files holding it when the
 deployment has the [text search index](deploy.md#text-search-index); one with
-none — `.*`, a character class alone — or whose only literal is in most files
-(`return`) scans every file of the ref, so add `--path` on a large repository,
-and prefer `-s` when case does not matter to the question (the
-case-insensitive scan costs several times more).
+none — `.*`, a character class alone — or whose literals are all in most
+files (`return.*null.*delete`) scans every file of the ref, so add `--path`
+on a large repository, and prefer `-s` when case does not matter to the
+question (the case-insensitive scan costs several times more). The index
+lookup itself is bounded: when every literal is common it gives up after a
+fraction of the request's time and the scan takes over, and the warning says
+so.
 
 **Grep pages by cursor, in a shuffled scan order.** Both grep modes scan files
 in a fixed shuffled order (by a hash of the path), so a page is a sample of
@@ -640,7 +650,7 @@ ccx show -e src/app.py                     # the whole file, numbered
 ccx show --depth 1 src/app.py              # the file's items only, each class or module collapsed to its head and a members roster
 ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
-ccx show --git-ref main src/app.py         # the indexed copy at that ref, never the working tree
+ccx show --git-ref main src/app.py         # request the indexed copy at that ref
 ```
 
 Every object prints under a header,
@@ -1074,13 +1084,14 @@ has been checked against the repositories in question.
      agent's tool list on every turn, carrying the same routing guidance from
      the server, so there is nothing to trigger.
   3. **The Claude Code plugin** — reaches the moment the skill cannot: the
-     agent's own decision to grep in the middle of a task, in subagents too.
+     agent's decision to grep or read source files, in subagents too.
      Its hooks add one line of context, once per agent, when the checkout is
      indexed: at the first repository-wide grep or `rg` (naming `ccx defs`,
      `refs`, `search`, `ask` and `show` with what each answers, the indexed
      commit's position relative to `HEAD`, and which local files still need
      grep); at
-     a grep that found nothing or far too much; and when a session or
+     a grep that found nothing or far too much; at a direct source-file read
+     with `sed -n`, `head`, `cat`, or windowed `Read` (naming `ccx show`); and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
@@ -1319,17 +1330,39 @@ keeps the server's change section and freshness data.
 Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
 before repeating work from a brief. The command splits bullets, numbered
 lines, and paragraphs into items. It searches once per item, up to 20 items.
-Each item shows its best record and score. `near` and `weak` use the server's
-score floor. These labels describe similarity, not whether work shipped.
+Each item shows the first record in the server's relevance order and its
+vector score. The server supplies `near` and `weak` assessments. Hybrid
+search combines vocabulary matches with vector similarity. An exact error
+can qualify below the usual score floor. Optional reranking checks whether
+a record addresses the query. These labels do not prove that work shipped.
+A failed rerank says `unrated (rerank unavailable)`.
 
 Use `ccx refs <name> --kind change --since 2d` for touched and mention groups.
-`ccx show` adds `touched by` when the server supplies an annotation. Change
-text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
+Search hits show the newest pull request that touches the same file and
+symbol. A file without symbol extraction uses its file row. Deleted symbols
+remain searchable through `ccx refs <name> --kind change`.
+
+Change hits show a bounded list of touched paths and the total path count.
+Files beyond the deployment's diff-file limit retain their path and counts.
+`ccx show --repo <owner>/<repo> PATH` receives change annotations from the
+indexed source. Local inline rendering keeps its existing attribution-only
+repository hint.
+
+During a stored-record upgrade, `ccx status` adds
+`upgrading N records to schema 3` to the repository's changes line. This count
+tracks records missing state or a PR touched set. The line clears this phrase
+when the automatic upgrade pass finishes.
+
+Change text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
 until that slice ships.
 
 Read the freshness line before treating absence as evidence. `insufficient`
-means the index cannot establish absence. Use the printed `state:` command
-to ask the code host about a record's current state.
+means the index cannot establish absence.
+
+Each change hit shows the host state from its last read. Closed and merged
+hits include the event date. State can change after that read. If the read
+predates the last completed sweep, the CLI prints `state as of <time>` and
+a `state:` command to check the host live. Unknown state also prints that command.
 
 The CLI remembers shown and followed record identifiers in its disposable
 cache when a session identifier exists. Claude Code's SessionStart hook sets
@@ -1377,3 +1410,49 @@ history, blame, or commit diffs. It must not infer which PR introduces code
 from the current file. Its last line names relevant files it cannot read,
 then says `history questions: use git log / ccx --kind change`.
 Check change coverage before you use its results as evidence.
+
+
+### Indexed pull requests and issues
+
+Use `ccx show '#2901'` or `ccx show https://github.com/acme/api/pull/2901`
+to read a record from the change index. A number uses the current repository;
+pass `--repo acme/api` to select another repository. The output includes the
+state's read time, dates, first body part, touched paths and symbols, and the
+number of retained indexed comments. Missing numbers report index coverage.
+These reads do not call GitHub.
+A search query containing only `#N` selects that record too; pass `--kind code`
+to search code for the number instead.
+
+```bash
+ccx search --kind change "Main is red" --state open --sort updated
+ccx search --kind change --state open --since 2h --sort updated
+ccx search --kind change --since 2026-10-23 --sort created
+```
+
+`--state` accepts `open`, `closed`, `merged`, or `all`; closed excludes merged
+PRs. `--since` selects records updated since a duration, a UTC date, or a
+timestamp with a timezone. `--sort` accepts `relevance`, `updated`, or `created`.
+The default order is relevance, or updated for an empty query. Empty queries
+need a filter. Date order uses title/body text matching when a query is present.
+Filters apply before ranking and pagination. Read the header's `states as of`
+time and the coverage footer's cycle age. The normal refresh target is five
+minutes; failures and backlogs can delay it. State reflects indexed reads.
+
+
+The Claude Code plugin also recognizes direct source reads with `sed -n`,
+`head`, `cat`, and windowed native `Read` calls. Inside an indexed checkout,
+it suggests `ccx show PATH:LINE` or the file outline once per agent.
+It ignores logs, JSON, heredocs, writes, producer pipes, and outside files.
+
+
+### Local fallback for unavailable indexed files
+
+For file targets, an unavailable indexed file can fall back to the current
+checkout's file, even with `--git-ref` or `--repo`. The repository must match
+this checkout. Successful indexed reads still use the requested ref.
+The header says `read from your working tree; not indexed at <commit>` and
+names the server's reason: `not_on_ref`, `not_indexed`, or `too_large`.
+The commit comes from the failed read, not a later ref lookup. Treat this
+output as local text. Missing local files still report the index error.
+Files too large for the render request receive a bounded local text view.
+That output names the limit instead of pretending to show an outline.

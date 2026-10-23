@@ -1,7 +1,7 @@
 #!/bin/sh
 # The ccx plugin's one hook. Claude Code runs it at an agent's repository
-# searches (PreToolUse and PostToolUse on Grep, grep, rg, git grep) and when a
-# session or subagent starts. It reads the hook event on stdin and prints at
+# searches, direct source reads (sed, head, cat, Read), and session or
+# subagent starts. It reads the hook event on stdin and prints at
 # most one line of context, as JSON, when the checkout is indexed in ccx.
 #
 # Division of labour: this script only keeps the per-agent markers that make
@@ -38,10 +38,15 @@ fi
 case "$event" in
   PreToolUse)
     kind=grep
+    tool_name=$(field tool_name)
+    [ "$tool_name" = Read ] && kind=read
     # Keep the event marker separate for host-history commands. The CLI
     # classifies their exact command shape and reports the final kind.
     command_text=$(field command)
-    case "$command_text" in gh\ *|git\ log\ *) kind=change ;; esac
+    case "$command_text" in
+      gh\ *|git\ log\ *) kind=change ;;
+      sed\ *|head\ *|cat\ *) kind=read ;;
+    esac
     # A shell expression may earn a different kind from its first command.
     # Do not let a guessed grep marker hide a later host-history search.
     # The CLI parses shell segments and claims the returned marker below.
@@ -93,7 +98,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start | change) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change | read) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac

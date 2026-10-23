@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.4"
+  ccx-skill-revision: "2026-10-23.10"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.4`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.10`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -72,7 +72,11 @@ so it is right on your branch, uncommitted edits included:
   `ccx show PATH` (its header's `L1-L<n>` gives the length), then one of the
   above. A file you know is under about 200 lines: read it whole.
 - **Not on disk, or at another ref** → the same targets with `--repo` or
-  `--git-ref`, which read the index (*Files at a ref you don't have* below).
+  `--git-ref`, which request the indexed copy (*Files at a ref you don't have* below).
+
+For this checkout's repository, a missing indexed file can use the local
+file, including with `--git-ref`. If its header says `read from your working tree; not indexed
+at <commit> (<reason>)`, treat it as local text, not that indexed commit.
 
 Local tools stay the right choice for exactly two things: the reads the list
 above gives them, and searching the files you edited or added since the
@@ -85,29 +89,56 @@ string, a config key, a log message, a word in a comment or a doc — goes to
 language to name. A structural `ccx grep` with no metavariable is neither: it
 floods hits.
 
-## Pull request and issue content
+## History: pull requests, issues and commits
 
-When `ccx indexed --json` carries a `changes` block, use the change index at
-these four moments:
+Before you look up history with `gh` or `git log`, use the ccx command that
+replaces the habit. ccx ranks by meaning (your words need not match the
+title), prints each record's state (open, merged, closed) on the hit, and
+spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 
-- Before redoing listed work, pass the list to `ccx prior -` on stdin.
-- For a test red on main, run `ccx refs <test> --kind change --since 2d`.
-- For a line that looks wrong, read its `touched by` annotation, then run
-  `ccx refs <symbol> --kind change`.
-- For a symptom, run `ccx search --kind change "<symptom>"`.
+| Your habit | Use instead |
+|---|---|
+| `gh pr list --search "sidebar animation" --state all` | `ccx search --kind change "sidebar plays drop animations on restart"` |
+| `gh pr list --state open --search "fix clippy"` (is a fix already in?) | `ccx search --kind change "<the failing test or error line>"`: it also sees merged fixes, which `--state open` hides |
+| `gh pr view 2901` | `ccx show '#2901'` (a PR or issue URL also works) |
+| `gh issue list --state open --search "Main is red"` | `ccx search --kind change "Main is red" --state open --sort updated` |
+| `gh search prs "rate limit breaker"` | `ccx search --kind change "GitHub calls fail with 403 until the reset"` |
+| `git log --oneline --grep="landing"` | `ccx search --kind change "landing retries after a rate limit"` |
+| `git log -S 'pub const FEATURES_10'` | `ccx log -S 'pub const FEATURES_10'` |
+| `git log -L :keep_landed_evidence:…/workspace.rs` | `ccx log keep_landed_evidence` (`--patch` for the diffs) |
+| "has someone already done this?" (reading PR lists) | `printf -- '- item\n- item\n' \| ccx prior -` |
+| "who changed the code around this line, and why?" | the hit's `touched by #N` line, then `ccx refs <symbol> --kind change` |
 
-Read the freshness line before treating absence as evidence. `insufficient`
-means coverage cannot answer. `near` and `weak` use the server's score floor.
-A change hit records what its author says. Read the current code to check it.
-Use each hit's printed `state:` command for the host's current answer.
+Write the query as the symptom or the task, in plain words: what you saw or
+what you are about to do. Paste an error line as it is; exact error text
+counts. One query per question; read the top three hits.
 
-**Commit history comes from your clone, not the index.** `ccx log <symbol>`
-lists the commits that changed its lines (sha, date, `#PR`, `+X/-Y` within
-it, `added` on the one that brought it in); `--patch` adds the symbol-scoped
-diff. `ccx log -S '<text>'` finds the commits that added or removed a text,
-for a symbol the index no longer holds. `ccx show --at <sha> PATH` or
-`ccx show --at <sha> -s NAME` reads any commit of your clone. `--git-ref`
-takes only indexed refs, never a sha.
+**When to run it, without being asked:**
+
+- **Before you start a fix or a listed task:** `ccx prior -`. A `near` hit
+  that is `merged` means the work may already be on main: read it before
+  you write code.
+- **When a test or build fails on main:** `ccx search --kind change` with the
+  first error line, and `ccx refs <test> --kind change --since 2d`.
+- **When a line looks wrong:** `ccx log <symbol>`, then the PR it names.
+
+**Reading the answer.** Each relevance-ranked search hit is labelled `near`
+(worth reading) or `weak · not found` (no record answers the query). The closing `changes:`
+line says the coverage: a numbered range (`#2200 to #3112`) means a `weak`
+result is real absence; `insufficient` means the index cannot answer yet, so
+fall back to `gh`. A hit records what its author wrote: check the current
+code before you rely on it. The printed state is as of the last read; its
+`state:` line checks it live.
+
+For recent changes, use `ccx search --kind change --state open --since 2h
+--sort updated`; omit `--state open` to include closed and merged records.
+Read the header's `states as of` time before treating a poll as current.
+If `ccx show '#N'` reports that N is outside the change index, use `gh`.
+
+**Still use `gh` / `git` for:** CI runs and logs; repositories or dates
+outside the coverage line; writing (comments, merges). `ccx log` and `ccx show --at <sha>`
+read your clone, so they see any commit you have fetched; `--git-ref` takes
+only indexed refs, never a sha.
 
 ## Repo & ref scoping (applies to every query command)
 
@@ -290,6 +321,7 @@ structural grep cannot parse included — and needs no `-l`. Output is one
 ccx grep --text 'retry_budget'                   # a word or phrase anywhere
 ccx grep --text 'TODO|FIXME' --path 'src/*'      # a regex, scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l is an optional filter
+ccx grep --text -U '\)\s*\{' -l c++              # -U: a match may span lines (rg -U)
 ```
 
 - **Reach for it when what you know is text**: a string literal, an error
@@ -298,9 +330,17 @@ ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l i
 - **Smart case** by default: case-insensitive unless the pattern has an
   uppercase letter; `--case sensitive|insensitive` forces it. `-w`/`--word`
   matches whole words only.
-- **Python `re` syntax**: `\b`, `\w`, `\d`, alternation and `(?i)` work as
-  in `rg`; lookarounds and backreferences also work (plain `rg` has neither);
-  `\p{…}` classes do not exist. A plain word needs no escaping.
+- **ripgrep's regex dialect**: write the pattern as you would for `rg` —
+  `\b`, `\w`, `\d`, `\s`, alternation, `(?i)`, `[[:alpha:]]`, `\p{…}` all
+  work as there. Lookarounds and backreferences also work, on a slower
+  engine (a warning says so). A plain word needs no escaping.
+- **A match that must span lines needs `-U`** (`rg -U`): a brace on the next
+  line (`\)\s*\{`), a signature wrapped over two lines, a call whose
+  arguments continue on the next. Without it the pattern is matched line by
+  line and `\s*` never crosses a line break, so the answer is zero. With it,
+  `^` / `$` still mean line bounds and `.` still stops at a newline; `\s`,
+  `[^;]` and `\n` cross one. Each line a match covers prints with its own
+  number.
 - **Cost**: a pattern with literal text in it is prefiltered in SQL and cheap;
   one with none (`.*`, a class alone), or whose only literal is in most files
   (`return`), scans every file of the ref — add `--path` on a large
@@ -515,7 +555,7 @@ over.
 gives each function one row at its line —
 `44~     async def put(self, row: Row) -> None: ... 4 lines` spans lines 44 to
 47 — each type with its fields, docs by their first line, the imports as one
-row. Each header ends with where the text came from: `working tree`,
+row. Each header includes where the text came from: `working tree`,
 `working tree, differs from indexed <ref>@<sha>` (index line numbers for this
 file have moved), or `indexed <ref>@<sha>`. A stderr note
 `outline folded to depth 1: the full outline is N rows` means the file is
@@ -546,7 +586,7 @@ routed by *Opening a file* above; nothing below applies then. There, too, a
 whole file gets its outline first:
 
 ```bash
-ccx show src/app.py --repo acme/api --git-ref v1.2        # its outline at that ref, from the index
+ccx show src/app.py --repo acme/api --git-ref v1.2        # request its indexed outline at that ref
 ccx read-file src/app.py --repo acme/api --git-ref v1.2   # a file at a ref you don't have on disk
 ccx find-files 'src/*.py' --repo acme/api --git-ref v1.2  # paths there, by glob (`*` spans `/`)
 ```

@@ -4,6 +4,79 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Local fallback after an indexed file miss
+
+Upgrade the CLI and query server together. `ccx show PATH` now uses the
+current checkout's file after an indexed file miss, including an explicit
+ref request. It applies only to this checkout's repository. The header
+identifies local text and names the failed read's commit and reason.
+Read that header before treating output as the requested indexed ref.
+No schema change or index rebuild is required.
+
+## Indexed record lookup and filtered change lists
+
+Upgrade the CLI, query server, and indexer together. A search query containing
+only `#N` now selects that indexed record. Use `--kind code` to search code
+for a number instead. `ccx show '#N'` and PR/issue URLs read the change index.
+
+Change search adds `--state`, `--since`, and `--sort`. An empty query requires
+`--kind change` and a filter. State/date conditions apply before ranking and
+pagination. Date order uses title/body text matching when a query is present.
+
+`ChangeFreshness.states_as_of` reports the earlier completed issue/PR listing
+check. The indexer stores these times in existing cycle statistics. Until a
+new cycle completes both listings, the CLI uses the earlier content watermark.
+No schema migration, rebuild, or manual database step is required.
+
+## Change search relevance comes from the server
+
+Upgrade the CLI and server together. Change search now returns `relevance`
+and `ranking` per hit. Clients must display the server assessment instead
+of comparing `score` with `change_freshness.near`. The vector score keeps
+its previous meaning. Automatic retrieval uses hybrid by default and vector
+candidates when optional reranking is enabled. Reranking is off by default.
+No database migration or index rebuild is required.
+
+## Change-hit host state
+
+Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer
+adds nullable columns at startup without rebuilding stored content or vectors.
+Start the new indexer before the new query server. Existing records show unknown
+state until the automatic upgrade pass reads them. Each read refreshes state,
+including unchanged text.
+The CLI shows stored state and prints a command for live checks when its
+observation predates the last sweep, or when state or sweep coverage is unknown.
+
+Status shows one change-index line per repository. `ccx log Type.method` uses
+the same name resolution as `ccx defs Type.method`.
+
+## Change-index touched sets
+
+The indexer now fills changed-file rows, symbol touches, and diff hunks.
+Search hits and change references read these rows. Indexed `ccx show` output
+also shows touched-by annotations. A touch identifies a proposal; it does not
+prove that the proposal merged.
+
+Startup adds the state columns first, then the nullable `change_meta.touch_key`
+column. Both steps are additive and run in one schema transaction. Existing content
+and usage history remain intact. The automatic upgrade pass fills old records
+without embedding their unchanged text again. No manual database step is required.
+Mirror-backed repositories read local git diffs. App-backed repositories use
+GraphQL file and blob reads within the existing quota reserve.
+
+## Existing change records upgrade automatically
+
+Stored records with missing state are stale. Pull requests with a missing
+touched-set key are stale too. The indexer reads them oldest-updated first,
+after new and updated records, within `maxRecordsPerCycle` and the GraphQL
+reserve. It batches these reads like backfill. Host timestamps and listing
+cursors do not prevent this upgrade pass.
+
+`ccx status` shows `upgrading N records to schema 3` until the remaining count
+reaches zero. The count remains visible when the GraphQL reserve stops a cycle.
+The indexer retains embeddings for unchanged text and reads mirror-backed
+touched sets from local git. The pass runs automatically on normal refreshes.
+
 ## Test-aware search and grounded answer citations
 
 Search now prefers implementation code unless the query asks about tests.
@@ -113,6 +186,22 @@ still describe the complete match. File-scoped reference lookup can return
 `candidates` when a bare method name has several definitions. Select a candidate
 and retry its exact `path` and `entity_id`.
 
+## Next release — change ingest GraphQL reserve and mirror reads
+
+Change ingest reserves 1500 GraphQL points by default for other applications.
+Set `changeIndex.graphqlReserve` in Helm, or `graphqlReserve` in `CCX_CHANGE_INDEX`.
+Zero disables this guard. A reserve stop or throttle skips the cycle until a later refresh.
+Token sources use local mirror commits for merge bases and avoid REST content reads on the normal path.
+Quota metadata checks use REST `GET /rate_limit`, which costs no primary REST quota.
+The App source retains its installation-permissions and compare reads.
+
+The indexer adds a `partial` column to change metadata at startup.
+This additive migration preserves existing change rows and usage history.
+A throttled optional REST read stores available content and marks the record partial.
+The next cycle retries the record; coverage reports `reason=partial` until repair completes.
+Review anchors now use GraphQL positions, including null positions on outdated threads.
+Upgrade the CLI and server together for the new coverage reason.
+
 ## Next release — change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.
@@ -139,6 +228,83 @@ The next refresh retries change ingest; code indexing continues for every reposi
 A refused credential leaves the existing change index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
 GitLab change ingest does not ship in this slice.
+
+## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a script or an MCP client of yours reads `text_grep` matches.
+
+- **What changed.** `ccx grep --text -U` / `--multiline` is ripgrep's `-U`:
+  the pattern may match across lines — `^` / `$` still mean line bounds and
+  `.` still stops at a newline, while `\s`, `[^;]` and `\n` cross one — so
+  `\)\s*\{` finds a brace on the next line. The REST body and the MCP tool
+  `text_grep` take `multiline` (default `false`, the behaviour so far), and
+  every match now carries `end_line` beside `line`: equal to `line` without
+  `multiline`; with it, the match covers `line`..`end_line` and `text` is
+  those lines joined by newlines. The CLI prints each covered line with its
+  own number.
+- **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
+  the brace-on-its-own-line style prints two-line matches; the same command
+  without `-U` prints only same-line braces.
+- **Expected after the upgrade.** Every ref's symbol step resolves every
+  module again, because the resolver's behavior changed for Rust: an
+  `impl Foo` written apart from `struct Foo` now reaches `Foo`'s members, and
+  `#[path = "x.rs"] mod foo;` names the file the attribute gives. That step
+  takes about as long as it did on the initial pass; nothing is re-read from
+  the code host and nothing is re-embedded. `ccx defs` / `ccx refs` on Rust
+  code answer from the old resolution until the pass ends.
+- **Rust fixes in the engine.** A structural `ccx grep` pattern like
+  `SessionView { \* }` matches struct expressions and patterns, and no longer
+  matches an impl or struct declaration or a function's return type. In
+  `ccx show`, a position inside a value or a body block opens the nearest
+  enclosing declaration.
+- **The license check reuses its cached answer for a day.** A standard
+  license is still validated against `api.keygen.sh` at a container's first
+  start, but a process that restarts within 24 hours on a host that keeps its
+  disk no longer sends a request. Nothing changes for a cluster whose
+  containers start empty. `COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds;
+  `0` restores a request at every start) tunes it — [License key](deploy.md#license-key).
+- **Structural `ccx grep` is faster, and its parallelism follows the query
+  server's CPUs.** The server parses candidate files on one thread per CPU
+  the container may use (its cgroup limit, else the node's count; before, a
+  flat eight), and reads the next batch of files while the current one is
+  being parsed. A pattern whose only literal is a keyword (`catch (\_ \_) { }`,
+  `for (int \_ = 0; \_ < \_; \_++) { delete \_; }`) no longer parses every
+  file of the language: a file without the keyword is skipped before the
+  parse. **What to check:** a `queryServer.resources.limits.cpu` of `1`
+  now means one parse thread; give the query server the CPUs you want a
+  large grep to use (4 to 8 on a monorepo). `CCX_GREP_PARSE_THREADS` through
+  `queryServer.extraEnv` caps the threads below the limit when the server
+  shares its CPUs — [Query server CPU](deploy.md#query-server-cpu).
+
+## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
+
+Nothing is required: upgrade normally. Read on if `ccx grep --text` on a
+large repository answered `503 Request deadline exceeded` or a warning
+ending in `after 0 files` whose cursor made no progress.
+
+- **What changed.** The lookup that asks the text search index which files
+  hold the pattern's literals now runs under a budget (a fifth of the time
+  left, at most 10 s). When every literal is in most files, the lookup gives
+  up and the scan takes over with the rest of the deadline, returns its
+  matches so far and a cursor that makes progress. A warning names the
+  abandoned lookup. A scan that could scan nothing in the time left now says
+  that a retry with its cursor repeats the same work, and names the levers
+  (`--path`, a rarer literal, `-s`) instead of advising a retry.
+- **The scan itself is several times faster.** Each file is searched once as
+  a whole before its lines are visited, so files without a match — nearly all
+  of them, for most patterns — cost one search instead of one per line. A
+  full scan of a large repository that took a minute takes seconds; the
+  deadline stop and the cursor still cover what does not fit.
+- **The pattern is read in ripgrep's dialect.** `ccx grep --text` now matches
+  with the same regex engine `rg` uses: everything `rg` accepts works as
+  there, and the engine never backtracks catastrophically. POSIX classes
+  (`[[:alpha:]]`), `\z` and Unicode classes (`\p{Greek}`) work now; `\Z`
+  does not (write `\z`). A pattern with a lookaround or a backreference still
+  works, matched by the previous engine with a warning that it is slower.
+- **Verify.** `ccx grep --text 'return.*null.*delete.*cast.*assert' --path '*' -k 5`
+  on a large repository returns inside the deadline with a cursor, and the
+  same command with that `--cursor` scans further.
 
 ## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far; `ccx repos` batches GitHub permission checks
 
@@ -172,7 +338,7 @@ Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
   checks in its batched lookup, and the lookups run in parallel.** When the
   authz App's installation grants **Organization → Members: Read-only**,
   one GraphQL request per 32 repositories answers the caller's permission
-  on each, up to 8 requests in flight per code host with every installation
+  on each, up to 8 requests in flight per installation with every installation
   at once, so a cold walk takes a few round trips instead of one per
   repository or one per batch; public repositories cost nothing either way.
   Without the grant the walk still batches the repository facts (one
