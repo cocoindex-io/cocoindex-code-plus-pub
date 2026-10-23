@@ -2640,3 +2640,32 @@ Turning off an entry removes its change rows on the next config cycle.
 Turning it on again starts a new backfill.
 Changing a local entry's `changes.from` to another repository also starts a new backfill.
 A failed cycle keeps all previous rows and checkpoints.
+
+### Change search ranking
+
+Automatic change retrieval uses hybrid without reranking and vector
+candidates with reranking. Set `changeIndex.retrieval` to `vector` or `hybrid`
+to override that choice. Hybrid retrieval combines full-text matches
+with vector similarity and boosts title matches. It changes no stored data.
+The server supplies the relevance labels; `score` remains vector similarity.
+
+| Chart value | Environment | Default |
+|---|---|---|
+| `changeIndex.retrieval` | `CCX_CHANGE_INDEX_RETRIEVAL` | `auto` |
+| `changeIndex.changesNear` | `CCX_CHANGE_INDEX_CHANGES_NEAR` | `0.5` |
+| `changeIndex.nearGap` | `CCX_CHANGE_INDEX_NEAR_GAP` | `0` |
+| `changeIndex.rerank` | `CCX_CHANGE_INDEX_RERANK` | `false` |
+| `changeIndex.rerankModel` | `CCX_CHANGE_INDEX_RERANK_MODEL` | `openai/gpt-4.1-mini` |
+| `changeIndex.rerankTimeoutSeconds` | `CCX_CHANGE_INDEX_RERANK_TIMEOUT_SECONDS` | `2` |
+
+Set `changeIndex.rerank: true` to select the measured quality profile.
+Enable it only when the completion provider may receive the query,
+record titles, and up to twenty excerpts of 1200 characters each.
+The query server uses provider credentials from its environment.
+It calls the model once, with no retry, within the configured deadline.
+A failure retains candidates but leaves their relevance unassessed.
+The model assesses only the first twenty records before pagination.
+
+The vector floor remains provisional. A long exact error can qualify below
+that floor. A nonzero `nearGap` also requires a lead over the next record.
+The available evaluation does not support enabling a gap by default.

@@ -1319,8 +1319,12 @@ keeps the server's change section and freshness data.
 Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
 before repeating work from a brief. The command splits bullets, numbered
 lines, and paragraphs into items. It searches once per item, up to 20 items.
-Each item shows its best record and score. `near` and `weak` use the server's
-score floor. These labels describe similarity, not whether work shipped.
+Each item shows the first record in the server's relevance order and its
+vector score. The server supplies `near` and `weak` assessments. Hybrid
+search combines vocabulary matches with vector similarity. An exact error
+can qualify below the usual score floor. Optional reranking checks whether
+a record addresses the query. These labels do not prove that work shipped.
+A failed rerank says `unrated (rerank unavailable)`.
 
 Use `ccx refs <name> --kind change --since 2d` for touched and mention groups.
 Search hits show the newest pull request that touches the same file and

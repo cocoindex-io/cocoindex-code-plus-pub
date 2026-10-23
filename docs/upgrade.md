@@ -4,6 +4,15 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Change search relevance comes from the server
+
+Upgrade the CLI and server together. Change search now returns `relevance`
+and `ranking` per hit. Clients must display the server assessment instead
+of comparing `score` with `change_freshness.near`. The vector score keeps
+its previous meaning. Automatic retrieval uses hybrid by default and vector
+candidates when optional reranking is enabled. Reranking is off by default.
+No database migration or index rebuild is required.
+
 ## Change-hit host state
 
 Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer

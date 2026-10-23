@@ -97,7 +97,7 @@ these four moments:
 - For a symptom, run `ccx search --kind change "<symptom>"`.
 
 Read the freshness line before treating absence as evidence. `insufficient`
-means coverage cannot answer. `near` and `weak` use the server's score floor.
+means coverage cannot answer. `near` and `weak` are the server's relevance assessments, not proof that work shipped.
 A change hit records what its author says. Read the current code to check it.
 Use each hit's printed `state:` command for the host's current answer.
 
