@@ -2588,6 +2588,9 @@ Missing commits permit one fetch per commit before the REST compare fallback.
 App sources retain their installation-permissions and REST compare reads.
 Review comments, including outdated threads, use GraphQL positions.
 Long discussions need additional GraphQL pages.
+Concurrent edits can return listing records outside timestamp order.
+The indexer sorts each page locally and advances its cursor after consuming the whole page.
+A cycle that stops mid-page re-lists it and skips records already stored at that timestamp.
 An older GHES schema with missing fields uses REST automatically.
 
 `changeIndex.graphqlReserve` defaults to 1500 points for other applications.
