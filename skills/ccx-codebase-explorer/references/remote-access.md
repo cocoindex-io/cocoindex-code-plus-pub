@@ -32,7 +32,9 @@ marks each line: `N:` an exact source line, `N|` a frame (an enclosing scope's h
 which spans lines N to N+11; a doc's first line), ` ~` a cue. A `... N more lines` cue
 inside a large type folds that type's own lines; `ccx show -s <name>` or
 `ccx show PATH:LINE` shows it whole, its doc included. On an import line,
-`ccx show PATH:LINE` prints the imports. A collapsed container — test code, or
+`ccx show PATH:LINE` prints the imports; on a Rust `mod x;` line, the module's
+file. A `lines A-B of PATH not shown` note means the 5,000-line output window
+cut there: `ccx show PATH:A` continues. A collapsed container — test code, or
 any container below `--depth` — is its head, `// members: a, b, c, +N more` (every
 direct member) and `... N lines`; the server folds an outline over about 300 rows
 to depth 1 on its own and the CLI notes it (`outline folded to depth 1: the full

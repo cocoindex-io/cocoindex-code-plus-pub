@@ -46,6 +46,21 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## Next release — one search result per definition, imports folded
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **Search.** Chunks of one function, method or type merge into one result;
+  the others are in its `more_chunks` (`+ N more chunks of this definition`
+  in the CLI). `top_k` and `offset` now count definitions, so a page holds
+  more distinct code. Clients that paged by chunk see fewer, merged results.
+- **`find_definitions`.** Imports and re-exports (`alias` rows) beside a
+  real definition are counted in `alias_count` / `alias_file_count`
+  instead of listed; pass `include_aliases: true` (`ccx defs --aliases`)
+  to list them. A Rust `mod x;` row gains `module_file`.
+- **`show`.** A cut response says what it left out: `omitted_lines` on the
+  cut object, `dropped_objects` / `dropped_from_line` for objects left off.
+
 ## Next release — checkout drift notes
 
 Upgrade the CLI; no server or database change. In a checkout whose files
