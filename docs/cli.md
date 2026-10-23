@@ -1409,3 +1409,28 @@ history, blame, or commit diffs. It must not infer which PR introduces code
 from the current file. Its last line names relevant files it cannot read,
 then says `history questions: use git log / ccx --kind change`.
 Check change coverage before you use its results as evidence.
+
+
+### Indexed pull requests and issues
+
+Use `ccx show '#2901'` or `ccx show https://github.com/acme/api/pull/2901`
+to read a record from the change index. A number uses the current repository;
+pass `--repo acme/api` to select another repository. The output includes the
+state's read time, dates, first body part, touched paths and symbols, and the
+number of retained indexed comments. Missing numbers report index coverage.
+These reads do not call GitHub.
+
+```bash
+ccx search --kind change "Main is red" --state open --sort updated
+ccx search --kind change --state open --since 2h --sort updated
+ccx search --kind change --since 2026-10-23 --sort created
+```
+
+`--state` accepts `open`, `closed`, `merged`, or `all`; closed excludes merged
+PRs. `--since` selects records updated since a duration, a UTC date, or a
+timestamp with a timezone. `--sort` accepts `relevance`, `updated`, or `created`.
+The default order is relevance, or updated for an empty query. Empty queries
+need a filter. Date order uses title/body text matching when a query is present.
+Filters apply before ranking and pagination. Read the header's `states as of`
+time and the coverage footer's cycle age. The normal refresh target is five
+minutes; failures and backlogs can delay it. State reflects indexed reads.
