@@ -592,6 +592,16 @@ code host and embedding provider. If your deployment cannot reach the internet
 at all, ask us for an **offline-entitled license** — it is a different license
 issued for exactly that case, and it validates without any network access.
 
+**How often.** The engine keeps the signed answer on the container's local
+disk and reuses it for 24 hours, so a process that restarts within a day on
+a host that keeps its filesystem makes no request. A Kubernetes container
+starts with an empty filesystem, so in a cluster each container start still
+validates once; a running pod never re-validates. To change the interval, set
+`COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds; `0` validates at every
+start) through `indexer.extraEnv` and `queryServer.extraEnv`. The trade-off
+is how quickly a license we suspend or revoke stops working on a host that
+has already validated it: at most the interval.
+
 **Keep it on one line.** The key is a single unbreakable token, so a YAML form
 that wraps it (`|-`, `>-`) puts a newline or a space *inside* the value and
 breaks it. Whitespace around the key is trimmed, so a trailing newline — from

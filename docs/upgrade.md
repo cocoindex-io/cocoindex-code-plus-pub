@@ -34,7 +34,7 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.72 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
+## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
 Read on if a script or an MCP client of yours reads `text_grep` matches.
@@ -63,6 +63,12 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
   matches an impl or struct declaration or a function's return type. In
   `ccx show`, a position inside a value or a body block opens the nearest
   enclosing declaration.
+- **The license check reuses its cached answer for a day.** A standard
+  license is still validated against `api.keygen.sh` at a container's first
+  start, but a process that restarts within 24 hours on a host that keeps its
+  disk no longer sends a request. Nothing changes for a cluster whose
+  containers start empty. `COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds;
+  `0` restores a request at every start) tunes it — [License key](deploy.md#license-key).
 
 ## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
 
