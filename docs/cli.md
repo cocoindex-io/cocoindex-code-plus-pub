@@ -353,6 +353,8 @@ ccx refs python:db.Repo.find                      # every use of this exact qual
 ccx refs src/db.py Repo.find                      # exactly this one definition — paste the
                                                   #   `uses: ccx refs …` command a defs row prints
 ccx refs QueryService --role call                 # restrict to a reference role
+ccx refs QueryService --tests --include-unresolved  # also list rows in tests and name-only mentions
+ccx refs QueryService --count                     # only the counts (--by-file: per file)
 
 # File access (ref-scoped; repo + ref auto-detected like search)
 ccx read-file README.md                          # print a file's contents
@@ -436,7 +438,18 @@ Rust navigation puts the type definition before its impl fragments.
 counts. A page-limit note says when more definitions exist.
 `ccx refs PATH NAME` resolves a bare method name within that file, or lists
 exact commands when several methods match. Name-only reference output groups
-uses by definition and lists unresolved mentions separately.
+uses by definition.
+
+**What `ccx refs` lists.** Resolved uses come first. Uses in test code and
+`name_only` mentions (sites whose target could not be resolved) are left off
+and counted on the last lines of stdout — `+ 17 in tests; --tests to list`,
+`+ 70 unresolved mentions of the name; --include-unresolved to list` — and
+`--tests` / `--include-unresolved` list them after the resolved rows. A name
+nothing resolves to (an external crate's function) lists its mentions anyway;
+a pinned `PATH ENTITY_ID` or qualified name never does. When more rows exist,
+stdout ends with `… N more references past 100; --offset 100 for the next
+page.` A `-k` above the server's page maximum (500) pages at the maximum.
+`--count` prints only the totals, and `--by-file` the count per file.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
@@ -475,9 +488,9 @@ just be unindexed, so absence is not completeness. A clean note is still not a
 proof: a use the resolver could not commit (an unknown receiver, an import
 across a Python source root the index could not infer — roots come from package
 markers and the repo's own absolute imports, never from build config) appears
-as a `name_only` row rather than a resolved one — every target form includes
-those rows unless you pass `--no-include-unresolved` — so read them before
-concluding a symbol has no callers.
+as a `name_only` row rather than a resolved one — `ccx refs` counts those
+rows on its last lines; list them with `--include-unresolved` and read them
+before concluding a symbol has no callers.
 
 A member written with its qualifier but no language tag, as in
 `ccx defs Repo.find` or C++/Rust `ccx defs Store::fetch`, matches every

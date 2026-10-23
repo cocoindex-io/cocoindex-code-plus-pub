@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.2"
+  ccx-skill-revision: "2026-10-23.3"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.2`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.3`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -353,11 +353,10 @@ what `ccx defs NAME` lists (*Opening a file* above).
 Four precisions of `ccx refs`, broad to exact:
 
 - **Bare name** — `ccx refs NAME`: every definition with that unqualified
-  name, plus unresolved mentions.
+  name.
 - **Dotted name** — `ccx refs Repo.find`, `ccx refs db.Repo.find`, C++/Rust
   `ccx refs Store::fetch`: every definition whose qualified name ends with it
-  (`python:db.Repo.find`), plus unresolved mentions of its last segment. The
-  natural spelling of a member; no tag, no flag.
+  (`python:db.Repo.find`). The natural spelling of a member; no tag, no flag.
 - **Qualified name** — `ccx refs python:db.Repo.find`: the name a `ccx defs`
   headline shows, every occurrence and overload under it. Every qualified name
   opens with its language tag (the CLI's errors say "pack-tagged"), so the `:`
@@ -374,8 +373,13 @@ a base name genuinely contains such characters).
 `ccx defs` takes the same spellings: `ccx defs Repo.find` lists every
 definition whose qualified name ends with `Repo.find`, where `ccx defs find` is
 the bare base name (narrow with `--kind method`). Both verbs page like `grep`
-(`-k`/`--limit`, default 100, and `--offset`); `refs` has no `--path`, so set
-test files aside by eye.
+(`-k`/`--limit`, default 100, at most 500, and `--offset`).
+
+`refs` lists resolved uses first and ends stdout with what it left off:
+`+ N in tests; --tests to list`, `+ N unresolved mentions of the name;
+--include-unresolved to list`, then `… N more references past K; --offset K
+for the next page.` Before saying a symbol has no other callers, rerun with the
+flag those lines name. `--count` / `--by-file` give the totals without rows.
 
 Reading `refs` output — each row carries:
 
@@ -388,8 +392,8 @@ Reading `refs` output — each row carries:
   so one source position can appear on several rows, and row count ≠ site
   count); `name_only`, printed `→ ~name`, is a mention whose target couldn't be
   resolved (an opaque receiver, an import the index could not place) — a
-  candidate use to verify by reading the file (`--no-include-unresolved`
-  drops these);
+  candidate use to verify by reading the file, listed only with
+  `--include-unresolved` (or when nothing resolves to a bare name);
 - possibly a `(via_alias)` marker: a supplementary row for the alias/re-export
   hop the primary reference went through.
 
@@ -403,11 +407,11 @@ and tells you to re-run `ccx defs` for a current target.
 
 **Resolved rows alone do not settle "no callers".** A use the resolver could
 not commit — an opaque receiver, an import across a Python source root the
-index could not infer — appears as a `~name` row, never as a resolved one: read
-those rows (`--role call` narrows them) as candidate uses and confirm by
-opening the file; re-run without `--no-include-unresolved` if you dropped them.
-A literal `No references.` with no coverage note (the `Using git ref` line is
-not one) is strong evidence, but where `refs` cannot see at all — string keys, dynamic dispatch, an uncovered
+index could not infer — appears as a `~name` row, never as a resolved one: when
+the output ends with `+ N unresolved mentions`, rerun with `--include-unresolved`
+and read those rows (`--role call` narrows them) as candidate uses, confirming
+by opening the file. A literal `No references.` with no coverage note and no
+`+ N` line (the `Using git ref` line is not one) is strong evidence, but where `refs` cannot see at all — string keys, dynamic dispatch, an uncovered
 language — `ccx grep` the call or registration shape before calling it settled.
 
 **Settling what runs.** To confirm a candidate is the live path, look at its
