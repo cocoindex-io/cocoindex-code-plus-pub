@@ -113,6 +113,22 @@ still describe the complete match. File-scoped reference lookup can return
 `candidates` when a bare method name has several definitions. Select a candidate
 and retry its exact `path` and `entity_id`.
 
+## Next release — change ingest GraphQL reserve and mirror reads
+
+Change ingest reserves 1500 GraphQL points by default for other applications.
+Set `changeIndex.graphqlReserve` in Helm, or `graphqlReserve` in `CCX_CHANGE_INDEX`.
+Zero disables this guard. A reserve stop or throttle skips the cycle until a later refresh.
+Token sources use local mirror commits for merge bases and avoid REST content reads on the normal path.
+Quota metadata checks use REST `GET /rate_limit`, which costs no primary REST quota.
+The App source retains its installation-permissions and compare reads.
+
+The indexer adds a `partial` column to change metadata at startup.
+This additive migration preserves existing change rows and usage history.
+A throttled optional REST read stores available content and marks the record partial.
+The next cycle retries the record; coverage reports `reason=partial` until repair completes.
+Review anchors now use GraphQL positions, including null positions on outdated threads.
+Upgrade the CLI and server together for the new coverage reason.
+
 ## Next release — change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.

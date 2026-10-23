@@ -2583,12 +2583,27 @@ The token permission check uses GraphQL, so REST quota exhaustion cannot block i
 GitHub is supported first; GitLab change ingest follows later.
 
 Content reads use GraphQL batches of up to 25 records.
-Each pull request also needs one REST compare request for its merge base.
+Token sources use the local git mirror for exact PR merge bases.
+Missing commits permit one fetch per commit before the REST compare fallback.
+App sources retain their installation-permissions and REST compare reads.
+Review comments, including outdated threads, use GraphQL positions.
 Long discussions need additional GraphQL pages.
-Outdated review threads need REST comment pages to preserve their existing anchors.
-A recorded issue and pull request need 2 requests, versus 9 through REST.
-GraphQL reads honor the host's retry hints and point-budget reset.
 An older GHES schema with missing fields uses REST automatically.
+
+`changeIndex.graphqlReserve` defaults to 1500 points for other applications.
+For direct indexer deployments, set `graphqlReserve` in `CCX_CHANGE_INDEX`.
+Zero disables the reserve guard.
+The quota-free REST `GET /rate_limit` checks the shared budget before each GraphQL operation.
+This endpoint works when the primary REST quota is exhausted.
+GraphQL quota probes cost one point, so ingest does not use them.
+A conservative allowance protects the reserve before sending that operation.
+Another application can spend points concurrently; GitHub offers no atomic reservation.
+A reserve stop or throttle skips the cycle and logs one UTC reset time.
+The next refresh retries; code indexing continues.
+
+A throttled optional REST read leaves a partial record with the available content.
+The next cycle retries partial records, even without a host timestamp change.
+Coverage reports `reason=partial` until repairs complete.
 No added permission or client setting is required.
 
 Set `changeIndex.enabled: true` in chart values.
