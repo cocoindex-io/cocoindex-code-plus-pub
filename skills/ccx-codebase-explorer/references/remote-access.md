@@ -20,12 +20,12 @@ ccx show -e src/app.py                                  # everything verbatim: t
 ccx show --depth 1 src/app.py                           # the file's items only, each container collapsed to its head and a `// members:` roster; -e and --depth are exclusive
 ccx show -s QueryService                                # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py                # -s narrowed by kind and to one file; -q/-b as on `ccx defs`
-ccx show --git-ref main src/app.py                      # the indexed copy at that ref, never the working tree
-ccx show src/app.py --repo acme/api                     # that repo's indexed copy: --repo, too, never reads the working tree
+ccx show --git-ref main src/app.py                      # request the indexed copy at that ref
+ccx show src/app.py --repo acme/api                     # request that repo's indexed copy
 ```
 
 Each object prints under a header, `<path>  <kind> <layer-path>  L<start>-L<end>  (<provenance>)`,
-whose provenance is `working tree`, `working tree, differs from indexed <ref>@<sha>`
+whose provenance includes `working tree`, `working tree, differs from indexed <ref>@<sha>`
 (your file is not what the index holds) or `indexed <ref>@<sha>`. The body's gutter
 marks each line: `N:` an exact source line, `N|` a frame (an enclosing scope's head),
 `N~` derived text anchored at line N (a folded row such as `def f(a): ... 12 lines`,
@@ -40,7 +40,7 @@ direct member) and `... N lines`; the server folds an outline over about 300 row
 to depth 1 on its own and the CLI notes it (`outline folded to depth 1: the full
 outline is N rows; …`), never when you passed `--depth`.
 
-The working tree is the source whenever the file is there; the header says `indexed`
+By default the working tree supplies a file that exists locally; the header says `indexed`
 when the index served instead (the file is not on disk, is over the 8 MiB request
 bound, or `--repo` or `--git-ref` was given). `-s NAME` renders one unique definition.
 Several matches are **listed** with paths; pick one with `ccx show PATH:LINE`,

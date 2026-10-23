@@ -4,6 +4,15 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Local fallback after an indexed file miss
+
+Upgrade the CLI and query server together. `ccx show PATH` now uses the
+current checkout's file after an indexed file miss, including an explicit
+ref request. It applies only to this checkout's repository. The header
+identifies local text and names the failed read's commit and reason.
+Read that header before treating output as the requested indexed ref.
+No schema change or index rebuild is required.
+
 ## Indexed record lookup and filtered change lists
 
 Upgrade the CLI, query server, and indexer together. A search query containing

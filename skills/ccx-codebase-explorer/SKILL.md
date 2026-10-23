@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.9"
+  ccx-skill-revision: "2026-10-23.10"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.9`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.10`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -72,7 +72,11 @@ so it is right on your branch, uncommitted edits included:
   `ccx show PATH` (its header's `L1-L<n>` gives the length), then one of the
   above. A file you know is under about 200 lines: read it whole.
 - **Not on disk, or at another ref** → the same targets with `--repo` or
-  `--git-ref`, which read the index (*Files at a ref you don't have* below).
+  `--git-ref`, which request the indexed copy (*Files at a ref you don't have* below).
+
+For this checkout's repository, a missing indexed file can use the local
+file, including with `--git-ref`. If its header says `read from your working tree; not indexed
+at <commit> (<reason>)`, treat it as local text, not that indexed commit.
 
 Local tools stay the right choice for exactly two things: the reads the list
 above gives them, and searching the files you edited or added since the
@@ -551,7 +555,7 @@ over.
 gives each function one row at its line —
 `44~     async def put(self, row: Row) -> None: ... 4 lines` spans lines 44 to
 47 — each type with its fields, docs by their first line, the imports as one
-row. Each header ends with where the text came from: `working tree`,
+row. Each header includes where the text came from: `working tree`,
 `working tree, differs from indexed <ref>@<sha>` (index line numbers for this
 file have moved), or `indexed <ref>@<sha>`. A stderr note
 `outline folded to depth 1: the full outline is N rows` means the file is
@@ -582,7 +586,7 @@ routed by *Opening a file* above; nothing below applies then. There, too, a
 whole file gets its outline first:
 
 ```bash
-ccx show src/app.py --repo acme/api --git-ref v1.2        # its outline at that ref, from the index
+ccx show src/app.py --repo acme/api --git-ref v1.2        # request its indexed outline at that ref
 ccx read-file src/app.py --repo acme/api --git-ref v1.2   # a file at a ref you don't have on disk
 ccx find-files 'src/*.py' --repo acme/api --git-ref v1.2  # paths there, by glob (`*` spans `/`)
 ```

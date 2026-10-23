@@ -1,7 +1,7 @@
 #!/bin/sh
 # The ccx plugin's one hook. Claude Code runs it at an agent's repository
-# searches (PreToolUse and PostToolUse on Grep, grep, rg, git grep) and when a
-# session or subagent starts. It reads the hook event on stdin and prints at
+# searches, direct source reads (sed, head, cat, Read), and session or
+# subagent starts. It reads the hook event on stdin and prints at
 # most one line of context, as JSON, when the checkout is indexed in ccx.
 #
 # Division of labour: this script only keeps the per-agent markers that make

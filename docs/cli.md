@@ -650,7 +650,7 @@ ccx show -e src/app.py                     # the whole file, numbered
 ccx show --depth 1 src/app.py              # the file's items only, each class or module collapsed to its head and a members roster
 ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
-ccx show --git-ref main src/app.py         # the indexed copy at that ref, never the working tree
+ccx show --git-ref main src/app.py         # request the indexed copy at that ref
 ```
 
 Every object prints under a header,
@@ -1084,13 +1084,14 @@ has been checked against the repositories in question.
      agent's tool list on every turn, carrying the same routing guidance from
      the server, so there is nothing to trigger.
   3. **The Claude Code plugin** — reaches the moment the skill cannot: the
-     agent's own decision to grep in the middle of a task, in subagents too.
+     agent's decision to grep or read source files, in subagents too.
      Its hooks add one line of context, once per agent, when the checkout is
      indexed: at the first repository-wide grep or `rg` (naming `ccx defs`,
      `refs`, `search`, `ask` and `show` with what each answers, the indexed
      commit's position relative to `HEAD`, and which local files still need
      grep); at
-     a grep that found nothing or far too much; and when a session or
+     a grep that found nothing or far too much; at a direct source-file read
+     with `sed -n`, `head`, `cat`, or windowed `Read` (naming `ccx show`); and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
@@ -1442,3 +1443,16 @@ The Claude Code plugin also recognizes direct source reads with `sed -n`,
 `head`, `cat`, and windowed native `Read` calls. Inside an indexed checkout,
 it suggests `ccx show PATH:LINE` or the file outline once per agent.
 It ignores logs, JSON, heredocs, writes, producer pipes, and outside files.
+
+
+### Local fallback for unavailable indexed files
+
+For file targets, an unavailable indexed file can fall back to the current
+checkout's file, even with `--git-ref` or `--repo`. The repository must match
+this checkout. Successful indexed reads still use the requested ref.
+The header says `read from your working tree; not indexed at <commit>` and
+names the server's reason: `not_on_ref`, `not_indexed`, or `too_large`.
+The commit comes from the failed read, not a later ref lookup. Treat this
+output as local text. Missing local files still report the index error.
+Files too large for the render request receive a bounded local text view.
+That output names the limit instead of pretending to show an outline.
