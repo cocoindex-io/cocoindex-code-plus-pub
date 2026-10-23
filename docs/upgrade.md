@@ -46,6 +46,19 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## Next release — checkout drift notes
+
+Upgrade the CLI; no server or database change. In a checkout whose files
+differ from the indexed commit, code commands print one stderr line saying how
+far the checkout is from the index, and mark hits in differing files
+(`[local differs]`, `[local differs, line from index]`). A remapped hit prints
+the working tree's line number.
+
+`ccx indexed --json` changes in place: `local_diff` now holds
+`changed_count` and `untracked_count`; pass `--files` to also get the
+`changed` and `untracked` path lists it used to carry. It also adds `head` and
+`head_line`. Scripts that read the lists add `--files`.
+
 ## Next release — index files up to 4 MiB
 
 The default indexed file size increases from 1 MiB to 4 MiB.

@@ -135,9 +135,14 @@ takes only indexed refs, never a sha.
   branch still means the commit the index holds for it. So when your checkout
   has uncommitted or unpushed changes, every path and line number can be stale,
   and a symbol you added since that commit is absent — that is not evidence it
-  doesn't exist. Read the note, and confirm a specific location in your working
-  tree before acting on it; when you need the exact commit that answered,
-  `ccx git-refs` prints it per ref. Keep querying on a dirty checkout, though:
+  doesn't exist. When files in an answer differ in your checkout, stderr says
+  so in one line (`your checkout is N commits behind the index …; K of the
+  files in this answer differ locally`) and each such hit is marked:
+  `[local differs]` — the line printed is your working tree's; `[local
+  differs, line from index]` — it is the index's, so open it with `ccx show
+  --git-ref <branch> PATH:LINE` or find it locally. Unmarked hits match your
+  files. When you need the exact commit that answered, `ccx git-refs` prints
+  it per ref. Keep querying on a dirty checkout, though:
   locating existing code — the common case — survives a line-number offset.
   On a feature branch the split is simple: ccx for the code your branch did
   not touch, which is nearly all of it; your own grep only for the files you
