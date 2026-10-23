@@ -34,6 +34,24 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.72 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a script or an MCP client of yours reads `text_grep` matches.
+
+- **What changed.** `ccx grep --text -U` / `--multiline` is ripgrep's `-U`:
+  the pattern may match across lines — `^` / `$` still mean line bounds and
+  `.` still stops at a newline, while `\s`, `[^;]` and `\n` cross one — so
+  `\)\s*\{` finds a brace on the next line. The REST body and the MCP tool
+  `text_grep` take `multiline` (default `false`, the behaviour so far), and
+  every match now carries `end_line` beside `line`: equal to `line` without
+  `multiline`; with it, the match covers `line`..`end_line` and `text` is
+  those lines joined by newlines. The CLI prints each covered line with its
+  own number.
+- **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
+  the brace-on-its-own-line style prints two-line matches; the same command
+  without `-U` prints only same-line braces.
+
 ## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
 
 Nothing is required: upgrade normally. Read on if `ccx grep --text` on a

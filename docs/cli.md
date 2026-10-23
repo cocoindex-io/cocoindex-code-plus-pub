@@ -159,6 +159,7 @@ ccx grep --text 'retry_budget'                    # a word or phrase anywhere; s
 ccx grep --text 'TODO|FIXME' --path 'src/*'       # a regex (ripgrep's dialect), scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml      # whole word; with --text, -l is an optional filter
 ccx grep --text -s 'return\s+\d{7};' --path 'src/*' # -s: case-sensitive (cheaper on a large repo); -i: insensitive
+ccx grep --text -U '\)\s*\{' -l c++               # -U: a match may span lines (rg -U); each covered line prints with its own number
 ccx grep --text 'retry' --cursor <c>              # continue a scan where its stderr note stopped
 
 # Symbol navigation: definitions & references (resolved, not text matches)
@@ -318,9 +319,13 @@ languages the structural grep cannot parse included — so it needs no `-l`
 (with `--text`, `-l` is an optional, repeatable filter by language). Case is
 **smart** by default (case-insensitive unless the pattern has an uppercase
 letter; `--case sensitive|insensitive` forces it, and `-s` / `-i` are the
-short forms); `-w/--word` matches whole words only. Output is one
-`path:line:text` line per match; the line number is the one `read-file
---offset` takes. A pattern with literal text in it is cheap: the server
+short forms); `-w/--word` matches whole words only. `-U/--multiline` is
+ripgrep's `-U`: a match may span lines — `^` / `$` still mean line bounds and
+`.` still stops at a newline, so only a consuming class (`\s`, `[^;]`, `\n`)
+crosses one — for a brace on the next line (`\)\s*\{`) or a signature wrapped
+over two lines. Output is one `path:line:text` line per matched line (a `-U`
+match prints each line it covers with its own number); the line number is the
+one `read-file --offset` takes. A pattern with literal text in it is cheap: the server
 prefilters on that text in SQL, and reads only the files holding it when the
 deployment has the [text search index](deploy.md#text-search-index); one with
 none — `.*`, a character class alone — or whose literals are all in most
