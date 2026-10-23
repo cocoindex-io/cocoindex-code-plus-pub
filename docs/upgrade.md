@@ -131,7 +131,7 @@ Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
   checks in its batched lookup, and the lookups run in parallel.** When the
   authz App's installation grants **Organization → Members: Read-only**,
   one GraphQL request per 32 repositories answers the caller's permission
-  on each, up to 8 requests in flight per code host with every installation
+  on each, up to 8 requests in flight per installation with every installation
   at once, so a cold walk takes a few round trips instead of one per
   repository or one per batch; public repositories cost nothing either way.
   Without the grant the walk still batches the repository facts (one

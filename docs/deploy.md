@@ -1991,7 +1991,7 @@ TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
 worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
 Insights views that list repositories) checks each indexed repo once per TTL
 window. It looks the repos up in batches — one GraphQL request per 32
-candidates under one installation, up to 8 requests in flight per code host,
+candidates under one installation, up to 8 requests in flight per installation,
 all installations at once: public repos cost nothing there, and when the
 installation grants **Organization → Members: Read-only** the same request
 answers the engineer's permission on each private or internal repo they can
