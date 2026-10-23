@@ -4,6 +4,21 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Indexed record lookup and filtered change lists
+
+Upgrade the CLI, query server, and indexer together. A search query containing
+only `#N` now selects that indexed record. Use `--kind code` to search code
+for a number instead. `ccx show '#N'` and PR/issue URLs read the change index.
+
+Change search adds `--state`, `--since`, and `--sort`. An empty query requires
+`--kind change` and a filter. State/date conditions apply before ranking and
+pagination. Date order uses title/body text matching when a query is present.
+
+`ChangeFreshness.states_as_of` reports the earlier completed issue/PR listing
+check. The indexer stores these times in existing cycle statistics. Until a
+new cycle completes both listings, the CLI uses the earlier content watermark.
+No schema migration, rebuild, or manual database step is required.
+
 ## Change search relevance comes from the server
 
 Upgrade the CLI and server together. Change search now returns `relevance`

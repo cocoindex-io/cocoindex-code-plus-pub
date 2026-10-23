@@ -1419,6 +1419,8 @@ pass `--repo acme/api` to select another repository. The output includes the
 state's read time, dates, first body part, touched paths and symbols, and the
 number of retained indexed comments. Missing numbers report index coverage.
 These reads do not call GitHub.
+A search query containing only `#N` selects that record too; pass `--kind code`
+to search code for the number instead.
 
 ```bash
 ccx search --kind change "Main is red" --state open --sort updated
