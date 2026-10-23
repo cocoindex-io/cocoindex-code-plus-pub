@@ -4,17 +4,74 @@
       {
         "matcher": "Grep",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "if": "Bash(grep *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(rg *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(git grep *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(gh *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(git log *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "if": "Bash(grep *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(rg *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(git grep *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(git log *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(sed *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(head *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(cat *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       }
     ],
@@ -22,15 +79,34 @@
       {
         "matcher": "Grep",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "if": "Bash(grep *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(rg *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 },
-          { "type": "command", "if": "Bash(git grep *)", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "if": "Bash(grep *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(rg *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(git grep *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       }
     ],
@@ -38,14 +114,22 @@
       {
         "matcher": "startup|resume|clear|compact",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       }
     ],
     "SubagentStart": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          }
         ]
       }
     ]

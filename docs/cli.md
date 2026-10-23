@@ -1436,3 +1436,9 @@ need a filter. Date order uses title/body text matching when a query is present.
 Filters apply before ranking and pagination. Read the header's `states as of`
 time and the coverage footer's cycle age. The normal refresh target is five
 minutes; failures and backlogs can delay it. State reflects indexed reads.
+
+
+The Claude Code plugin also recognizes direct source reads with `sed -n`,
+`head`, `cat`, and windowed native `Read` calls. Inside an indexed checkout,
+it suggests `ccx show PATH:LINE` or the file outline once per agent.
+It ignores logs, JSON, heredocs, writes, producer pipes, and outside files.
