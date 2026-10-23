@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.10"
+  ccx-skill-revision: "2026-10-23.11"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.10`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.11`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -54,6 +54,7 @@ ccx search "<what the code does>"     # no exact term to grep
 ccx grep '<pattern>' -l <language>    # a syntactic shape
 ccx grep --text '<regex>'             # an exact string or regex anywhere — comments, docs, config too
 ccx show <file>                       # the file's outline, every definition at its line — before reading it whole
+ccx show <file>:<line>                # the whole function or type around a line — not sed -n 'A,Bp'
 ccx ask "<question>"                  # a cited written answer
 ```
 
@@ -62,6 +63,12 @@ so it is right on your branch, uncommitted edits included:
 
 - **A window you can name** — lines a hit or a match already printed, an edit
   you just made → your own file read of that window.
+- **About to run `sed -n 'A,Bp' FILE`, `head -n`, or a `grep -A40` to see a
+  function body** → `ccx show FILE:A` instead. It prints the definition that
+  contains line A, whole and with its signature, and folds what you did not
+  ask for: on this box it sends about a fifth of the text a range read does,
+  and you never cut a function in half or read the next window to finish it.
+  Keep `sed -n` for a window you can already name (the first bullet).
 - **A line, and you need the definition around it** — a search or grep hit, a
   traceback line → `ccx show PATH:LINE`: that definition whole, under its
   enclosing scopes, instead of a guessed window.
