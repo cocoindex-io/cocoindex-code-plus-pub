@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.5"
+  ccx-skill-revision: "2026-10-23.6"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.5`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.6`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -85,29 +85,50 @@ string, a config key, a log message, a word in a comment or a doc — goes to
 language to name. A structural `ccx grep` with no metavariable is neither: it
 floods hits.
 
-## Pull request and issue content
+## History: pull requests, issues and commits
 
-When `ccx indexed --json` carries a `changes` block, use the change index at
-these four moments:
+Before you look up history with `gh` or `git log`, use the ccx command that
+replaces the habit. ccx ranks by meaning (your words need not match the
+title), prints each record's state (open, merged, closed) on the hit, and
+spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 
-- Before redoing listed work, pass the list to `ccx prior -` on stdin.
-- For a test red on main, run `ccx refs <test> --kind change --since 2d`.
-- For a line that looks wrong, read its `touched by` annotation, then run
-  `ccx refs <symbol> --kind change`.
-- For a symptom, run `ccx search --kind change "<symptom>"`.
+| Your habit | Use instead |
+|---|---|
+| `gh pr list --search "sidebar animation" --state all` | `ccx search --kind change "sidebar plays drop animations on restart"` |
+| `gh issue list --search "Main is red"` | `ccx search --kind change "<the failing test or error line>"` |
+| `gh search prs "rate limit breaker"` | `ccx search --kind change "GitHub calls fail with 403 until the reset"` |
+| `git log --oneline --grep="landing"` | `ccx search --kind change "landing retries after a rate limit"` |
+| `git log -S 'pub const FEATURES_10'` | `ccx log -S 'pub const FEATURES_10'` |
+| `git log -L :keep_landed_evidence:…/workspace.rs` | `ccx log keep_landed_evidence` (`--patch` for the diffs) |
+| "has someone already done this?" (reading PR lists) | `printf -- '- item\n- item\n' \| ccx prior -` |
+| "who changed the code around this line, and why?" | the hit's `touched by #N` line, then `ccx refs <symbol> --kind change` |
 
-Read the freshness line before treating absence as evidence. `insufficient`
-means coverage cannot answer. `near` and `weak` are the server's relevance assessments, not proof that work shipped.
-A change hit records what its author says. Read the current code to check it.
-Use each hit's printed `state:` command for the host's current answer.
+Write the query as the symptom or the task, in plain words: what you saw or
+what you are about to do. Paste an error line as it is; exact error text
+counts. One query per question; read the top three hits.
 
-**Commit history comes from your clone, not the index.** `ccx log <symbol>`
-lists the commits that changed its lines (sha, date, `#PR`, `+X/-Y` within
-it, `added` on the one that brought it in); `--patch` adds the symbol-scoped
-diff. `ccx log -S '<text>'` finds the commits that added or removed a text,
-for a symbol the index no longer holds. `ccx show --at <sha> PATH` or
-`ccx show --at <sha> -s NAME` reads any commit of your clone. `--git-ref`
-takes only indexed refs, never a sha.
+**When to run it, without being asked:**
+
+- **Before you start a fix or a listed task:** `ccx prior -`. A `near` hit
+  that is `merged` means the work may already be on main: read it before
+  you write code.
+- **When a test or build fails on main:** `ccx search --kind change` with the
+  first error line, and `ccx refs <test> --kind change --since 2d`.
+- **When a line looks wrong:** `ccx log <symbol>`, then the PR it names.
+
+**Reading the answer.** Each hit is labelled `near` (worth reading) or
+`weak · not found` (no record answers the query). The closing `changes:`
+line says the coverage: a numbered range (`#2200 to #3112`) means a `weak`
+result is real absence; `insufficient` means the index cannot answer yet, so
+fall back to `gh`. A hit records what its author wrote: check the current
+code before you rely on it. The printed state is as of the last read; its
+`state:` line checks it live.
+
+**Still use `gh` / `git` for:** a record you already know by number
+(`gh pr view N`); CI runs and logs; repositories or dates outside the
+coverage line; writing (comments, merges). `ccx log` and `ccx show --at <sha>`
+read your clone, so they see any commit you have fetched; `--git-ref` takes
+only indexed refs, never a sha.
 
 ## Repo & ref scoping (applies to every query command)
 
