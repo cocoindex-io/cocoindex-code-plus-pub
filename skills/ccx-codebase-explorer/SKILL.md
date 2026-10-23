@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-22.1"
+  ccx-skill-revision: "2026-10-23"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-22.1`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -127,9 +127,14 @@ Use each hit's printed `state:` command for the host's current answer.
   branch still means the commit the index holds for it. So when your checkout
   has uncommitted or unpushed changes, every path and line number can be stale,
   and a symbol you added since that commit is absent — that is not evidence it
-  doesn't exist. Read the note, and confirm a specific location in your working
-  tree before acting on it; when you need the exact commit that answered,
-  `ccx git-refs` prints it per ref. Keep querying on a dirty checkout, though:
+  doesn't exist. When files in an answer differ in your checkout, stderr says
+  so in one line (`your checkout is N commits behind the index …; K of the
+  files in this answer differ locally`) and each such hit is marked:
+  `[local differs]` — the line printed is your working tree's; `[local
+  differs, line from index]` — it is the index's, so open it with `ccx show
+  --git-ref <branch> PATH:LINE` or find it locally. Unmarked hits match your
+  files. When you need the exact commit that answered, `ccx git-refs` prints
+  it per ref. Keep querying on a dirty checkout, though:
   locating existing code — the common case — survives a line-number offset.
   On a feature branch the split is simple: ccx for the code your branch did
   not touch, which is nearly all of it; your own grep only for the files you

@@ -384,6 +384,7 @@ from what I have? Exit 0 when it is:
 ```text
 Indexed: acme/proj at heads/main@1a2b3c4d5e6f (origin/main, 3 commits behind your HEAD)
   server:  https://ccx.example.com
+  head:    HEAD 0f1e2d3c4b5a is 3 commits ahead of the index (heads/main@1a2b3c4d5e6f)
   local:   7 files differ locally (`git diff --name-only 1a2b3c4d5e6f` lists them, plus untracked files): grep those; ccx covers the rest.
   refs:    heads/main@1a2b3c4d5e6f, tags/v1.2@9f8e7d6c5b4a
   checked: 12 min ago (cached; --refresh asks the server now)
@@ -393,7 +394,8 @@ The ref it names is the one a query from that checkout would run against
 (your branch if indexed, else the default branch). The parenthesis says where
 the indexed commit sits relative to your `HEAD`: `your HEAD`, a ref name, a
 verified `HEAD~N`, `N commits behind/ahead of your HEAD`, `diverged`, or `not
-in your clone yet` when you have not fetched it. The `local` line is the
+in your clone yet` when you have not fetched it; the `head` line says the
+same from your side, with both commits. The `local` line is the
 split that matters on a feature branch: files that differ need local grep,
 everything else is what the index holds. Exit 1 when the server says the repo
 is not indexed (or not visible to you), 2 when it cannot be told (not in a
@@ -402,8 +404,26 @@ unreachable). The answer comes from a local cache (`~/.cache/ccx/indexed.json`)
 that your fetched `origin/*` refs keep honest: a fetch that knows a newer
 commit than the cached one re-asks at once, otherwise the entry lives from a
 minute to an hour depending on how recent the tip is; `--refresh` asks now,
-`--json` emits the facts as one object. `ccx git-refs` for the current repo
-also refreshes it.
+`--json` emits the facts as one object (`local_diff` carries counts; add
+`--files` for the paths). `ccx git-refs` for the current repo
+also refreshes it. `ccx status` in a checkout ends with the same comparison
+as one `checkout:` line.
+
+**When your checkout differs from the index.** Every code command (`search`,
+`grep`, `defs`, `refs`, `show`, `read-file`, `ask`) answers from the indexed
+commit. When files in its answer differ in your checkout, or it read a working
+tree that differs from the index, it prints one line on stderr:
+
+```text
+your checkout is 61 commits behind the index (heads/main@1a2b3c4d5e6f); 3 of the 12 files in this answer differ locally — `--git-ref main` reads the indexed version
+```
+
+A hit in such a file ends with `[local differs]` when the line printed is
+your working tree's (remapped through your local diff), or `[local differs,
+line from index]` when no working-tree line was found; a `search` header says
+`[local differs, lines from index]`. Hits in unchanged files are printed as
+before. `ccx show --git-ref main PATH:LINE` renders the indexed text at the
+index's line numbers. Commands given `--repo` or `--git-ref` print neither.
 
 Rust navigation puts the type definition before its impl fragments.
 `ccx defs` collapses impl fragments into one `[impl]` summary with complete
