@@ -4,6 +4,19 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Change-index touched sets
+
+The indexer now fills changed-file rows, symbol touches, and diff hunks.
+Search hits and change references read these rows. Indexed `ccx show` output
+also shows touched-by annotations. A touch identifies a proposal; it does not
+prove that the proposal merged.
+
+Startup adds the nullable `change_meta.touch_key` column. Existing content
+and usage history remain intact. The normal sweep fills old records without
+embedding their unchanged text again. No manual database step is required.
+Mirror-backed repositories read local git diffs. App-backed repositories use
+GraphQL file and blob reads within the existing quota reserve.
+
 ## Test-aware search and grounded answer citations
 
 Search now prefers implementation code unless the query asks about tests.

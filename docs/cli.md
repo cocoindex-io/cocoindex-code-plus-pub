@@ -1323,8 +1323,17 @@ Each item shows its best record and score. `near` and `weak` use the server's
 score floor. These labels describe similarity, not whether work shipped.
 
 Use `ccx refs <name> --kind change --since 2d` for touched and mention groups.
-`ccx show` adds `touched by` when the server supplies an annotation. Change
-text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
+Search hits show the newest pull request that touches the same file and
+symbol. A file without symbol extraction uses its file row. Deleted symbols
+remain searchable through `ccx refs <name> --kind change`.
+
+Change hits show a bounded list of touched paths and the total path count.
+Files beyond the deployment's diff-file limit retain their path and counts.
+`ccx show --repo <owner>/<repo> PATH` receives change annotations from the
+indexed source. Local inline rendering keeps its existing attribution-only
+repository hint.
+
+Change text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
 until that slice ships.
 
 Read the freshness line before treating absence as evidence. `insufficient`
