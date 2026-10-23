@@ -1401,7 +1401,12 @@ request reports a known skipped file as `<file> is not indexed (<reason>); grep 
 Read or grep the working-tree file to continue.
 
 `search --kind change`, `search --kind all`, and `refs --kind change` keep
-the freshness line even when their results are empty. `changes: insufficient`
+the freshness line even when their results are empty.
+`observed through` reports the earlier of the issue and pull request listing times.
+A listing must complete successfully before it advances this time.
+It advances when no issue or pull request changes.
+A partial, failed, or throttled listing keeps the previous completed time.
+`changes: insufficient`
 means the backfill cannot settle absence. With no index, the line says
 `no change index for <repo>; absence proves nothing — use gh/git log`.
 
