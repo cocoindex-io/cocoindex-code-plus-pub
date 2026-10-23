@@ -1333,6 +1333,11 @@ Files beyond the deployment's diff-file limit retain their path and counts.
 indexed source. Local inline rendering keeps its existing attribution-only
 repository hint.
 
+During a stored-record upgrade, `ccx status` adds
+`upgrading N records to schema 3` to the repository's changes line. This count
+tracks records missing state or a PR touched set. The line clears this phrase
+when the automatic upgrade pass finishes.
+
 Change text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
 until that slice ships.
 

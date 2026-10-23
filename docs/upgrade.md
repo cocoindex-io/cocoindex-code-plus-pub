@@ -9,7 +9,8 @@ upgrade command have an entry below, newest first.
 Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer
 adds nullable columns at startup without rebuilding stored content or vectors.
 Start the new indexer before the new query server. Existing records show unknown
-state until their next read. Each read refreshes state, including unchanged text.
+state until the automatic upgrade pass reads them. Each read refreshes state,
+including unchanged text.
 The CLI shows stored state and prints a command for live checks when its
 observation predates the last sweep, or when state or sweep coverage is unknown.
 
@@ -25,10 +26,23 @@ prove that the proposal merged.
 
 Startup adds the state columns first, then the nullable `change_meta.touch_key`
 column. Both steps are additive and run in one schema transaction. Existing content
-and usage history remain intact. The normal sweep fills old records without
-embedding their unchanged text again. No manual database step is required.
+and usage history remain intact. The automatic upgrade pass fills old records
+without embedding their unchanged text again. No manual database step is required.
 Mirror-backed repositories read local git diffs. App-backed repositories use
 GraphQL file and blob reads within the existing quota reserve.
+
+## Existing change records upgrade automatically
+
+Stored records with missing state are stale. Pull requests with a missing
+touched-set key are stale too. The indexer reads them oldest-updated first,
+after new and updated records, within `maxRecordsPerCycle` and the GraphQL
+reserve. It batches these reads like backfill. Host timestamps and listing
+cursors do not prevent this upgrade pass.
+
+`ccx status` shows `upgrading N records to schema 3` until the remaining count
+reaches zero. The count remains visible when the GraphQL reserve stops a cycle.
+The indexer retains embeddings for unchanged text and reads mirror-backed
+touched sets from local git. The pass runs automatically on normal refreshes.
 
 ## Test-aware search and grounded answer citations
 
