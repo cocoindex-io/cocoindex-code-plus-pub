@@ -4,6 +4,18 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Change-hit host state
+
+Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer
+adds nullable columns at startup without rebuilding stored content or vectors.
+Start the new indexer before the new query server. Existing records show unknown
+state until their next read. Each read refreshes state, including unchanged text.
+The CLI shows stored state and prints a command for live checks when its
+observation predates the last sweep, or when state or sweep coverage is unknown.
+
+Status shows one change-index line per repository. `ccx log Type.method` uses
+the same name resolution as `ccx defs Type.method`.
+
 ## Test-aware search and grounded answer citations
 
 Search now prefers implementation code unless the query asks about tests.

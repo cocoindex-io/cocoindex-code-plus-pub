@@ -1328,8 +1328,10 @@ text grep (`ccx grep --text --kind change`) requires slice 4 and is refused
 until that slice ships.
 
 Read the freshness line before treating absence as evidence. `insufficient`
-means the index cannot establish absence. Use the printed `state:` command
-to ask the code host about a record's current state.
+means the index cannot establish absence. Each change hit shows the host state from its last read. Closed and merged
+hits include the event date. State can change after that read. If the read
+predates the last completed sweep, the CLI prints `state as of <time>` and
+a `state:` command to check the host live. Unknown state also prints that command.
 
 The CLI remembers shown and followed record identifiers in its disposable
 cache when a session identifier exists. Claude Code's SessionStart hook sets
