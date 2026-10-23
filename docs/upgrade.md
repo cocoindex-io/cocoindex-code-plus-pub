@@ -51,6 +51,18 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
 - **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
   the brace-on-its-own-line style prints two-line matches; the same command
   without `-U` prints only same-line braces.
+- **Expected after the upgrade.** Every ref's symbol step resolves every
+  module again, because the resolver's behavior changed for Rust: an
+  `impl Foo` written apart from `struct Foo` now reaches `Foo`'s members, and
+  `#[path = "x.rs"] mod foo;` names the file the attribute gives. That step
+  takes about as long as it did on the initial pass; nothing is re-read from
+  the code host and nothing is re-embedded. `ccx defs` / `ccx refs` on Rust
+  code answer from the old resolution until the pass ends.
+- **Rust fixes in the engine.** A structural `ccx grep` pattern like
+  `SessionView { \* }` matches struct expressions and patterns, and no longer
+  matches an impl or struct declaration or a function's return type. In
+  `ccx show`, a position inside a value or a body block opens the nearest
+  enclosing declaration.
 
 ## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
 
