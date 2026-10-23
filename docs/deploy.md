@@ -600,6 +600,16 @@ code host and embedding provider. If your deployment cannot reach the internet
 at all, ask us for an **offline-entitled license** — it is a different license
 issued for exactly that case, and it validates without any network access.
 
+**How often.** The engine keeps the signed answer on the container's local
+disk and reuses it for 24 hours, so a process that restarts within a day on
+a host that keeps its filesystem makes no request. A Kubernetes container
+starts with an empty filesystem, so in a cluster each container start still
+validates once; a running pod never re-validates. To change the interval, set
+`COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds; `0` validates at every
+start) through `indexer.extraEnv` and `queryServer.extraEnv`. The trade-off
+is how quickly a license we suspend or revoke stops working on a host that
+has already validated it: at most the interval.
+
 **Keep it on one line.** The key is a single unbreakable token, so a YAML form
 that wraps it (`|-`, `>-`) puts a newline or a space *inside* the value and
 breaks it. Whitespace around the key is trimmed, so a trailing newline — from
@@ -948,6 +958,23 @@ pass redoes little ([Interrupted passes](#interrupted-passes-and-cleanup)
 says what a killed pass keeps and what it leaves for later). Alternatively,
 add the largest repositories to the [index config](#index-config-repo) first
 and the rest once their first pass is done.
+
+### Query server CPU
+
+A structural `ccx grep` parses every candidate file the index could not
+rule out, on one thread per CPU the query server's container may use (its
+cgroup limit, else the node's count). Parsing is the whole cost of a grep
+whose pattern carries no identifier, so the CPU limit is what sets its speed:
+
+- **Give the query server the CPUs a large grep should use.** With
+  `queryServer.resources.limits.cpu: "1"` a grep parses one file at a time,
+  about 150 files per second; a limit of 4 to 8 is reasonable on a monorepo
+  where agents grep often. Without a limit the server uses the node's cores.
+- **`CCX_GREP_PARSE_THREADS`** (through `queryServer.extraEnv`) caps the
+  parse threads below the limit when the server shares its CPUs with other
+  work; `1` or more.
+- A grep that reaches the request deadline answers the files it scanned and
+  a cursor to continue from, with a warning that says so ([cli.md](cli.md)).
 
 ### Symbol index
 
@@ -1989,7 +2016,7 @@ TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
 worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
 Insights views that list repositories) checks each indexed repo once per TTL
 window. It looks the repos up in batches — one GraphQL request per 32
-candidates under one installation, up to 8 requests in flight per code host,
+candidates under one installation, up to 8 requests in flight per installation,
 all installations at once: public repos cost nothing there, and when the
 installation grants **Organization → Members: Read-only** the same request
 answers the engineer's permission on each private or internal repo they can
@@ -2400,6 +2427,91 @@ Search keeps serving the last completed index meanwhile.
 to standard error and collectors stamped the lot `ERROR`: see
 [upgrade.md](upgrade.md#v0145--ccx-query-is-now-ccx-ask-log-severity-means-something).
 
+### Metrics export (OpenTelemetry)
+
+The indexer's engine records what every pipeline component did and how long
+it took: files walked, chunks embedded or reused, rows written to each
+table, why a component was rebuilt, where the time went, whether the
+in-flight limit is the bottleneck, what failed, and when the last pass
+reached ready. It pushes those measurements over OpenTelemetry (OTLP,
+HTTP/protobuf) to the metrics store you already run, and a reference Grafana
+dashboard reads them unmodified.
+
+Export is **off until you name an endpoint**. A bare install exports nothing
+and opens no connection; with an endpoint set, the indexer is the only
+workload that sends, and nothing leaves the deployment except to that
+endpoint. The series carry repository names (the `stats_group` label), so
+pointing them at a hosted store is a data-sharing decision.
+
+```yaml
+metrics:
+  otlp:
+    # An OpenTelemetry Collector, or a Prometheus with its OTLP receiver on
+    # (`--web.enable-otlp-receiver`; the path is /api/v1/otlp).
+    endpoint: http://otel-collector.monitoring.svc:4318
+    # Optional, for an authenticated endpoint (Grafana Cloud, a gateway): a
+    # Secret whose key OTEL_EXPORTER_OTLP_HEADERS holds the request headers.
+    headersSecret: ""
+    # Milliseconds between exports; unset keeps the engine's 60 s.
+    exportIntervalMs: ~
+  resourceAttributes:
+    deployment.environment: prod
+```
+
+```bash
+kubectl -n ccx create secret generic otlp-headers \
+  --from-literal=OTEL_EXPORTER_OTLP_HEADERS='Authorization=Basic <base64-credentials>'
+```
+
+Every series carries `env`, `app` and the resource attributes the chart
+sets (`service.name` = `ccx-indexer`, `service.version` = the release,
+`k8s.namespace.name`). Component-level series add `stats_group` — one per
+indexed repository, titled `repo <owner>/<name> (<repo-key>)` — and
+`processor`, the pipeline step. Prometheus renders the names with
+underscores and a `_total` suffix on counters. The ones to start from:
+
+| Question | Series |
+|---|---|
+| When did the last pass finish? | `cocoindex_run_last_ready_time_seconds`; `cocoindex_runs_total` by `status` |
+| How much changed, per repository? | `cocoindex_component_runs_total` by `stats_group`, `processor`, `outcome` — `declare_chunk_embedding` with `outcome="added"` is embeddings paid for, `unchanged` is embeddings reused |
+| Why did everything re-run? | `cocoindex_component_memo_decisions_total` by `decision` |
+| Where does the time go? | `cocoindex_component_process_duration_seconds` and `cocoindex_component_submit_duration_seconds` histograms |
+| What landed in the tables? | `cocoindex_target_reconciles_total` by `container` (the table partition) and `result`; `cocoindex_target_sink_failures_total` |
+| Is concurrency the limiter? | `cocoindex_admission_available`, `cocoindex_admission_wait_duration_seconds` |
+| What is failing? | `cocoindex_errors_total` by `processor`, `exception_type` |
+
+The full catalog with units and labels is CocoIndex Plus's
+[metrics reference](https://cocoindex.io/docs/advanced_topics/metrics_reference/).
+
+**The dashboard.** The chart ships CocoIndex Plus's reference Grafana
+dashboard. With a Grafana dashboard sidecar (kube-prometheus-stack's
+default), enable the ConfigMap and the dashboard appears on its own:
+
+```yaml
+metrics:
+  grafanaDashboard:
+    enabled: true
+    namespace: monitoring        # where the sidecar watches, if not this namespace
+    annotations:
+      grafana_folder: CocoIndex
+```
+
+Without a sidecar, enable the ConfigMap all the same, take the JSON from it
+and import it (Dashboards, New, Import), then pick your Prometheus
+datasource. With the release `ccx` in namespace `ccx` (substitute yours):
+
+```bash
+kubectl -n ccx get configmap ccx-cocoindex-code-plus-grafana-dashboard \
+  -o jsonpath='{.data.cocoindex\.json}' > cocoindex.json
+```
+
+The dashboard has one section per repository (the stats-group row repeats),
+a freshness row, a targets row and a concurrency row. The indexer runs in
+cycle mode once the answer cache or Insights is on, so the process stays up
+and the freshness series stays current; a one-shot `--once` run flushes its
+final counters at exit and its series then go stale after Prometheus's
+staleness window.
+
 ### Alerting
 
 **A Ready pod does not prove a working deployment.** The indexer can fail
@@ -2413,6 +2525,7 @@ already run:
 | The workloads stay up | a container restarts, or a Deployment stays below its desired available replicas for 15 minutes | crash loops, OOM kills, pods that never become Ready |
 | The indexer applies what it reads | any indexer line contains `component build failed` | a pass that fails part of the index while the pod stays Ready; such a pass publishes no completeness stamps |
 | The query server reports no errors | a query-server line logged at `ERROR` or `CRITICAL` | failures behind requests, such as the IdP's signing keys becoming unreachable |
+| The index converges (with [metrics export](#metrics-export-opentelemetry) on) | `time() - max by (app) (cocoindex_run_last_ready_time_seconds)` exceeds a few cycles | passes that run but never reach ready — a stuck resolve, a provider outage the retries hide |
 
 - **Match the level word, not the severity.** Warnings share standard error
   with errors ([Logs and severity](#logs-and-severity)), so a collector that

@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.4"
+  ccx-skill-revision: "2026-10-23.5"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.4`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.5`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -290,6 +290,7 @@ structural grep cannot parse included — and needs no `-l`. Output is one
 ccx grep --text 'retry_budget'                   # a word or phrase anywhere
 ccx grep --text 'TODO|FIXME' --path 'src/*'      # a regex, scoped by path
 ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l is an optional filter
+ccx grep --text -U '\)\s*\{' -l c++              # -U: a match may span lines (rg -U)
 ```
 
 - **Reach for it when what you know is text**: a string literal, an error
@@ -298,9 +299,17 @@ ccx grep --text -w 'timeout' -l yaml -l toml     # whole word; with --text, -l i
 - **Smart case** by default: case-insensitive unless the pattern has an
   uppercase letter; `--case sensitive|insensitive` forces it. `-w`/`--word`
   matches whole words only.
-- **Python `re` syntax**: `\b`, `\w`, `\d`, alternation and `(?i)` work as
-  in `rg`; lookarounds and backreferences also work (plain `rg` has neither);
-  `\p{…}` classes do not exist. A plain word needs no escaping.
+- **ripgrep's regex dialect**: write the pattern as you would for `rg` —
+  `\b`, `\w`, `\d`, `\s`, alternation, `(?i)`, `[[:alpha:]]`, `\p{…}` all
+  work as there. Lookarounds and backreferences also work, on a slower
+  engine (a warning says so). A plain word needs no escaping.
+- **A match that must span lines needs `-U`** (`rg -U`): a brace on the next
+  line (`\)\s*\{`), a signature wrapped over two lines, a call whose
+  arguments continue on the next. Without it the pattern is matched line by
+  line and `\s*` never crosses a line break, so the answer is zero. With it,
+  `^` / `$` still mean line bounds and `.` still stops at a newline; `\s`,
+  `[^;]` and `\n` cross one. Each line a match covers prints with its own
+  number.
 - **Cost**: a pattern with literal text in it is prefiltered in SQL and cheap;
   one with none (`.*`, a class alone), or whose only literal is in most files
   (`return`), scans every file of the ref — add `--path` on a large

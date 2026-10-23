@@ -205,6 +205,83 @@ A refused credential leaves the existing change index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
 GitLab change ingest does not ship in this slice.
 
+## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a script or an MCP client of yours reads `text_grep` matches.
+
+- **What changed.** `ccx grep --text -U` / `--multiline` is ripgrep's `-U`:
+  the pattern may match across lines — `^` / `$` still mean line bounds and
+  `.` still stops at a newline, while `\s`, `[^;]` and `\n` cross one — so
+  `\)\s*\{` finds a brace on the next line. The REST body and the MCP tool
+  `text_grep` take `multiline` (default `false`, the behaviour so far), and
+  every match now carries `end_line` beside `line`: equal to `line` without
+  `multiline`; with it, the match covers `line`..`end_line` and `text` is
+  those lines joined by newlines. The CLI prints each covered line with its
+  own number.
+- **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
+  the brace-on-its-own-line style prints two-line matches; the same command
+  without `-U` prints only same-line braces.
+- **Expected after the upgrade.** Every ref's symbol step resolves every
+  module again, because the resolver's behavior changed for Rust: an
+  `impl Foo` written apart from `struct Foo` now reaches `Foo`'s members, and
+  `#[path = "x.rs"] mod foo;` names the file the attribute gives. That step
+  takes about as long as it did on the initial pass; nothing is re-read from
+  the code host and nothing is re-embedded. `ccx defs` / `ccx refs` on Rust
+  code answer from the old resolution until the pass ends.
+- **Rust fixes in the engine.** A structural `ccx grep` pattern like
+  `SessionView { \* }` matches struct expressions and patterns, and no longer
+  matches an impl or struct declaration or a function's return type. In
+  `ccx show`, a position inside a value or a body block opens the nearest
+  enclosing declaration.
+- **The license check reuses its cached answer for a day.** A standard
+  license is still validated against `api.keygen.sh` at a container's first
+  start, but a process that restarts within 24 hours on a host that keeps its
+  disk no longer sends a request. Nothing changes for a cluster whose
+  containers start empty. `COCOINDEX_PLUS_LICENSE_REVALIDATE_AFTER` (seconds;
+  `0` restores a request at every start) tunes it — [License key](deploy.md#license-key).
+- **Structural `ccx grep` is faster, and its parallelism follows the query
+  server's CPUs.** The server parses candidate files on one thread per CPU
+  the container may use (its cgroup limit, else the node's count; before, a
+  flat eight), and reads the next batch of files while the current one is
+  being parsed. A pattern whose only literal is a keyword (`catch (\_ \_) { }`,
+  `for (int \_ = 0; \_ < \_; \_++) { delete \_; }`) no longer parses every
+  file of the language: a file without the keyword is skipped before the
+  parse. **What to check:** a `queryServer.resources.limits.cpu` of `1`
+  now means one parse thread; give the query server the CPUs you want a
+  large grep to use (4 to 8 on a monorepo). `CCX_GREP_PARSE_THREADS` through
+  `queryServer.extraEnv` caps the threads below the limit when the server
+  shares its CPUs — [Query server CPU](deploy.md#query-server-cpu).
+
+## v0.1.71 — text_grep: the index lookup is bounded, so a case-insensitive pattern of common words can no longer spend the whole deadline before the scan
+
+Nothing is required: upgrade normally. Read on if `ccx grep --text` on a
+large repository answered `503 Request deadline exceeded` or a warning
+ending in `after 0 files` whose cursor made no progress.
+
+- **What changed.** The lookup that asks the text search index which files
+  hold the pattern's literals now runs under a budget (a fifth of the time
+  left, at most 10 s). When every literal is in most files, the lookup gives
+  up and the scan takes over with the rest of the deadline, returns its
+  matches so far and a cursor that makes progress. A warning names the
+  abandoned lookup. A scan that could scan nothing in the time left now says
+  that a retry with its cursor repeats the same work, and names the levers
+  (`--path`, a rarer literal, `-s`) instead of advising a retry.
+- **The scan itself is several times faster.** Each file is searched once as
+  a whole before its lines are visited, so files without a match — nearly all
+  of them, for most patterns — cost one search instead of one per line. A
+  full scan of a large repository that took a minute takes seconds; the
+  deadline stop and the cursor still cover what does not fit.
+- **The pattern is read in ripgrep's dialect.** `ccx grep --text` now matches
+  with the same regex engine `rg` uses: everything `rg` accepts works as
+  there, and the engine never backtracks catastrophically. POSIX classes
+  (`[[:alpha:]]`), `\z` and Unicode classes (`\p{Greek}`) work now; `\Z`
+  does not (write `\z`). A pattern with a lookaround or a backreference still
+  works, matched by the previous engine with a warning that it is slower.
+- **Verify.** `ccx grep --text 'return.*null.*delete.*cast.*assert' --path '*' -k 5`
+  on a large repository returns inside the deadline with a cursor, and the
+  same command with that `--cursor` scans further.
+
 ## v0.1.70 — grep pages by cursor in a shuffled scan order; a scan the deadline would end returns its matches so far; `ccx repos` batches GitHub permission checks
 
 Nothing is required in the deployment: upgrade normally, and upgrade the
@@ -237,7 +314,7 @@ Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
   checks in its batched lookup, and the lookups run in parallel.** When the
   authz App's installation grants **Organization → Members: Read-only**,
   one GraphQL request per 32 repositories answers the caller's permission
-  on each, up to 8 requests in flight per code host with every installation
+  on each, up to 8 requests in flight per installation with every installation
   at once, so a cold walk takes a few round trips instead of one per
   repository or one per batch; public repositories cost nothing either way.
   Without the grant the walk still batches the repository facts (one
