@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.6"
+  ccx-skill-revision: "2026-10-23.7"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.6`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.7`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -95,7 +95,7 @@ spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 | Your habit | Use instead |
 |---|---|
 | `gh pr list --search "sidebar animation" --state all` | `ccx search --kind change "sidebar plays drop animations on restart"` |
-| `gh issue list --search "Main is red"` | `ccx search --kind change "<the failing test or error line>"` |
+| `gh pr list --state open --search "fix clippy"` (is a fix already in?) | `ccx search --kind change "<the failing test or error line>"`: it also sees merged fixes, which `--state open` hides |
 | `gh search prs "rate limit breaker"` | `ccx search --kind change "GitHub calls fail with 403 until the reset"` |
 | `git log --oneline --grep="landing"` | `ccx search --kind change "landing retries after a rate limit"` |
 | `git log -S 'pub const FEATURES_10'` | `ccx log -S 'pub const FEATURES_10'` |
@@ -125,8 +125,11 @@ code before you rely on it. The printed state is as of the last read; its
 `state:` line checks it live.
 
 **Still use `gh` / `git` for:** a record you already know by number
-(`gh pr view N`); CI runs and logs; repositories or dates outside the
-coverage line; writing (comments, merges). `ccx log` and `ccx show --at <sha>`
+(`gh pr view N`, `git log --grep "(#N)"`: ccx has no lookup by number);
+"what is open right now?" or "is main red now?" (`gh issue list --state open
+--search "Main is red"`: ccx ranks by meaning, not by state or date); the
+newest items; CI runs and logs; repositories or dates outside the coverage
+line; writing (comments, merges). `ccx log` and `ccx show --at <sha>`
 read your clone, so they see any commit you have fetched; `--git-ref` takes
 only indexed refs, never a sha.
 
