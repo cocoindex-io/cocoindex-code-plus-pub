@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-22.1"
+  ccx-skill-revision: "2026-10-23"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-22.1`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -100,6 +100,14 @@ Read the freshness line before treating absence as evidence. `insufficient`
 means coverage cannot answer. `near` and `weak` use the server's score floor.
 A change hit records what its author says. Read the current code to check it.
 Use each hit's printed `state:` command for the host's current answer.
+
+**Commit history comes from your clone, not the index.** `ccx log <symbol>`
+lists the commits that changed its lines (sha, date, `#PR`, `+X/-Y` within
+it, `added` on the one that brought it in); `--patch` adds the symbol-scoped
+diff. `ccx log -S '<text>'` finds the commits that added or removed a text,
+for a symbol the index no longer holds. `ccx show --at <sha> PATH` or
+`ccx show --at <sha> -s NAME` reads any commit of your clone. `--git-ref`
+takes only indexed refs, never a sha.
 
 ## Repo & ref scoping (applies to every query command)
 
