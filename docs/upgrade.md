@@ -34,10 +34,13 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`
+## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler
 
-Nothing is required for the deployment. Read on if your rollout doc or
-your managed Claude Code settings install the `ccx` plugin.
+Nothing is required for most deployments. Read on if your rollout doc or
+your managed Claude Code settings install the `ccx` plugin, or if the
+indexer reaches its internal state database through a connection pooler.
+
+### The plugin installs as `ccx@ccx`
 
 - **What changed.** The plugin marketplace in
   `cocoindex-io/cocoindex-code-plus-pub` is named `ccx`. It was `cocoindex`,
@@ -57,6 +60,78 @@ your managed Claude Code settings install the `ccx` plugin.
   [cli.md → For agents & automation](cli.md#for-agents--automation), under
   "Installed as `ccx@cocoindex`?".
 - **Verify.** In Claude Code, `/plugin` → **Installed** lists `ccx@ccx`.
+
+### The internal state database behind a connection pooler
+
+This applies if the indexer reaches its internal state database
+(`CCX_INTERNAL_DB_URL`) through a connection pooler: PgBouncer, a
+provider's pooled connection string, or Cloud SQL Managed Connection
+Pooling. A direct connection is not affected, and neither is the Cloud SQL
+Auth Proxy on an instance without Managed Connection Pooling.
+
+- **What changed.** The engine keeps the indexer's internal state in
+  `CCX_INTERNAL_DB_SCHEMA` (default `ccx_internal`). It used to select that
+  schema with a connection startup parameter (`search_path`), which a
+  default PgBouncer refuses: the indexer failed at startup with
+  `unsupported startup parameter in options: search_path`. From
+  cocoindex-plus 1.0.62 the engine writes the schema into every table name
+  and sends no startup parameter, so the internal database works behind a
+  pooler, in session or transaction pooling.
+- **Before you upgrade, if a pooler was already in front of the internal
+  database.** A PgBouncer with `ignore_startup_parameters = options`, or
+  with `track_extra_parameters = search_path` against Postgres 17 or
+  earlier, accepted the parameter and dropped it, so the internal state went
+  to the `public` schema instead. Check where it is:
+
+  ```sql
+  SELECT schemaname FROM pg_tables WHERE tablename = 'cocoindex_meta';
+  ```
+
+  `ccx_internal` (or your `CCX_INTERNAL_DB_SCHEMA`) needs nothing. `public`
+  means the state must move before the new release starts. Otherwise the
+  indexer starts over in the empty schema: its first pass is a
+  bootstrap-scale run, embeddings included, and the old state stays unused.
+  Stop the indexer, move the tables, then upgrade. Don't start the old
+  release in between: it would find nothing in `public` and start over
+  there.
+
+  ```bash
+  kubectl -n ccx scale deploy/ccx-cocoindex-code-plus-indexer --replicas=0
+  ```
+
+  Then, as the indexer's role (it owns the tables; adjust `ccx_internal` if
+  you overrode `CCX_INTERNAL_DB_SCHEMA`), move the tables `cocoindex_meta`
+  lists, then `cocoindex_meta` itself. Other tables in `public` stay:
+
+  ```sql
+  BEGIN;
+  DO $$ DECLARE t text; BEGIN
+    FOR t IN SELECT c.tablename FROM pg_tables c
+             JOIN public.cocoindex_meta m ON m.key LIKE 'app:%'
+              AND starts_with(c.tablename, 'app_' || (m.value->>'table_prefix') || '__')
+             WHERE c.schemaname = 'public' LOOP
+      EXECUTE format('ALTER TABLE public.%I SET SCHEMA ccx_internal', t);
+    END LOOP;
+  END $$;
+  ALTER TABLE public.cocoindex_meta SET SCHEMA ccx_internal;
+  COMMIT;
+  ```
+
+  Run the upgrade command, then start the indexer again (a no-op if the
+  upgrade already did):
+
+  ```bash
+  kubectl -n ccx scale deploy/ccx-cocoindex-code-plus-indexer --replicas=1
+  ```
+
+- **Cloud SQL Managed Connection Pooling.** In its default transaction mode,
+  set the pooler's `max_prepared_statements` flag above 0, or switch the
+  pool to session mode. The engine uses prepared statements, and the default
+  of 0 makes them fail under load (`prepared statement "s10" does not
+  exist`). PgBouncer has them on by default since 1.24.
+- **Verify.** The query above returns your `CCX_INTERNAL_DB_SCHEMA`, and the
+  first indexer pass after the upgrade takes about as long as a normal pass,
+  not as long as the initial one.
 
 ## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
 
