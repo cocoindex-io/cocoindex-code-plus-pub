@@ -322,7 +322,7 @@ ccx search "how are vector embeddings stored"   # scopes to the current repo + b
 ccx search foo --repo cocoindex-io/cocoindex     # a specific repo
 ccx search foo --repo acme/a --repo acme/b       # several repos, one cross-repo-ranked result list
 ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (single repo scope)
-ccx search foo -k 10                             # more results; --offset paginates
+ccx search foo -k 10                             # more results (definitions, not chunks); --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 ccx search retry --tests                         # include tests in similarity order
@@ -436,6 +436,12 @@ index's line numbers. Commands given `--repo` or `--git-ref` print neither.
 Rust navigation puts the type definition before its impl fragments.
 `ccx defs` collapses impl fragments into one `[impl]` summary with complete
 counts. A page-limit note says when more definitions exist.
+Imports of the name (`use a::SessionView`, `from m import Repo`) fold the
+same way beside a real definition: `ccx defs SessionView` prints the struct
+and ends with `+ 50 imports in 48 files [alias]; --aliases to list`;
+`--aliases` lists them. A name that is only imported, or `--kind alias`,
+lists them anyway. A Rust `mod x;` row names the file holding the module,
+`module file: src/ui/x.rs  (ccx show src/ui/x.rs)`.
 `ccx refs PATH NAME` resolves a bare method name within that file, or lists
 exact commands when several methods match. Name-only reference output groups
 uses by definition.
@@ -588,6 +594,12 @@ The server reads up to 20,000 candidates to fill a page; a page can be short
 when the index or that limit is reached. Returned scores remain raw cosine
 similarities, so default results need not have descending scores.
 
+One result is one definition. The index splits a long function into several
+chunks; when more than one of them matches, the best is the result and the
+others are one line under it, `+ 2 more chunks of this definition: L356-L368,
+L369-L382` (`more_chunks` in `--json`). `-k` and `--offset` count definitions,
+and regions outside any definition, not chunks.
+
 ### `ccx show` — a file's outline, or one definition's body
 
 `ccx show PATH` prints a file as an outline, the IDE outline view in a
@@ -692,8 +704,21 @@ name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
-One unique definition renders in full. Several definitions list their paths
-and exact commands for you to pick one (`ccx show PATH:LINE`), exit 0.
+One unique definition renders in full; imports and impl fragments do not
+count against it, so `ccx show -s SessionView` renders the struct. Several
+definitions list their paths and exact commands for you to pick one
+(`ccx show PATH:LINE`), exit 0.
+
+**Module declarations.** On a Rust `mod x;` line, or the `#[path = "…"]`
+line above it, `ccx show PATH:LINE` shows the module's file — its outline,
+or everything with `-e` — and a stderr note names it; `ccx show -s x` does
+the same.
+
+**A cut output says what it left out.** The server renders at most 5,000
+lines per request. When it cut what was printed, a stderr note names the
+lines, `lines 5001-30078 of <path> not shown (the server's 5,000-line
+window); ccx show <path>:5001 renders the definition there`; nothing is
+said when nothing was cut.
 Add a file path after `-s NAME` to restrict lookup to that file. A
 `... N more lines` cue inside a large type folds that type's own lines;
 `ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
@@ -1165,7 +1190,8 @@ and REST API closely (same capabilities, same scoping).
     before a search.
   - `code_search(query, repos, top_k?, offset?, paths?, languages?)` → one
     cross-repo-ranked list of code chunks (repo, filename, line range, code,
-    score). `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
+    score), one per definition — the definition's other matching chunks in
+    `more_chunks`. `repos` is 1..10 scopes `{repo, git_ref?}` — each repo searched
     at its own ref; `resolved_scopes` reports every scope's resolution.
   - `code_grep(pattern, language, repo, git_ref?, paths?, limit?, cursor?)` → AST
     structural matches (filename, line range, node kind, code, captured metavars),

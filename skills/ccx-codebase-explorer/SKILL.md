@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.3"
+  ccx-skill-revision: "2026-10-23.4"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.3`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23.4`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -173,7 +173,9 @@ ccx search "error handling retry logic"
   safe. `-k` / `--top-k <N>` returns more (default 5) and `--offset` paginates —
   raise `-k` only when every result still looks relevant (then there are likely
   more). An empty or off-target page is a signal to rephrase the concept, or to
-  widen a subtree-narrowed `--path` — not to page further.
+  widen a subtree-narrowed `--path` — not to page further. One result is one
+  definition: `+ N more chunks of this definition: L356-L368` names its other
+  matching chunks, for `ccx show PATH:LINE`.
 - **A hit shows that code *talks about* your question, not that it *runs*.**
   Search ranks by resemblance to your words, so a doc, a default, a test, or an
   older or fallback implementation can outrank the code that actually does the
@@ -331,6 +333,10 @@ ccx refs python:db.Repo.find                 # every use of this exact qualified
 ccx refs src/db.py Repo.find                 # uses of EXACTLY this definition (see below)
 ccx refs QueryService --role call            # only calls (roles: call, import, type_use, …)
 ```
+
+Imports of the name fold into a last line, `+ 50 imports in 48 files [alias];
+--aliases to list`, beside the real definition; a Rust `mod x;` row names the
+module's file (`module file: …`), which `ccx show` opens.
 
 The canonical flow is **defs → refs**, a copy-paste. Each `ccx defs` row's detail
 line ends with a paste-ready command — `uses: ccx refs PATH ENTITY_ID` (carrying
