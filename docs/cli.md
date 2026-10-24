@@ -567,6 +567,12 @@ lookup itself is bounded: when every literal is common it gives up after a
 fraction of the request's time and the scan takes over, and the warning says
 so.
 
+**Text grep defaults to a compact sample.** `ccx grep --text` prints at most
+30 matches, with at most 10 from one file. It samples a bounded 100-match
+server page and reports how many matches it omits. Add `-k 100` to print that
+complete page; explicit `-k N` disables the per-file cap. Keep the same cursor
+when recovering a page. The next cursor continues after the server page.
+
 **Grep pages by cursor, in a shuffled scan order.** Both grep modes scan files
 in a fixed shuffled order (by a hash of the path), so a page is a sample of
 the ref rather than its alphabetically-first subtree. When a scan stops short
@@ -627,18 +633,19 @@ terminal:
   `integration_tests`, `TestHarness`, `testutil`) shows its head, a
   `// members:` roster of what it holds and a `... N lines` cue. A test
   file itself outlines fully.
-- **A long outline folds to depth 1.** Over about 300 rows, the server
-  renders the file's items only, each container collapsed to its head, a
-  `// members: a, b, c, +N more` roster and a `... N lines` cue, and the
-  CLI notes it on stderr: `outline folded to depth 1: the full outline is
-  2,483 rows; ccx show PATH:LINE opens one object, --depth 2 shows one more
-  level, -e everything.` `--depth N` sets the level yourself and is never
-  folded further; `-e` and `--depth` are exclusive.
+- **Large output uses a budget.** Bodies use about 2.6 KB or 120 rows;
+  outlines use about 1.5 KB or 60 rows. The server folds deeper rows first.
+  It keeps the signature and four source lines around the requested line.
+  These protected lines can exceed the budget. Headers add some overhead.
+  A counted cue names the omitted lines and the expansion commands.
+  `--full` expands the object. `--lines A-B` reads an exact source range.
+  `--depth N` sets the outline depth and bypasses the default budget.
+  `-e` and `--depth` remain exclusive.
 
 It reads the file from your **working tree** when it is there (inside or
 outside a checkout; outside one no repo is needed), so it is right on the
 branch you are on; the index serves only the fallbacks below. `ccx show
-PATH:LINE` renders one definition whole, its doc included; on an import line
+PATH:LINE` renders one definition with the default budget; on an import line
 it prints the imports. `-e/--expand` renders everything verbatim.
 
 ```bash
@@ -646,7 +653,8 @@ ccx show src/app.py                        # the outline
 ccx show src/app.py:142                    # the innermost definition at line 142, its enclosing scopes as frames
 ccx show src/app.py:142:8                  # a pasted `ccx defs` headline (path:line:col) works as a target
 ccx show src/app.py:142-150                # a pasted `ccx grep` headline too (the first line is used)
-ccx show -e src/app.py                     # the whole file, numbered
+ccx show --full src/app.py                 # the whole file, numbered
+ccx show src/app.py --lines 142-160        # an exact source range
 ccx show --depth 1 src/app.py              # the file's items only, each class or module collapsed to its head and a members roster
 ccx show -s QueryService                   # the definitions `ccx defs QueryService` finds, rendered
 ccx show -s find --kind method src/db.py   # narrowed by kind and to one file; -q/-b pick the name mode as on defs
@@ -714,10 +722,11 @@ name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
 file is absent, the indexed definition is shown instead and a note says so.
-One unique definition renders in full; imports and impl fragments do not
-count against it, so `ccx show -s SessionView` renders the struct. Several
-definitions list their paths and exact commands for you to pick one
-(`ccx show PATH:LINE`), exit 0.
+Imports and impl fragments do not compete with an ordinary definition.
+An ambiguous name renders one match and lists the other candidates on single lines.
+It prefers the nearest directory, then a callable over a field, then the most
+primary graph references. Path and line break remaining ties.
+Use a listed `PATH:LINE` to open another candidate.
 
 **Module declarations.** On a Rust `mod x;` line, or the `#[path = "…"]`
 line above it, `ccx show PATH:LINE` shows the module's file — its outline,
@@ -731,7 +740,7 @@ window); ccx show <path>:5001 renders the definition there`; nothing is
 said when nothing was cut.
 Add a file path after `-s NAME` to restrict lookup to that file. A
 `... N more lines` cue inside a large type folds that type's own lines;
-`ccx show -s <name>` or `ccx show PATH:LINE` shows it whole.
+`ccx show --full -s <name>` or `ccx show --full PATH:LINE` shows it whole.
 
 **What leaves your machine.** Showing a working-tree file sends its content,
 uncommitted edits included, to your deployment's own query server — the same
