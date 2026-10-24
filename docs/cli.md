@@ -1499,3 +1499,10 @@ When a bare-name `refs` query has no resolved use, its count and file summary
 also include unresolved candidates. Each summary labels them as unresolved.
 Use `--no-include-unresolved` to count only resolved uses. Test uses remain
 available with `--tests`.
+
+Rust workspace references use indexed `Cargo.toml` files for crate aliases and
+library paths. Public re-exports, explicit standard pointer fields, and standard
+`Deref::Target` implementations help resolve method receivers. Unresolved
+callback parameters still produce candidate uses with `--include-unresolved`.
+Use `--tests` when the call appears only in test code. SQL column names inside
+strings require `grep --text` rather than symbol references.

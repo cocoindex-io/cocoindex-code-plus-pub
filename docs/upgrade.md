@@ -1718,3 +1718,13 @@ database before every upgrade. A volume created before v0.1.39 still holds
 the query server's role under its old name, `ccx_query`, so set
 `database.bundled.queryUsername: ccx_query` in your values or recreate the
 volume.
+
+## Rust workspace symbol metadata
+
+This change requires an engine with internal `cargotoml` extraction support.
+Upgrade the engine before the indexer. The indexer preflight names missing
+language support and refuses startup with an older engine.
+
+IR format 3 rebuilds derived symbol nodes. Rust extraction version 10 and
+resolver behavior version 29 also invalidate older derived references. Existing
+usage and change history remain intact. `Cargo.toml` keeps its TOML search chunks.
