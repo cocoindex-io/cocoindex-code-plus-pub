@@ -165,6 +165,21 @@ long as the initial index.
   `walk: <owner>/<repo> <ref> at <commit> finished in …s` lines report seconds,
   not minutes, per branch.
 
+## v0.1.74 — a resolver change confined to one language re-resolves that language only
+
+Nothing is required: upgrade normally.
+
+- **What changed.** The symbol resolver's version is kept per language. From
+  now on an engine release that changes resolution for one language makes
+  the first pass re-resolve that language's files only; refs without such
+  files read their symbol tree and reuse everything. Upgrade notes say which
+  languages a pass re-resolves. A change for every language still
+  re-resolves every module, as before.
+- **Expected after the upgrade.** Each ref's symbol step reads its tree once
+  and reuses every module (the indexer logs `reused all N modules`). Nothing
+  is re-resolved, nothing is re-read from the code host and nothing is
+  re-embedded.
+
 ## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
@@ -182,13 +197,16 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
 - **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
   the brace-on-its-own-line style prints two-line matches; the same command
   without `-U` prints only same-line braces.
-- **Expected after the upgrade.** Every ref's symbol step resolves every
+- **Expected after the upgrade.** Two one-time costs on the first pass.
+  Every repository is walked again — every file re-read from the code host,
+  nothing re-embedded — because Rust symbol extraction changed (`#[path =
+  "x.rs"] mod foo;` now names the file the attribute gives); on a large
+  installation that walk is hours. And every ref's symbol step resolves every
   module again, because the resolver's behavior changed for Rust: an
   `impl Foo` written apart from `struct Foo` now reaches `Foo`'s members, and
-  `#[path = "x.rs"] mod foo;` names the file the attribute gives. That step
-  takes about as long as it did on the initial pass; nothing is re-read from
-  the code host and nothing is re-embedded. `ccx defs` / `ccx refs` on Rust
-  code answer from the old resolution until the pass ends.
+  `super::` inside a `#[path]` file climbs to the declaring module. That step
+  takes about as long as it did on the initial pass. `ccx defs` / `ccx refs`
+  on Rust code answer from the old resolution until the pass ends.
 - **Rust fixes in the engine.** A structural `ccx grep` pattern like
   `SessionView { \* }` matches struct expressions and patterns, and no longer
   matches an impl or struct declaration or a function's return type. In
