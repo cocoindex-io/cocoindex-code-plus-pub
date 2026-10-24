@@ -568,7 +568,8 @@ fraction of the request's time and the scan takes over, and the warning says
 so.
 
 **Text grep defaults to a compact sample.** `ccx grep --text` prints at most
-30 matches, with at most 10 from one file. It samples a bounded 100-match
+30 matches, with at most 10 per file when several files match. A single
+matching file shows up to 100 matches. It samples a bounded 100-match
 server page and reports how many matches it omits. Add `-k 100` to print that
 complete page; explicit `-k N` disables the per-file cap. Keep the same cursor
 when recovering a page. The next cursor continues after the server page.
@@ -1473,7 +1474,6 @@ That output names the limit instead of pretending to show an outline.
 
 ## Focused code lookups
 
-A text grep over one matching file shows up to 100 matches by default.
 Use a line range to search a specific part of a large file:
 
 ```bash
