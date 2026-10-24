@@ -462,10 +462,11 @@ Two behaviors worth knowing, shared with `included_patterns` /
   these limits and your include/exclude patterns first.
 - **Changing the limit takes effect on the next poll.** Lowering it drops the
   now-oversized files' contents from the index; raising it indexes them. No
-  reindex or restart is needed, but the repo is re-walked: the next pass reads
-  and parses every file again, and embeds only the files the new limit admits.
-  Changing `indexer.maxFileSizeBytes` re-walks every repo that doesn't set its
-  own limit. See [What a settings change redoes](#what-a-settings-change-redoes).
+  reindex or restart is needed, but the repo is re-walked: the next pass
+  parses every file again, reading each from the index's own copy rather than
+  the code host, and embeds only the files the new limit admits. Changing
+  `indexer.maxFileSizeBytes` re-walks every repo that doesn't set its own
+  limit. See [What a settings change redoes](#what-a-settings-change-redoes).
 
 Two kinds of file are never indexed, at any size:
 
@@ -1114,14 +1115,21 @@ on the next poll, and a chart value on the `helm upgrade` that sets it. Some
 of them make the next pass redo work across whole repositories. An upgrade
 that does the same says so in its [upgrade.md](upgrade.md) entry.
 
+A re-walk parses every file of the repository again, but reads it from the
+index's own copy: since 0.1.74 the indexer keeps each indexed file's bytes
+beside the index and asks the code host only for files it has not stored, so
+a re-walk is bound by the database and the parse, not by the code host's
+rate limit. The one exception is the first re-walk after upgrading to 0.1.74,
+which reads every file from the code host once more and keeps the copy.
+
 | Change | What the next pass redoes | What it embeds |
 |---|---|---|
-| A repo's `max_file_size` | re-walks that repo: reads and parses every file again | only the files the new limit admits |
+| A repo's `max_file_size` | re-walks that repo: parses every file again, read from the index's copy | only the files the new limit admits |
 | `indexer.maxFileSizeBytes` | re-walks every repo that doesn't set its own `max_file_size` | only the files the new limit admits |
 | `indexer.symbolIndex.enabled: false` | re-walks every repo, and deletes every symbol row and all extracted symbol data | nothing |
 | `indexer.symbolIndex.enabled: true`, after `false` | re-walks every repo, re-extracts symbols from every file, resolves every ref | nothing |
 | An upgrade that adds or changes language packs | re-walks every repo and re-extracts symbols from every file | nothing |
-| An upgrade that changes which files are skipped (binary, Git LFS) | re-walks every repo: reads and parses every file again, symbols included, and drops the contents of files now skipped | nothing |
+| An upgrade that changes which files are skipped (binary, Git LFS) | re-walks every repo: parses every file again from the index's copy, symbols included, and drops the contents of files now skipped | nothing |
 | `indexer.symbolIndex.maxFilesPerGitRef` or `maxIrBytesPerGitRef` | no re-walk: a ref that crosses the cap loses or regains its symbol rows | nothing |
 | `indexer.symbolIndex.resolveTimeoutSeconds` | nothing: it only decides how long a ref's resolve may run | nothing |
 | `indexer.symbolIndex.reuseMaxAgeSeconds` | nothing at once: from then on, a pass that resolves a ref also re-checks its files last resolved longer ago than the new age | nothing |
