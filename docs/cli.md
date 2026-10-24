@@ -1470,3 +1470,26 @@ The commit comes from the failed read, not a later ref lookup. Treat this
 output as local text. Missing local files still report the index error.
 Files too large for the render request receive a bounded local text view.
 That output names the limit instead of pretending to show an outline.
+
+## Focused code lookups
+
+A text grep over one matching file shows up to 100 matches by default.
+Use a line range to search a specific part of a large file:
+
+```bash
+ccx grep --text hitbox --path vendor/gpui-pre/src/window.rs --lines 4901-5199
+ccx show -s build --match 'places|cwd|checkout'
+```
+
+`show --match` keeps matching source lines visible inside folded bodies.
+Rust outlines retain method names inside impl blocks. Long name lists can
+exceed the usual output budget.
+
+Code searches prefer implementation over documents and HTML mocks unless the
+query asks for documentation. Use `--lang markdown` to search documents.
+Change searches for code fragments and quoted text also search indexed diffs.
+Exact matches appear first.
+
+Use `ccx log -S TEXT` to find commits that change the number of occurrences
+anywhere in the repository. Add a path to narrow it. Use `ccx log SYMBOL`
+for changes to the definition's lines.
