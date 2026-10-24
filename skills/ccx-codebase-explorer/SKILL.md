@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-23.11"
+  ccx-skill-revision: "2026-10-24.1"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23.11`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-24.1`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -114,7 +114,7 @@ spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 | `git log -S 'pub const FEATURES_10'` | `ccx log -S 'pub const FEATURES_10'` |
 | `git log -L :keep_landed_evidence:…/workspace.rs` | `ccx log keep_landed_evidence` (`--patch` for the diffs) |
 | "has someone already done this?" (reading PR lists) | `printf -- '- item\n- item\n' \| ccx prior -` |
-| "who changed the code around this line, and why?" | the hit's `touched by #N` line, then `ccx refs <symbol> --kind change` |
+| "who changed the code around this line, and why?" | `ccx refs <symbol> --kind change` |
 
 Write the query as the symptom or the task, in plain words: what you saw or
 what you are about to do. Paste an error line as it is; exact error text
@@ -129,7 +129,7 @@ counts. One query per question; read the top three hits.
   first error line, and `ccx refs <test> --kind change --since 2d`.
 - **When a line looks wrong:** `ccx log <symbol>`, then the PR it names.
 
-**Reading the answer.** Each relevance-ranked search hit is labelled `near`
+**Reading the answer.** Each relevance-ranked change-search hit is labelled `near`
 (worth reading) or `weak · not found` (no record answers the query). The closing `changes:`
 line says the coverage: a numbered range (`#2200 to #3112`) means a `weak`
 result is real absence; `insufficient` means the index cannot answer yet, so
@@ -428,7 +428,8 @@ definition whose qualified name ends with `Repo.find`, where `ccx defs find` is
 the bare base name (narrow with `--kind method`). Both verbs page like `grep`
 (`-k`/`--limit`, default 100, at most 500, and `--offset`).
 
-`refs` lists resolved uses first and ends stdout with what it left off:
+`refs` lists resolved uses first. Results with at most 60 rows include test
+uses and unresolved mentions. Larger results end stdout with what they leave off:
 `+ N in tests; --tests to list`, `+ N unresolved mentions of the name;
 --include-unresolved to list`, then `… N more references past K; --offset K
 for the next page.` Before saying a symbol has no other callers, rerun with the
@@ -445,8 +446,8 @@ Reading `refs` output — each row carries:
   so one source position can appear on several rows, and row count ≠ site
   count); `name_only`, printed `→ ~name`, is a mention whose target couldn't be
   resolved (an opaque receiver, an import the index could not place) — a
-  candidate use to verify by reading the file, listed only with
-  `--include-unresolved` (or when nothing resolves to a bare name);
+  candidate use to verify by reading the file, listed automatically in small results, or with
+  `--include-unresolved` when a larger result hides them;
 - possibly a `(via_alias)` marker: a supplementary row for the alias/re-export
   hop the primary reference went through.
 

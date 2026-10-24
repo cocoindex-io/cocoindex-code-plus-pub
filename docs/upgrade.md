@@ -4,6 +4,20 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Complete small lookup results
+
+Upgrade the CLI and server together. Requested definitions now retain nested
+code up to 400 lines or 16 KiB. File outlines keep their compact budget.
+Text grep keeps pages with at most 60 hits complete. Small reference results
+include tests and unresolved mentions. Use `--no-tests` or
+`--no-include-unresolved` to exclude those rows explicitly.
+
+Default CLI search now requests code and preserves similarity order.
+Exact record numbers and URLs retain record lookup.
+Use `--kind all` to request the change section. File outlines omit change
+annotations; selected definitions show only recent symbol-level changes.
+No schema migration or index rebuild is required.
+
 ## Compact show and text grep output
 
 Upgrade the CLI and query server together. Default show output now folds large

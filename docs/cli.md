@@ -447,16 +447,16 @@ lists them anyway. A Rust `mod x;` row names the file holding the module,
 exact commands when several methods match. Name-only reference output groups
 uses by definition.
 
-**What `ccx refs` lists.** Resolved uses come first. Uses in test code and
-`name_only` mentions (sites whose target could not be resolved) are left off
-and counted on the last lines of stdout — `+ 17 in tests; --tests to list`,
-`+ 70 unresolved mentions of the name; --include-unresolved to list` — and
-`--tests` / `--include-unresolved` list them after the resolved rows. A name
-nothing resolves to (an external crate's function) lists its mentions anyway;
-a pinned `PATH ENTITY_ID` or qualified name never does. When more rows exist,
-stdout ends with `… N more references past 100; --offset 100 for the next
-page.` A `-k` above the server's page maximum (500) pages at the maximum.
-`--count` prints only the totals, and `--by-file` the count per file.
+**What `ccx refs` lists.** Resolved uses come first. Results with at most
+60 rows list test uses and unresolved mentions too. Larger results count those
+classes on the last lines of stdout: `+ 17 in tests; --tests to list` and
+`+ 70 unresolved mentions of the name; --include-unresolved to list`.
+Use those flags to list the hidden rows. `--no-tests` and
+`--no-include-unresolved` explicitly hide those classes, even for small results.
+A broad name with no resolved use lists its mentions. When more rows exist,
+stdout ends with `… N more references past 100; --offset 100 for the next page.`
+A `-k` above the page maximum (500) pages at the maximum.
+`--count` prints totals, and `--by-file` prints counts per file.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
@@ -567,7 +567,8 @@ lookup itself is bounded: when every literal is common it gives up after a
 fraction of the request's time and the scan takes over, and the warning says
 so.
 
-**Text grep defaults to a compact sample.** `ccx grep --text` prints at most
+**Text grep keeps small pages complete.** `ccx grep --text` prints every hit
+when the server page has at most 60 matches. Larger pages print at most
 30 matches, with at most 10 per file when several files match. A single
 matching file shows up to 100 matches. It samples a bounded 100-match
 server page and reports how many matches it omits. Add `-k 100` to print that
@@ -603,13 +604,12 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
-By default, semantic search prefers implementation code over test code.
-Queries containing test or regression words keep similarity order. This
-includes identifiers such as `test_retry` and `TestRetry`. `--tests` forces
-similarity order with tests included. `--no-tests` excludes test candidates.
-The server reads up to 20,000 candidates to fill a page; a page can be short
-when the index or that limit is reached. Returned scores remain raw cosine
-similarities, so default results need not have descending scores.
+Semantic search preserves similarity order, including tests and documents.
+`--no-tests` excludes test candidates; `--tests` includes them.
+The server reads up to 20,000 candidates to fill a filtered page.
+Returned scores remain raw cosine similarities.
+Default CLI search requests code. Exact record numbers and URLs retain record lookup. Use `--kind all` for a change section,
+or `--kind change` to search indexed PRs and issues.
 
 One result is one definition. The index splits a long function into several
 chunks; when more than one of them matches, the best is the result and the
@@ -634,9 +634,10 @@ terminal:
   `integration_tests`, `TestHarness`, `testutil`) shows its head, a
   `// members:` roster of what it holds and a `... N lines` cue. A test
   file itself outlines fully.
-- **Large output uses a budget.** Bodies use about 2.6 KB or 120 rows;
+- **Large output uses a budget.** Requested definitions use up to 16 KiB or 400 rows;
   outlines use about 1.5 KB or 60 rows. The server folds deeper rows first.
-  It keeps the signature and four source lines around the requested line.
+  A requested definition includes nested code. It keeps the signature and
+  four source lines around the requested line when a larger definition folds.
   These protected lines can exceed the budget. Headers add some overhead.
   A counted cue names the omitted lines and the expansion commands.
   `--full` expands the object. `--lines A-B` reads an exact source range.
@@ -759,6 +760,12 @@ Exit codes: 0 with output (the listing included); 1 when `-s` matches
 nothing, when the path is on neither side (not on disk, not in the ref), or
 on a usage error such as `-s` together with a `PATH:LINE`; 2 on a malformed
 command line.
+
+#### Recent change annotations
+
+Code search and selected definitions show `touched by` only for symbol-level
+changes in the last seven days. File outlines omit change annotations.
+Use `ccx refs NAME --kind change` to request indexed history for a symbol.
 
 ### `ccx log` — a symbol's commit history
 
@@ -1485,8 +1492,8 @@ ccx show -s build --match 'places|cwd|checkout'
 Rust outlines retain method names inside impl blocks. Long name lists can
 exceed the usual output budget.
 
-Code searches prefer implementation over documents and HTML mocks unless the
-query asks for documentation. Use `--lang markdown` to search documents.
+Code searches preserve similarity order across source, documents, and HTML mocks.
+Use `--lang markdown` to search documents.
 Change searches for code fragments and quoted text also search indexed diffs.
 Exact matches appear first.
 
