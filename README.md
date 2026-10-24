@@ -78,15 +78,17 @@ subagents, which skills never reach:
 
 ```text
 /plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
-/plugin install ccx@cocoindex
+/plugin install ccx@ccx
 ```
 
 It needs the `ccx` CLI on `PATH` and a login to your deployment. Install the
 plugin *or* the skill copy above on Claude Code, not both. Updates reach you
-when you run `/plugin marketplace update cocoindex`, or on their own once you
-enable auto-update for the `cocoindex` marketplace under `/plugin` →
+when you run `/plugin marketplace update ccx`, or on their own once you
+enable auto-update for the `ccx` marketplace under `/plugin` →
 Marketplaces; the hook warns in the session when the plugin is older than
-your `ccx` expects. Details, including what the hook sends to your server:
+your `ccx` expects. Installed it as `ccx@cocoindex` before 2026-10-23? The
+marketplace was renamed; the same section says how to move it. Details,
+including what the hook sends to your server:
 [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation).
 
 ## About

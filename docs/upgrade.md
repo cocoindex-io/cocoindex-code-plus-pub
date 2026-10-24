@@ -34,6 +34,30 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`
+
+Nothing is required for the deployment. Read on if your rollout doc or
+your managed Claude Code settings install the `ccx` plugin.
+
+- **What changed.** The plugin marketplace in
+  `cocoindex-io/cocoindex-code-plus-pub` is named `ccx`. It was `cocoindex`,
+  which the CocoIndex library's own marketplace also uses, and Claude Code
+  refuses a second marketplace of the same name. The rename is live in the
+  repository from 2026-10-23, ahead of this release; the add command is
+  unchanged.
+- **What to change.** A rollout doc that says
+  `/plugin install ccx@cocoindex` fails at that step for a new user: change
+  it to `/plugin install ccx@ccx`. Managed settings that declare the
+  marketplace under `extraKnownMarketplaces` as `cocoindex`, or enable
+  `ccx@cocoindex` under `enabledPlugins`, change the key to `ccx` and the id
+  to `ccx@ccx`.
+- **Developers who installed `ccx@cocoindex`** keep receiving updates under
+  the old name. From this release on, the plugin's hook tells each of them
+  once a day, as a warning in the session, to move with three commands —
+  [cli.md → For agents & automation](cli.md#for-agents--automation), under
+  "Installed as `ccx@cocoindex`?".
+- **Verify.** In Claude Code, `/plugin` → **Installed** lists `ccx@ccx`.
+
 ## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.

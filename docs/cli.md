@@ -795,7 +795,7 @@ has been checked against the repositories in question.
 
      ```text
      /plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
-     /plugin install ccx@cocoindex
+     /plugin install ccx@ccx
      ```
 
      It needs the `ccx` CLI on `PATH` and a login to your deployment (the
@@ -809,10 +809,10 @@ has been checked against the repositories in question.
 
      **Updates.** The plugin's manifest pins no version, so Claude Code
      treats every change to this repository as a new plugin version — but
-     fetches it only when you ask (`/plugin marketplace update cocoindex`)
+     fetches it only when you ask (`/plugin marketplace update ccx`)
      or when auto-update is on for the marketplace, which it is not by
      default for a marketplace you added yourself. Turn it on once: `/plugin`
-     → **Marketplaces** → `cocoindex` → **Enable auto-update** (an admin can
+     → **Marketplaces** → `ccx` → **Enable auto-update** (an admin can
      set `"autoUpdate": true` on the marketplace's `extraKnownMarketplaces`
      entry in managed settings instead). Claude Code then refreshes the
      plugin shortly after a session's first message and offers
@@ -821,6 +821,31 @@ has been checked against the repositories in question.
      older than your CLI expects. If you moved to the plugin from a skills
      CLI install, remove that copy (`npx skills remove
      ccx-codebase-explorer -g`) so Claude Code lists the skill once.
+
+     **Installed as `ccx@cocoindex`?** Until 2026-10-23 the marketplace was
+     named `cocoindex`, which the CocoIndex library's own marketplace also
+     uses. Claude Code keeps the name a marketplace had when you added it,
+     so a copy installed then still updates, but under that name. Move it
+     once:
+
+     ```text
+     /plugin marketplace remove cocoindex
+     /plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
+     /plugin install ccx@ccx
+     ```
+
+     - **Why move.** The update command and the auto-update toggle above
+       name `ccx`, which do not reach the old copy, and Claude Code refuses
+       to add the library's marketplace while yours holds its name.
+     - **Why the remove comes first.** Adding the repository again while it
+       is registered as `cocoindex` changes nothing. The remove also
+       uninstalls `ccx@cocoindex`.
+     - **If `cocoindex` is the library's marketplace.** When `/plugin` →
+       **Marketplaces** shows `cocoindex` as `cocoindex-io/cocoindex-claude`,
+       run `/plugin uninstall ccx@cocoindex` in place of the remove, so the
+       library's skills stay installed.
+     - **The reminder.** From `ccx` 0.1.74 on, the hook tells you once a
+       day, as a warning in the session, until you move.
   4. **One line in the repo's agent instructions** (`AGENTS.md` /
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
