@@ -1725,6 +1725,6 @@ This change requires an engine with internal `cargotoml` extraction support.
 Upgrade the engine before the indexer. The indexer preflight names missing
 language support and refuses startup with an older engine.
 
-IR format 3 rebuilds derived symbol nodes. Rust extraction version 10 and
-resolver behavior version 29 also invalidate older derived references. Existing
+IR format 4 rebuilds derived symbol nodes. Rust extraction version 11 and
+resolver behavior version 30 also invalidate older derived references. Existing
 usage and change history remain intact. `Cargo.toml` keeps its TOML search chunks.
