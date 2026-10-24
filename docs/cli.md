@@ -1493,3 +1493,9 @@ Exact matches appear first.
 Use `ccx log -S TEXT` to find commits that change the number of occurrences
 anywhere in the repository. Add a path to narrow it. Use `ccx log SYMBOL`
 for changes to the definition's lines.
+
+
+When a bare-name `refs` query has no resolved use, its count and file summary
+also include unresolved candidates. Each summary labels them as unresolved.
+Use `--no-include-unresolved` to count only resolved uses. Test uses remain
+available with `--tests`.
