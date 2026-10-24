@@ -944,6 +944,22 @@ indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 
   Read in order, they tell the walk's backlog apart from the symbol step,
   and both from memory an earlier ref's step left behind.
 
+**Read the code-host requests from the log.** After `Pass finished`, the
+indexer prints what the pass cost at each code host, one line per instance:
+
+```
+Code-host requests this pass: github.com: 268 requests, 131 for one object, 884 objects (mean batch 3.3)
+```
+
+`requests` are the GraphQL and REST calls the indexer made for Git objects,
+`for one object` those that fetched a single object, and the mean batch is
+objects per request. The per-instance budget (`codeHosts.<instance>.rateLimit`,
+one token per request, 1 request/s by default) is what a first pass over many
+repositories is bound by, so a mean batch near 100 means the budget is spent
+well. `1 file in progress` in the memory line beside a small mean batch means
+the indexer is waiting on the code host, not on itself; raise the budget if
+the host's quota allows it.
+
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
 pass redoes little ([Interrupted passes](#interrupted-passes-and-cleanup)
