@@ -131,7 +131,9 @@ Queries & agents splits requests per day by operation and by client, agent
 queries into answered live and served from cache, wait time into spent and
 saved, and errors per day by code, and counts the follow-ups — questions
 that continued a stored answer; Indexing splits the work into what was
-embedded and what reuse skipped.
+embedded and what reuse skipped. A day where *reused* jumps while *embedded*
+stays flat is a re-walk — an upgrade or a setting change made the indexer
+visit every file again and found every chunk already embedded — not new code.
 
 **Repositories** gives each repository you can read its own row: queries,
 developers, agent queries, estimated model cost and what reuse saved,
@@ -362,6 +364,12 @@ settled:
   text, and whether it asked for it later, is not measured. The figure is
   kept in tokens beside the dollar savings, never added to them, and its
   one dollar form is labelled with the rate it used.
+- **Reused chunks can jump without new code.** *Chunks reused* counts the
+  chunks a pass visited and did not have to embed again. A re-walk (an
+  upgrade that changes a language pack, a changed file-size limit, the symbol
+  index toggled) visits every file, so that day's *reused* figure is the whole
+  index while *embedded* stays flat. The Indexing view's cycle durations show
+  the pass; the [upgrade guide](upgrade.md) says which releases cause one.
 - **Rates are labelled** as illustrative until you configure them.
 - **Cost means model cost.** Agent and embedding model calls at your rates;
   compute and storage are not priced, they are on your cloud bill.

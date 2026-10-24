@@ -133,6 +133,38 @@ Auth Proxy on an instance without Managed Connection Pooling.
   first indexer pass after the upgrade takes about as long as a normal pass,
   not as long as the initial one.
 
+## v0.1.74 — a re-walk reads files from the index, not from the code host
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if an upgrade or a setting change has ever cost you a first pass as
+long as the initial index.
+
+- **What changed.** The indexer keeps a copy of every indexed file's bytes,
+  and of every directory listing, beside the index (in its internal schema),
+  keyed by the file's content hash and kept exactly as long as some indexed
+  branch or tag holds the file. A pass that has to visit every file again — a
+  changed `max_file_size`, the symbol index turned on or off, an upgrade
+  that changes a language pack or which files are skipped
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes))
+  — now reads those files from the database instead of the code host, so
+  such a pass is bound by parsing, not by the code host's rate limit.
+  Nothing changes for an ordinary pass: a file the indexer has not seen is
+  read from the code host as before, and nothing is re-embedded in either
+  case.
+- **Expected after the upgrade.** The upgrade itself visits no file again.
+  The **first** pass after it that does re-walk — the next pack change,
+  limit change or symbol toggle — still reads every file from the code host,
+  as it would have before, and stores the copies; the re-walks after that one
+  read from the database.
+- **Storage.** About the size of the index's file contents again (the
+  `file_body` table), a few percent of the whole index, in the indexer's
+  internal schema. `ccx usage` and the Insights *Indexing* view count it in
+  the index footprint.
+- **Verify.** On a re-walk, the indexer's per-repository stats lines show
+  `_cached_blob: N total | N unchanged` and `_cached_tree: … unchanged`, and
+  `walk: <owner>/<repo> <ref> at <commit> finished in …s` lines report seconds,
+  not minutes, per branch.
+
 ## v0.1.73 — `ccx grep --text -U`: a match may span lines; `text_grep` matches carry `end_line`
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
