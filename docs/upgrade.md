@@ -34,11 +34,32 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler
+## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
-your managed Claude Code settings install the `ccx` plugin, or if the
-indexer reaches its internal state database through a connection pooler.
+your managed Claude Code settings install the `ccx` plugin, if the
+indexer reaches its internal state database through a connection pooler,
+or to know what the first indexing pass after this upgrade does.
+
+### The first pass after the upgrade re-reads every repository once
+
+- **What changed.** The indexer now remembers, per file, which language's
+  symbol extractor produced its entry. From this release on, an engine
+  release that changes one language's extractor re-reads only that
+  language's files and the directories holding them; every other file and
+  subtree is reused. The v0.1.73 pass that re-read every repository for a
+  Rust change was the last of its kind.
+- **Expected after the upgrade.** Recording that dependency changes the
+  indexer's memo identity for the tree walk once, so the first pass re-reads
+  every file of every repository from the code host and re-extracts
+  symbols. Nothing is re-embedded, no symbol is re-resolved, and queries keep
+  answering from the current index until each repository's pass completes.
+  Expect the pass to take about as long as the initial pass did, less
+  whatever the walk's read cache (also new in this release) already holds.
+- **Verify.** The indexer log of the first pass reports `File.accept: … N
+  reprocessed` for every repository and `declare_chunk_embedding: … unchanged`;
+  the next pass reports `Dir.accept: 1 unchanged` per repository and visits
+  no file.
 
 ### The plugin installs as `ccx@ccx`
 
