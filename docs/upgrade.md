@@ -4,6 +4,18 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
+## Compact show and text grep output
+
+Upgrade the CLI and query server together. Default show output now folds large
+bodies and outlines. Use `--full` for the expanded object, or `--lines A-B` for
+an exact source range. An ambiguous `show -s` renders one match and lists alternatives.
+Text grep defaults to 30 displayed matches, with at most 10 per file.
+Use explicit `-k N` to disable sampling. REST and MCP grep defaults remain unchanged.
+Refs now reports test-only unresolved mentions in both hidden counts.
+Enable `--tests --include-unresolved` to list them.
+Concrete reference targets precede same-named import aliases.
+No schema change or index rebuild is required.
+
 ## Hybrid change search lexical ties
 
 Hybrid retrieval now prefers newer creation times when lexical scores are equal.
