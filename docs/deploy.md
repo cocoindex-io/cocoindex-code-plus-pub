@@ -910,7 +910,7 @@ unaffected ([Symbol index](#symbol-index)).
 while it has work in progress and every ten minutes while idle:
 
 ```
-indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 files waiting their turn, symbol steps: 1 running
+indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 files waiting their turn, symbol steps: 1 running; code-host requests so far: github.com: 212 requests, 31 for one object, 884 objects (mean batch 4.2)
 ```
 
 - **`used` and `peak`.** `used` is the container's memory charge, the
@@ -920,6 +920,12 @@ indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 
   read ahead, each holding its contents; `files in progress` are the ones
   parsed and waiting on their embeddings; `symbol steps` and
   `symbol writes` are the symbol index's work.
+- **`code-host requests so far`.** What the running pass has cost at each
+  code host, in the same words as the pass's own line (described next). It
+  appears once the
+  pass has made a request and does not change how often the line is
+  logged. Read it when a pass is still running, or when a long pass outlived
+  the container's log rotation and its `Pass finished` lines are gone.
 - **Other lines end with the same figure.** Each ref's walk, the first time
   the indexer walks the ref after it starts and again whenever the ref's
   content changes; the symbol step's lines
@@ -959,7 +965,10 @@ one token per request, 1 request/s by default) is what a first pass over many
 repositories is bound by, so a mean batch near 100 means the budget is spent
 well. `1 file in progress` in the memory line beside a small mean batch means
 the indexer is waiting on the code host, not on itself; raise the budget if
-the host's quota allows it.
+the host's quota allows it. While a pass runs, the memory line carries the
+same figures so far (`code-host requests so far: …`), so a pass that is still
+running, or one whose end the log rotation has dropped, is read from those
+minute lines.
 
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
