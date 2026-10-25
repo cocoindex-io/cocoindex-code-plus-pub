@@ -268,20 +268,26 @@ Upgrade the CLI and server together. There is no new setting, no schema
 migration and no index rebuild.
 
 - **A type brings its impl blocks.** `ccx show -s Type` prints the type,
-  then each `impl` block of the same name in that file. An impl block of up
-  to 40 lines shows whole; a longer one shows its first 24 rows (the method
-  signatures) and a fold cue. Rendering from the index adds one request for
+  then each `impl` block of the same name in that file. An inherent impl
+  block of up to 40 lines shows whole; a longer one shows its first 24 rows
+  (the method signatures) and a fold cue. A trait impl prints as one line,
+  `impl Trait for Type  L76-L80`. Rendering from the index adds one request for
   a type.
 - **A line target reads on.** When the object around `PATH:LINE` ends
   within 20 lines after the line, the response also has a `file` object
   with the source that follows. That object holds the items that start
-  within 40 lines of the line, whole, up to 60 lines past the line. It goes past the
+  within 40 lines of the line. A short last item comes whole up to 60 lines
+  past the line; a long one stops 40 lines past it. It goes past the
   closing brace of the enclosing scope. In Markdown, the following sibling
-  sections come with the section while the total stays within 200 lines.
+  sections come with the section while the total stays within 200 lines,
+  cut 150 lines past the asked line.
 - **Design docs come whole.** A Markdown section asked for by line or name
   shows whole up to 400 lines and 48 KB (it was cut at 16 KB). A Markdown
-  file shows whole up to 200 lines and 16 KB (it was cut at 6 KB or 150
-  lines). Longer ones are cut by section as before.
+  file shows up to 150 lines and 9 KB (it was cut at 6 KB), whole or by
+  section.
+- **File outlines print one fold cue.** A file outline no longer prints a
+  `~ ... N lines folded` marker for each gap the budget left between rows;
+  the line numbers show the gaps, and one cue at the end counts them.
 - **Faster outlines and `-s` lookups in long files.** In Rust and Python
   files of 1,000 lines or more, a file outline or a `-s NAME` lookup renders
   from a copy of the file with function bodies blank. The functions that
