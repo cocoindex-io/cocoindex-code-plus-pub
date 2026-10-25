@@ -348,6 +348,7 @@ ccx defs Repo.find                                # a member with its qualifier:
 ccx defs python:db.Repo.find                      # exact qualified name (the ':' selects the mode)
 ccx defs lookup:withDefault:                      # an Objective-C method: its full selector
 ccx defs Config --kind class --lang python        # filter by kind / language / --path
+ccx defs work_facts_until --no-body               # one definition: rows only, no body under the row
 ccx refs QueryService                             # where is it USED? (by name, broad)
 ccx refs Repo.find                                # uses of every definition matching the dotted name
 ccx refs python:db.Repo.find                      # every use of this exact qualified name
@@ -493,7 +494,10 @@ src/db.py:42:4 [method] python:db.Repo.find
   lang=python  uses: ccx refs src/db.py Repo.find
 ```
 
-— and running that `uses: …` command returns exactly that definition's uses
+When the name resolves to **one definition**, its body follows the row, as
+`ccx show -s NAME` prints it (working tree first, within the same show budget),
+so you need no second read; `--no-body` leaves it out. Several definitions print
+rows only. Running a row's `uses: …` command returns exactly that definition's uses
 (it carries any `--repo`/`--git-ref`/`--server` flags you passed, so it
 re-queries the same scope). Four precisions of `ccx refs`, broad to exact: a
 bare `ccx refs NAME` casts a wide net by unqualified name; a **dotted name**
@@ -639,6 +643,10 @@ chunks; when more than one of them matches, the best is the result and the
 others are one line under it, `+ 2 more chunks of this definition: L356-L368,
 L369-L382` (`more_chunks` in `--json`). `-k` and `--offset` count definitions,
 and regions outside any definition, not chunks.
+
+A page with **one code result** (for example `-k 1`) also prints the whole
+definition around the hit, as `ccx show PATH:LINE` does, before the `---`.
+`--no-body` leaves it out.
 
 ### `ccx show` — a file's outline, or one definition's body
 
@@ -1131,7 +1139,7 @@ has been checked against the repositories in question.
      commit's position relative to `HEAD`, and which local files still need
      grep); at
      a grep that found nothing or far too much; at a direct source-file read
-     with `sed -n`, `head`, `cat`, or windowed `Read` (naming `ccx show`); and when a session or
+     with `sed -n`, `awk`, `tail`, `head`, `cat`, or windowed `Read` (naming `ccx show FILE:LINE`); and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
@@ -1509,10 +1517,14 @@ time and the coverage footer's cycle age. The normal refresh target is five
 minutes; failures and backlogs can delay it. State reflects indexed reads.
 
 
-The Claude Code plugin also recognizes direct source reads with `sed -n`,
-`head`, `cat`, and windowed native `Read` calls. Inside an indexed checkout,
-it suggests `ccx show PATH:LINE` or the file outline once per agent.
-It ignores logs, JSON, heredocs, writes, producer pipes, and outside files.
+The Claude Code plugin also recognizes direct source reads with `sed -n A,Bp`,
+`awk 'NR>=A && NR<=B'`, `tail -n +A`, `head`, `cat`, and windowed native
+`Read` calls, also inside a chain such as `cd DIR && sed -n A,Bp FILE; echo ---`.
+Inside an indexed checkout, it names the replacement once per agent:
+`ccx show FILE:LINE` at the middle of the range, which prints the whole
+definition enclosing that line (better still, the line a `ccx` row printed),
+or the file outline for a read from the top. It ignores logs, JSON, heredocs, writes,
+readers fed by a pipe, and outside files.
 
 
 ### Local fallback for unavailable indexed files

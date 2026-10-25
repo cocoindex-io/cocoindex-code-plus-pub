@@ -285,6 +285,28 @@ Agent answers now use observed citation spans. Unsupported coordinates become
 The answer-cache logic epoch advances; older answers are recomputed. Stored
 usage history remains intact. No operator migration is required.
 
+### One definition prints its body; the read hint names `ccx show FILE:LINE`
+
+Upgrade the CLI; no server or database change, no re-index. Update the Claude
+Code plugin to get the new hook patterns.
+
+- **`ccx defs NAME`.** A name that resolves to one definition prints that
+  definition's body under its row, as `ccx show -s NAME` does, within the same
+  show budget. Several definitions print rows only. `--no-body` restores the
+  rows-only output; scripts that parse `ccx defs` text add it, or use the
+  REST/MCP `find_definitions` response, which is unchanged.
+- **`ccx search`.** A page with one code result (for example `-k 1`) prints
+  the definition around the hit before `---`. `--no-body` leaves it out;
+  `--json` is unchanged.
+- **The plugin's read hint.** It now also fires on `awk` NR ranges, `tail -n
+  +A`, and range reads inside a chain (`cd DIR && sed -n A,Bp FILE; echo
+  ---`), and its line names the replacement: `ccx show FILE:LINE` at the
+  middle of the range, which prints the whole definition enclosing that line.
+  It still fires once per agent.
+
+Verify: in an indexed checkout, `ccx defs <function-name>` (a name with one definition) ends with
+the function's numbered lines under a `path  kind name  L<a>-L<b>` header.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or

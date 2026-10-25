@@ -61,6 +61,18 @@
             "if": "Bash(cat *)",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(awk *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "if": "Bash(tail *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
+            "timeout": 20
           }
         ]
       },
