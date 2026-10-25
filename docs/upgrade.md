@@ -417,6 +417,26 @@ Upgrade the CLI and server together; no database change and no re-index.
 Verify: `ccx ask "<question>"` prints the `**First answer**` block within a
 few seconds, then `collect: ccx ask --collect <id>` on stderr.
 
+### `ccx status --wait-ready` no longer waits on the change feed
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **Readiness.** A repository with the change index on is ready when its code
+  refs are. Before, its `changes` row never counted as indexed, so the summary
+  read `5 of 6 ready; 1 first pass` and `--wait-ready` waited until its
+  timeout. A queued, running or failed change cycle never makes a repository
+  not ready or failed.
+- **The `changes` line** now also shows a cycle that has not committed yet
+  (`changes: first cycle queued` or `running`) and a failed one
+  (`changes: last cycle failed: <error>; retries next cycle; code search is
+  unaffected`).
+- **JSON.** The `changes` entry in `refs` reports `first_pass: false` once a
+  change cycle has committed. `summary` counts code refs only.
+- **Server connections.** The query server's Postgres sessions are named
+  `ccx-query-server` in `pg_stat_activity`. Postgres ends one that stays idle
+  inside a transaction for 180 s (`idle_in_transaction_session_timeout`); the
+  server opens a new connection. Nothing to configure.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or

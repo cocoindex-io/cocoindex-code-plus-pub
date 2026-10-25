@@ -77,6 +77,8 @@ only when it differs. An older CLI shows the upgrade command.
 The index-status request tests the resolved credential; only `/health` is anonymous.
 Each observation resolves the credential once, including any login refresh.
 `--wait-ready --timeout S` bounds refresh and listing requests by the remaining time.
+Ready means every code ref is indexed. The change index has its own `changes` line
+(first cycle, last failure, freshness); it never makes `--wait-ready` wait or fail.
 
 A rejected credential shows `auth rejected`, its source, and the fix.
 For `token (CCX_API_TOKEN) rejected`, check the token or run `ccx login`.
