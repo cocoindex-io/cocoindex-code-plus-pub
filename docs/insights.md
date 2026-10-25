@@ -109,11 +109,19 @@ footprint), and **Queries & agents** (operations, latency, agent reuse,
 `ccx show`, errors).
 
 **The Overview has no single headline number.** It is three groups of equal
-tiles. *Usage*: active developers, queries, agent queries, answer-cache hit
-rate. *Savings*: three figures in three units, never added together — model
-cost saved by reuse, agent time saved, and potential tokens saved by `ccx
-show` — each with a caption that says what it counts. *Cost and health*:
-estimated model cost, error rate, index footprint.
+tiles. *Usage*: active developers, queries, agent queries, agent cost served
+from cache. *Savings*: three figures in three units, never added together —
+model cost saved by reuse, agent time saved, and potential tokens saved by
+`ccx show` — each with a caption that says what it counts. *Cost and
+health*: estimated model cost, error rate, index footprint.
+
+**Agent cost served from cache** is the share of the agent model cost with
+no cache that reuse saved: saved ÷ (spent + saved), at your rate sheet. It
+counts every kind of reuse — whole answers, subquery answers and replayed
+turns — weighted by what that work would have cost. Its caption gives the
+whole-answer hit rate: the agent queries answered entirely from the cache. A
+query that ran live but replayed most of its turns is a miss there and still
+counts toward the share.
 
 **Potential tokens saved** is the text `ccx show` folded out of its output
 — the bodies an outline left out of a file, in estimated tokens. An agent can
