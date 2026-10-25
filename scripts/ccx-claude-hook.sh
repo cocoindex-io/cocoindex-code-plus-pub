@@ -1,6 +1,6 @@
 #!/bin/sh
 # The ccx plugin's one hook. Claude Code runs it at an agent's repository
-# searches, direct source reads (sed, head, cat, Read), and session or
+# searches, direct source reads (sed, awk, head, tail, cat, Read), and session or
 # subagent starts. It reads the hook event on stdin and prints at
 # most one line of context, as JSON, when the checkout is indexed in ccx.
 #
@@ -45,7 +45,7 @@ case "$event" in
     command_text=$(field command)
     case "$command_text" in
       gh\ *|git\ log\ *) kind=change ;;
-      sed\ *|head\ *|cat\ *) kind=read ;;
+      sed\ *|head\ *|cat\ *|awk\ *|tail\ *) kind=read ;;
     esac
     # A shell expression may earn a different kind from its first command.
     # Do not let a guessed grep marker hide a later host-history search.
