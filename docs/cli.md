@@ -450,8 +450,11 @@ working tree instead of the index:
   lists them.
 - `ccx show -s NAME` renders a definition only your working tree has.
   `ccx show PATH:NAME` runs as `ccx show -s NAME PATH`. A repo-relative path
-  given from a subdirectory reads from the checkout's top. A path that is
-  nowhere gets a list of similar files.
+  given from a subdirectory reads from the checkout's top. A path that
+  neither your working tree, `HEAD` nor the indexed commit holds sends no
+  request: the CLI shows the one file the path plainly names (the only file
+  of that name, or the one much closer to the path than any other), with a
+  note, or lists similar files.
 
 An answer whose differing files all came from your working tree prints no
 drift line. The overlay reads at most 500 files or 32 MiB in the command's
@@ -594,6 +597,24 @@ question (the case-insensitive scan costs several times more). The index
 lookup itself is bounded: when every literal is common it gives up after a
 fraction of the request's time and the scan takes over, and the warning says
 so.
+
+**What the CLI reads as you meant it.** Agents' common slips run instead of
+failing:
+
+- `ccx grep --text 'foo('`: a pattern that is not a valid regex is searched
+  as its literal text, with a `warning:` line naming the escaped regex
+  (`foo\(`).
+- `ccx grep --text PATTERN docs/a.md src/*.rs`: paths after the pattern, as
+  in `rg`, are more `--path` globs. So is an unquoted `--path src/*.rs` that
+  your shell expanded.
+- `ccx search QUERY --limit 15` and `-n 15` are `-k 15`.
+- `ccx show -s NAME --path GLOB` restricts the lookup as `ccx defs --path`
+  does; a directory means every file under it.
+- `ccx changes search QUERY` runs `ccx search --kind change QUERY`.
+- `ccx refs NAME --role calls` reads as `--role call`. An unknown role
+  (`--role construct`) prints the roles and an example call:
+  `call` covers calls and constructions, `field_access` a field read or
+  written, `type_use` where a type is named.
 
 **Text grep keeps small pages complete.** `ccx grep --text` prints every hit
 when the server page has at most 60 matches. Larger pages print at most
@@ -1490,11 +1511,16 @@ The CLI sends its working-tree text. The indexed file size limit does not apply.
 ## When an index cannot answer
 
 An empty result is useful only when the index covers the requested files.
-`defs`, `refs`, and symbol `show` name up to three relevant skipped or failed
-files, with reasons and a local grep fallback. They print this note for
-empty results or nearby file paths, rather than on every successful lookup.
-Older index rows can report an unavailable skip reason. This does not mean
-that the file fails to parse.
+`defs`, `refs`, and symbol `show` name up to three relevant source files
+whose symbol extraction failed, with reasons and a local grep fallback. They
+print this note for empty results or nearby file paths, rather than on every
+successful lookup. Binary files, Git LFS pointers, excluded paths and files
+over the size limit hold no symbols, so they never make a lookup partial.
+
+`ccx search` keeps its code results when the server's deadline is near: it
+drops the change section and the `touched by` lines, and prints one
+`warning: … skipped: the server's deadline was near.` line on stderr for each.
+`ccx search --kind change` asks for the change section alone.
 
 An exact `grep --text --path <file>`, file-scoped `show -s`, or `read-file`
 request reports a known skipped file as `<file> is not indexed (<reason>); grep it locally`.
