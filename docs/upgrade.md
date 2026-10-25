@@ -85,6 +85,36 @@ show` prints no drift line for a working-tree render.
   it with `[working tree]`.
 - **Optional.** `--git-ref <branch>` still reads the index alone.
 
+### Fewer errors from agent mistakes and timeouts
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **Invalid text-grep regex.** `text_grep` searches a pattern that is not a
+  valid regex (`foo(`) as its literal text and says so in `warnings`. It
+  used to answer `400`. A client that relied on the `400` reads the
+  warning instead.
+- **Search near the deadline.** `semantic_search` gains `warnings`. When
+  the request deadline is near, the server drops the change section and the
+  `touched by` annotations and keeps the code results, instead of answering
+  `503`. An explicit change-only search still answers `503`.
+- **Deadline log.** Each deadline `503` logs one WARNING: the route, the
+  stages in flight, and whether the timer fired late. A late timer means
+  the server process stalled (CPU, memory or I/O pressure on its host).
+- **Coverage note.** `ccx defs`, `refs` and `show -s` say "partial … grep
+  locally" only for files whose symbol extraction failed. Binary, LFS,
+  excluded and over-size files no longer trigger it.
+- **CLI input.** `ccx search` takes `--limit` and `-n` for `-k`; `ccx grep`
+  takes paths after the pattern, as `rg` does; `ccx show -s NAME` takes
+  `--path`; `ccx changes search Q` runs `ccx search --kind change Q`. An
+  unknown `ccx refs --role` prints the roles and an example call. A commit
+  passed as `--git-ref` gets an error that names a ref to pass.
+- **Missing paths.** `ccx show PATH` for a path that neither your working
+  tree, `HEAD` nor the indexed commit holds sends no request. It shows the
+  one file that path plainly names, with a note, or lists similar files.
+- **Verify.** `ccx grep --text 'foo('` prints its matches and one
+  `warning:` line; `ccx defs NoSuchName` in a repository with binary files
+  prints no coverage note.
+
 ### Index files up to 4 MiB
 
 The default indexed file size increases from 1 MiB to 4 MiB.
