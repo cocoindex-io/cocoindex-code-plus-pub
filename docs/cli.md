@@ -434,6 +434,29 @@ line from index]` when no working-tree line was found; a `search` header says
 before. `ccx show --git-ref main PATH:LINE` renders the indexed text at the
 index's line numbers. Commands given `--repo` or `--git-ref` print neither.
 
+**Answers from your working tree.** For the files that differ from the
+indexed commit (changed, deleted or untracked), the CLI answers from your
+working tree instead of the index:
+
+- `ccx grep --text` scans those files locally and lists their hits first,
+  marked `[working tree]`, in place of the index's hits in them.
+- `ccx defs` and `ccx refs` keep a row in such a file only where its name
+  still is, and say how many rows they left out. `ccx defs` also lists the
+  definitions only your working tree has, marked `[working tree]`, with a
+  `ccx show PATH:LINE` command. `ccx refs` cannot resolve new uses without
+  the index; it counts them and names the `ccx grep --text -w NAME` that
+  lists them.
+- `ccx show -s NAME` renders a definition only your working tree has.
+  `ccx show PATH:NAME` runs as `ccx show -s NAME PATH`. A repo-relative path
+  given from a subdirectory reads from the checkout's top. A path that is
+  nowhere gets a list of similar files.
+
+An answer whose differing files all came from your working tree prints no
+drift line. The overlay reads at most 500 files or 32 MiB in the command's
+scope; above that, or for a `grep --text` pattern Python's regex dialect
+cannot read, or with `-l` / `--lang`, the index's answer stands with its
+marks and a note says why.
+
 Rust navigation puts the type definition before its impl fragments.
 `ccx defs` collapses impl fragments into one `[impl]` summary with complete
 counts. A page-limit note says when more definitions exist.

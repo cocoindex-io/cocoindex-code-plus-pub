@@ -67,6 +67,24 @@ the working tree's line number.
 `changed` and `untracked` path lists it used to carry. It also adds `head` and
 `head_line`. Scripts that read the lists add `--files`.
 
+### Answers from the working tree for files that differ
+
+Upgrade the CLI; no server or database change, no re-index. For the files
+that differ from the indexed commit, the CLI now answers from your working
+tree: `ccx grep --text` replaces the index's hits in them with local hits
+(`[working tree]`), `ccx defs` / `ccx refs` leave out rows whose name left
+the file, and `ccx defs` adds definitions only the working tree has. `ccx
+show` prints no drift line for a working-tree render.
+
+- **Output changes in place.** A `grep --text` line or a `defs` row can end
+  with `[working tree]`; a script that parses rows should accept the mark.
+  Local `grep --text` hits print before the index's.
+- **Bound.** The overlay reads at most 500 files or 32 MiB per command; a
+  stderr note says when it stood aside.
+- **Verify.** In a checkout with a new function, `ccx defs <name>` lists
+  it with `[working tree]`.
+- **Optional.** `--git-ref <branch>` still reads the index alone.
+
 ### Index files up to 4 MiB
 
 The default indexed file size increases from 1 MiB to 4 MiB.
