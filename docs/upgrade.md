@@ -324,6 +324,9 @@ setting, no schema migration and no index rebuild.
   prints the same layer path as `-s`.
 - **A fix.** `show PATH:LINE` on the last section of a Markdown file no
   longer fails with a server error.
+- **A fix.** A line inside a type that follows a multi-line `type X = dyn
+  Fn(…)` alias could print the type with its first lines missing. It now
+  prints them.
 
 ### Hybrid change search lexical ties
 
