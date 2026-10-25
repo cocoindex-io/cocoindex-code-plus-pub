@@ -708,6 +708,35 @@ The server reads the `code_terms` and `file_body` tables grep already uses.
   → `sealing/`) greps the folder's files and says so on stderr, instead of
   `No matches.` and exit 1.
 
+### A loaded host no longer stalls the server in a log write
+
+Upgrade the server; no database change, no re-index, no new setting.
+
+- **Logging never blocks a request.** Log records go on a queue that one
+  thread writes to stdout and stderr. When the log collector falls behind
+  (a full journald or container-runtime pipe on a loaded host), the server
+  keeps serving; past 20,000 waiting records it drops new ones and then
+  logs `N log records dropped: the log stream took no writes`. Before,
+  every thread that logged waited for the pipe: at load 250 the event loop
+  stalled for tens of seconds and two searches answered their deadline
+  `503` 13 s and 33 s late.
+- **Event-loop stall WARNING.** A stall of 2 s or more logs one line from
+  `cocoindex_code_plus.query_server.loop_watch`: its seconds on CPU, waiting
+  for a CPU and blocked, the major page faults (swap), the loop thread's
+  scheduler states and stack, and the other threads that were running.
+- **The deadline `503` goes out at the deadline.** It no longer waits for
+  the cancelled work to unwind (a statement's cancel, the rollback); that
+  finishes detached and logs `cancelled request work unwound Ns after its
+  503`. The deadline WARNING now measures how late the timer fired, not
+  the unwind.
+- **No search holds a transaction idle.** A search that reads code and the
+  change section on two connections commits each one when its part is
+  done; before, the first one done sat idle in transaction until the other
+  finished (37 s and 45 s seen under load).
+- **Verify.** Under load, `pg_stat_activity` shows no `ccx-query-server`
+  backend `idle in transaction` for more than a second or two, and no
+  request in the audit log has `duration_ms` above the deadline plus 1 s.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
