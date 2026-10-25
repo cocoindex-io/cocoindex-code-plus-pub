@@ -583,6 +583,41 @@ The CLI reads the diffs from the clone it runs in, with `git`.
   its own under the other candidates, its `score` multiplied by 0.7,
   unless the query names a merge or a topic word of the merged branch. Clients that sort by `score` see it lower.
 
+### Search finds code by the query's distinctive words; grep pages put a file's tests last
+
+Upgrade the CLI and server together; no database change and no re-index.
+The server reads the `code_terms` and `file_body` tables grep already uses.
+
+- **Lexical candidates.** While the query embeds, the server looks up the
+  identifiers and string literals that hold two or more of the query's
+  words (`pending_prompts_are_kept_until_answered_and_replayed_on_connect`
+  for "pending … replayed"), in at most 8 files, and each run of three or
+  more words between the query's punctuation as written
+  (`Not fetched from the bucket`). The chunks that hold them join the
+  vector candidates with their own similarity, so code the vector index
+  never reached can rank. Rare words count more than common ones. On the
+  replayed searches, a known target reached the top 5 in 12 of 18 queries
+  (10 before).
+- **A hit that names the query's distinctive words ranks higher**, by up to
+  0.04 similarity, and a test or doc that does is no longer ranked under
+  code. The score shown stays the similarity.
+- **Vendored code ranks under first-party code.** A hit under `vendor/`,
+  `third_party/`, `node_modules/` … ranks 0.06 lower unless the query names
+  it (`vendor`, or a word of the package's folder such as `gpui`) or a
+  `--path` filter chose the files.
+- **Latency.** The lookup runs while the query embeds (150–300 ms on a
+  repo of 600k identifiers); each statement stops at 1 s, and the search
+  then answers from the vector candidates alone.
+- **`ccx grep --text` pages put a file's test modules last.** The server
+  now returns `test_regions` with a text grep page: for each Rust file on
+  the page, the line ranges of its `#[cfg(test)] mod … { }` modules. A
+  sampled page takes every production hit of a file before its first test
+  hit, also when the checkout lacks the file. An older CLI ignores the
+  field.
+- **`grep --text --path FILE` on a file that became a folder** (`sealing.rs`
+  → `sealing/`) greps the folder's files and says so on stderr, instead of
+  `No matches.` and exit 1.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or

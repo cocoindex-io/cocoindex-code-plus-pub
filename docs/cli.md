@@ -693,7 +693,12 @@ rank 0.06 lower in similarity; design mocks (HTML, CSS, files under
 lower. A kind the query names keeps its place (`doc`, `design`, `spec`;
 `mock`, `html`; `test` or `--tests`; `jsonl`, `fixture`, `snapshot`, a file
 name such as `package.json` …), and a `--path` / `--lang` filter turns the
-demotion off.
+demotion off. Vendored code (`vendor/`, `third_party/`, `node_modules/` …)
+ranks 0.06 lower unless the query names it or a `--path` filter is set.
+Code whose identifiers or strings hold several of the query's words, or
+that holds a phrase of the query as written, joins the candidates even when
+the vector index misses it, and ranks up to 0.04 higher; a test or doc that
+does keeps its place.
 `--no-tests` excludes test candidates; `--tests` includes them.
 The server reads up to 20,000 candidates to fill a filtered page.
 Returned scores remain raw cosine similarities.
