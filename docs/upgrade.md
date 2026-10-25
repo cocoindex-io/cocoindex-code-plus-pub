@@ -243,6 +243,25 @@ Enable `--tests --include-unresolved` to list them.
 Concrete reference targets precede same-named import aliases.
 No schema change or index rebuild is required.
 
+### Faster show in long files; folds keep the asked place
+
+Upgrade the query server. The CLI needs no change.
+
+- **Speed.** A `show` of a line or a line range in a file of 1,000 lines or
+  more renders only the definition around it. On a 30,000-line file, this
+  takes about 0.1 to 0.3 s instead of about 1.8 s. The output is the same.
+  When the server cannot find the definition's block, it renders the whole
+  file, as before.
+- **Folds keep the asked place.** The 12 lines on each side of a requested
+  line are never folded. The lines near it come before the rest of a long
+  body. Comment lines fold before code lines.
+- **Markdown is cut by section.** `ccx show` of a Markdown file or section
+  shows the text as written. Over the budget, it shows whole sections. It
+  names each cut section by its heading and line, so you can read it next
+  with `PATH:LINE`.
+
+There is no new setting, no schema migration and no index rebuild.
+
 ### Hybrid change search lexical ties
 
 Hybrid retrieval now prefers newer creation times when lexical scores are equal.
