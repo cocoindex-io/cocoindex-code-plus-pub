@@ -262,11 +262,80 @@ A refused credential leaves the existing change index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
 GitLab change ingest does not ship in this slice.
 
-## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler
+## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
-your managed Claude Code settings install the `ccx` plugin, or if the
-indexer reaches its internal state database through a connection pooler.
+your managed Claude Code settings install the `ccx` plugin, if the
+indexer reaches its internal state database through a connection pooler,
+or to know what the first indexing pass after this upgrade does; the walk's
+read cache and the per-language resolver version, also below, need nothing
+from you.
+
+### The first pass after the upgrade re-reads every repository once
+
+- **What changed.** The indexer now remembers, per file, which language's
+  symbol extractor produced its entry. From this release on, an engine
+  release that changes one language's extractor re-reads only that
+  language's files and the directories holding them; every other file and
+  subtree is reused. The v0.1.73 pass that re-read every repository for a
+  Rust change was the last of its kind.
+- **Expected after the upgrade.** Recording that dependency changes the
+  indexer's memo identity for the tree walk once, so the first pass re-reads
+  every file of every repository from the code host and re-extracts
+  symbols. Nothing is re-embedded, no symbol is re-resolved, and queries keep
+  answering from the current index until each repository's pass completes.
+  Expect the pass to take about as long as the initial pass did, less
+  whatever the walk's read cache (also new in this release) already holds.
+- **Verify.** The indexer log of the first pass reports `File.accept: … N
+  reprocessed` for every repository and `declare_chunk_embedding: … unchanged`;
+  the next pass reports `Dir.accept: 1 unchanged` per repository and visits
+  no file.
+
+### A re-walk reads files from the index, not from the code host
+
+Nothing to do. Read on if an upgrade or a setting change has ever cost you a
+first pass as long as the initial index.
+
+- **What changed.** The indexer keeps a copy of every indexed file's bytes,
+  and of every directory listing, beside the index (in its internal schema),
+  keyed by the file's content hash and kept exactly as long as some indexed
+  branch or tag holds the file. A pass that has to visit every file again — a
+  changed `max_file_size`, the symbol index turned on or off, an upgrade
+  that changes a language pack or which files are skipped
+  ([What a settings change redoes](deploy.md#what-a-settings-change-redoes))
+  — now reads those files from the database instead of the code host, so
+  such a pass is bound by parsing, not by the code host's rate limit.
+  Nothing changes for an ordinary pass: a file the indexer has not seen is
+  read from the code host as before, and nothing is re-embedded in either
+  case.
+- **Expected after the upgrade.** The copies are made as files are read, so
+  the first pass after this upgrade — which re-reads every repository for the
+  reason above — still reads every file from the code host, as before, and
+  stores the copies. Every re-walk after it, whatever its cause, reads from
+  the database.
+- **Storage.** About the size of the index's file contents again (the
+  `file_body` table), a few percent of the whole index, in the indexer's
+  internal schema. `ccx usage` and the Insights *Indexing* view count it in
+  the index footprint.
+- **Verify.** On a re-walk, the indexer's per-repository stats lines show
+  `_cached_blob: N total | N unchanged` and `_cached_tree: … unchanged`, and
+  `walk: <owner>/<repo> <ref> at <commit> finished in …s` lines report seconds,
+  not minutes, per branch.
+
+### A resolver change confined to one language re-resolves that language only
+
+Nothing to do.
+
+- **What changed.** The symbol resolver's version is kept per language. From
+  now on an engine release that changes resolution for one language makes
+  the first pass re-resolve that language's files only; refs without such
+  files read their symbol tree and reuse everything. Upgrade notes say which
+  languages a pass re-resolves. A change for every language still
+  re-resolves every module, as before.
+- **Expected after the upgrade.** Each ref's symbol step reads its tree once
+  and reuses every module (the indexer logs `reused all N modules`). Nothing
+  is re-resolved, nothing is re-read from the code host and nothing is
+  re-embedded.
 
 ### The plugin installs as `ccx@ccx`
 
@@ -378,13 +447,16 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
 - **Verify.** `ccx grep --text -U '\)\s*\{' -l c++ -k 3` on a repository in
   the brace-on-its-own-line style prints two-line matches; the same command
   without `-U` prints only same-line braces.
-- **Expected after the upgrade.** Every ref's symbol step resolves every
+- **Expected after the upgrade.** Two one-time costs on the first pass.
+  Every repository is walked again — every file re-read from the code host,
+  nothing re-embedded — because Rust symbol extraction changed (`#[path =
+  "x.rs"] mod foo;` now names the file the attribute gives); on a large
+  installation that walk is hours. And every ref's symbol step resolves every
   module again, because the resolver's behavior changed for Rust: an
   `impl Foo` written apart from `struct Foo` now reaches `Foo`'s members, and
-  `#[path = "x.rs"] mod foo;` names the file the attribute gives. That step
-  takes about as long as it did on the initial pass; nothing is re-read from
-  the code host and nothing is re-embedded. `ccx defs` / `ccx refs` on Rust
-  code answer from the old resolution until the pass ends.
+  `super::` inside a `#[path]` file climbs to the declaring module. That step
+  takes about as long as it did on the initial pass. `ccx defs` / `ccx refs`
+  on Rust code answer from the old resolution until the pass ends.
 - **Rust fixes in the engine.** A structural `ccx grep` pattern like
   `SessionView { \* }` matches struct expressions and patterns, and no longer
   matches an impl or struct declaration or a function's return type. In
