@@ -486,7 +486,22 @@ Use those flags to list the hidden rows. `--no-tests` and
 A broad name with no resolved use lists its mentions. When more rows exist,
 stdout ends with `… N more references past 100; --offset 100 for the next page.`
 A `-k` above the page maximum (500) pages at the maximum.
-`--count` prints totals, and `--by-file` prints counts per file.
+`--count` prints totals, and `--by-file` prints counts per file: every file
+with a use, name-only mentions (such as trait-method calls) and test files
+included, unless `--no-include-unresolved` / `--no-tests` drops them.
+
+When a name's uses resolve to several definitions (a field of the same name
+on different types), `ccx refs NAME` first prints one line per definition,
+with its use count and the command that lists its uses alone:
+
+```
+5 definitions share this name; their uses are listed together below. One definition's uses:
+  6  ccx refs crates/reduce-model/src/state.rs AppState.archived_at
+  4  ccx refs crates/reduce-store/src/catalog.rs Session.archived_at  (3 in tests)  [uncommitted changes]
+```
+
+A definition whose file, or a use of it on the page, has uncommitted changes
+in your checkout comes first and is marked; then most uses first.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
 and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
@@ -620,15 +635,24 @@ failing:
 
 **Text grep keeps small pages complete.** `ccx grep --text` prints every hit
 when the server page has at most 60 matches. Larger pages print at most
-30 matches, with at most 10 per file when several files match. A single
-matching file shows up to 100 matches. It samples a bounded 100-match
-server page and reports how many matches it omits. Add `-k 100` to print that
+40 matches, with at most 10 per file when several files match:
+
+- the first hit of each top-level alternation branch (`a|b|c`);
+- then one hit per file in turns, so every file gets a line;
+- source files first, then test files (a test path, or a line in a Rust
+  file's `#[cfg(test)]` module when your checkout has the file);
+- `… N more in PATH` after a file that holds hits back, and one
+  `… K files not listed: PATH (N), …` line for files with none printed.
+
+A single matching file shows up to 100 matches. It samples a bounded
+100-match server page and reports how many matches it omits. Add `-k 100` to print that
 complete page; explicit `-k N` disables the per-file cap. Keep the same cursor
 when recovering a page. The next cursor continues after the server page.
 
 **Grep pages by cursor, in a shuffled scan order.** Both grep modes scan files
-in a fixed shuffled order (by a hash of the path), so a page is a sample of
-the ref rather than its alphabetically-first subtree. When a scan stops short
+in a fixed shuffled order (source files first, then test files, each by a
+hash of the path), so a page is a sample of the ref rather than its
+alphabetically-first subtree. When a scan stops short
 of the ref's end, the CLI prints one stderr line with the cursor to continue:
 
 ```text
@@ -656,6 +680,9 @@ call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
 Semantic search preserves similarity order, including tests and documents.
+Data files (logs, JSONL records, fixtures, snapshots) rank under code, unless
+`--path` / `--lang` is set or the query asks for data (`jsonl`, `fixture`,
+`snapshot`, a file name such as `package.json` …).
 `--no-tests` excludes test candidates; `--tests` includes them.
 The server reads up to 20,000 candidates to fill a filtered page.
 Returned scores remain raw cosine similarities.
@@ -1614,7 +1641,8 @@ ccx show -s build --match 'places|cwd|checkout'
 Rust outlines retain method names inside impl blocks. Long name lists can
 exceed the usual output budget.
 
-Code searches preserve similarity order across source, documents, and HTML mocks.
+Code searches preserve similarity order across source, documents, and HTML mocks;
+only data files rank lower.
 Use `--lang markdown` to search documents.
 Change searches for code fragments and quoted text also search indexed diffs.
 Exact matches appear first.
