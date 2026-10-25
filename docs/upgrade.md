@@ -489,6 +489,31 @@ Upgrade the CLI and server together; no database change and no re-index.
   files, the server reads the page again with an exact scan, at most 3 s;
   that query then takes about 0.5 s longer.
 
+### History shows what the commits changed
+
+Upgrade the CLI and server together; no database change and no re-index.
+The CLI reads the diffs from the clone it runs in, with `git`.
+
+- **`ccx log SYMBOL`** prints each commit's first changed lines within the
+  symbol (four a commit, 40 in all; `--patch` still prints every diff), a
+  constant's current line under the header, and then the commits after the
+  symbol's newest change that changed its file elsewhere or added or
+  removed its name (`Since <sha>: …`, at most five).
+- **`ccx log -S TEXT` / `-G REGEX`** prints the changed lines that hold the
+  text under each commit, then `Now in HEAD: N lines` with up to six
+  `path:line:text` rows: where the text stands now.
+- **`ccx show '#N'`** for a pull request of the checkout's repository adds
+  its diff from the clone: the commit that landed it, each file's `+X/-Y`
+  and first changed lines (8 a file, 60 in all), and `git show <sha> --
+  PATH` for the rest. A number below the change index's floor no longer
+  only fails: the CLI says it is below the floor, prints the commit that
+  landed it (subject, date, author, message) with its diff, and exits 0.
+  Exit 1 remains for a number no commit of the clone names.
+- **Change search** ranks a record titled as a sync merge (`Merge main`,
+  `Merge remote-tracking branch 'origin/main' into fix/…`) with no text of
+  its own under the other candidates, its `score` multiplied by 0.7,
+  unless the query names a merge. Clients that sort by `score` see it lower.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
