@@ -681,6 +681,27 @@ The server reads the `code_terms` and `file_body` tables grep already uses.
   → `sealing/`) greps the folder's files and says so on stderr, instead of
   `No matches.` and exit 1.
 
+### Search: docs and tests yield to code that matches as well; vendored code under first-party tests
+
+Upgrade the server; the CLI needs no change. No setting, no schema
+migration, no re-index.
+
+- **A test or doc keeps its rank only over weaker code.** A test or doc
+  hit that names the query's distinctive words still gives up nothing,
+  unless a first-party code hit within its penalty (0.06 similarity) under
+  it, or above it, names them at least as strongly. A design doc that
+  repeats the query's words no longer pushes the code that says the same
+  words off the first page.
+- **Vendored code ranks under first-party tests too.** A hit under
+  `vendor/`, `third_party/`, `node_modules/` … now gives up a test's
+  penalty plus 0.08 (was 0.06), unless the query names it or a `--path`
+  filter chose the files.
+- **Function words no longer weigh a query.** `another`, `whether`,
+  `these`, `those`, `you`, `your`, `our`, `been`, `being`, `such`, `very`,
+  `just`, `whose`, `about` and `again` are dropped from the lexical lookup
+  and from the lines a merged hit reveals. As rare words they counted most
+  ("move a session to another machine" weighed `another` over `machine`).
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
