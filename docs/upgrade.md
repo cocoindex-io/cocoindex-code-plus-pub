@@ -296,6 +296,38 @@ migration and no index rebuild.
   copy would show a line it blanked (a function inside a string literal),
   the server renders the whole file, as before.
 
+### show keeps its last renderings; lines and ranges in long files are faster
+
+Upgrade the query server. The CLI needs no change. There is no new
+setting, no schema migration and no index rebuild.
+
+- **Memory.** The server keeps its last `show` renderings in memory, up to
+  32 MiB of rendered text, keyed by a digest of the file's text and the
+  request. A repeated `show` of an unchanged file answers without
+  rendering. Plan for about 32 MiB more resident memory per server
+  process.
+- **Threads.** A file outline of a long Rust or Python file renders its
+  folded form on a second pool, `show-depth` (at most 8 threads), beside
+  the full one.
+- **Speed.** In files of 1,000 lines or more:
+  - a line that opens a long impl or type, or no definition at all, renders
+    from the file with its function bodies blank;
+  - `--lines A-B` across several items does the same, keeping whole the
+    functions the range overlaps;
+  - a Markdown `--lines` range reads only the sections around it.
+
+  On a 33,000-line file these take 0.2 to 0.4 s instead of 1.5 to 3 s.
+  The output is the same.
+- **A fix.** In a Rust file with several impl blocks of one type, a line in
+  a method that other impls also define (`event`, `from`) could print the
+  method without its number (`Ptr#20.event` for `Ptr#20.event#18`). It now
+  prints the same layer path as `-s`.
+- **A fix.** `show PATH:LINE` on the last section of a Markdown file no
+  longer fails with a server error.
+- **A fix.** A line inside a type that follows a multi-line `type X = dyn
+  Fn(…)` alias could print the type with its first lines missing. It now
+  prints them.
+
 ### Hybrid change search lexical ties
 
 Hybrid retrieval now prefers newer creation times when lexical scores are equal.
