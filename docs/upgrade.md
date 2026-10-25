@@ -489,6 +489,41 @@ Upgrade the CLI and server together; no database change and no re-index.
   files, the server reads the page again with an exact scan, at most 3 s;
   that query then takes about 0.5 s longer.
 
+### Search puts the implementation first; grep pages list every file
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **Search ranks docs, mocks and tests under code.** A Markdown doc or a
+  test ranks 0.06 lower in similarity than implementation code, and a
+  design mock (HTML, CSS or a file under `mocks/`) 0.1 lower, like data
+  files. A kind the query names keeps its place: `doc`, `design`, `spec`,
+  `readme` for docs; `mock`, `html`, `css` for mocks; `test` for tests (or
+  `--tests`). A `--path` or `--lang` filter turns the demotion off. The
+  score shown stays the raw similarity, so a demoted hit can print a higher
+  score than the code above it.
+- **A merged result keeps the lines that match.** When other chunks of the
+  definition hold lines with the query's words that the best chunk folds
+  (`TracedList { ... }`), those lines are spliced into the result, at most
+  40 new lines, each with two lines around it. `more_chunks` lists only the
+  chunks not shown whole.
+- **A demoted page reads further, in fewer reads.** Each candidate read
+  doubles, up to 1,000 candidates; the exact rescan of a page trapped in
+  data rows reads them in one statement. A query whose first 300 candidates
+  were soak-log rows answered in 1.9 s instead of about 15 s.
+- **`ccx grep --text` prints a complete page whole.** A page of at most
+  100 hits with no `--cursor` after it is no longer sampled. A sampled page
+  (one with a cursor, or of more than 100 hits) lists every file before a
+  source file gets a second line, and in each file takes definition lines
+  (`fn spawned(`, `struct SpawnedKept`) first, then hits spread over the
+  file rather than its first ones.
+- **`grep --text --path FILE` reads up to 500 hits** of the one named file
+  and prints 100 spread over the whole file, ending with
+  `… N more matches in this page …; --lines A-B lists a range of the file.`
+- **`grep --path` on a path the index does not have** says so after
+  `No matches.`, with the indexed files it may mean
+  (`…/sealing.rs is not in the index (heads/main); similar files:
+  …/sealing/mod.rs, …`), or `--path 'DIR/**'` for a folder, and exits 1.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or

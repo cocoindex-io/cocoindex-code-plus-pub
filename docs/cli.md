@@ -633,19 +633,27 @@ failing:
   `call` covers calls and constructions, `field_access` a field read or
   written, `type_use` where a type is named.
 
-**Text grep keeps small pages complete.** `ccx grep --text` prints every hit
-when the server page has at most 60 matches. Larger pages print at most
+**Text grep keeps complete pages whole.** `ccx grep --text` prints every hit
+when the server page has at most 60 matches, or at most 100 with nothing
+past it (no `--cursor` line). A larger or unfinished page prints at most
 40 matches, with at most 10 per file when several files match:
 
 - the first hit of each top-level alternation branch (`a|b|c`);
-- then one hit per file in turns, so every file gets a line;
+- then one hit of every file, so every file gets a line, then the files
+  in turns;
+- in each file, lines that define something (`fn spawned(`) first, then
+  hits spread over the file;
 - source files first, then test files (a test path, or a line in a Rust
   file's `#[cfg(test)]` module when your checkout has the file);
 - `… N more in PATH` after a file that holds hits back, and one
   `… K files not listed: PATH (N), …` line for files with none printed.
 
-A single matching file shows up to 100 matches. It samples a bounded
-100-match server page and reports how many matches it omits. Add `-k 100` to print that
+`--path FILE` naming one file reads up to 500 of its matches and prints up
+to 100, spread over the file; `--lines A-B` lists a range. A `--path` the
+index does not have prints `No matches.` and, on stderr, the indexed files
+it may mean (or `--path 'DIR/**'` for a folder), and exits 1. Otherwise the
+CLI samples a bounded 100-match server page and reports how many matches
+it omits. Add `-k 100` to print that
 complete page; explicit `-k N` disables the per-file cap. Keep the same cursor
 when recovering a page. The next cursor continues after the server page.
 
@@ -679,10 +687,13 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended.
 
-Semantic search preserves similarity order, including tests and documents.
-Data files (logs, JSONL records, fixtures, snapshots) rank under code, unless
-`--path` / `--lang` is set or the query asks for data (`jsonl`, `fixture`,
-`snapshot`, a file name such as `package.json` …).
+Semantic search ranks implementation code first. Docs (Markdown) and tests
+rank 0.06 lower in similarity; design mocks (HTML, CSS, files under
+`mocks/`) and data files (logs, JSONL records, fixtures, snapshots) 0.1
+lower. A kind the query names keeps its place (`doc`, `design`, `spec`;
+`mock`, `html`; `test` or `--tests`; `jsonl`, `fixture`, `snapshot`, a file
+name such as `package.json` …), and a `--path` / `--lang` filter turns the
+demotion off.
 `--no-tests` excludes test candidates; `--tests` includes them.
 The server reads up to 20,000 candidates to fill a filtered page.
 Returned scores remain raw cosine similarities.
@@ -692,7 +703,9 @@ or `--kind change` to search indexed PRs and issues.
 One result is one definition. The index splits a long function into several
 chunks; when more than one of them matches, the best is the result and the
 others are one line under it, `+ 2 more chunks of this definition: L356-L368,
-L369-L382` (`more_chunks` in `--json`). `-k` and `--offset` count definitions,
+L369-L382` (`more_chunks` in `--json`). Lines of those chunks that hold the
+query's words are spliced into the result (at most 40), so a body the best
+chunk folds still shows them. `-k` and `--offset` count definitions,
 and regions outside any definition, not chunks.
 
 A page with **one code result** (for example `-k 1`) also prints the whole
@@ -1641,9 +1654,9 @@ ccx show -s build --match 'places|cwd|checkout'
 Rust outlines retain method names inside impl blocks. Long name lists can
 exceed the usual output budget.
 
-Code searches preserve similarity order across source, documents, and HTML mocks;
-only data files rank lower.
-Use `--lang markdown` to search documents.
+Code searches rank implementation over documents, tests and HTML mocks unless
+the query names them. Use `--lang markdown` (or say `doc` / `design`) to
+search documents.
 Change searches for code fragments and quoted text also search indexed diffs.
 Exact matches appear first.
 

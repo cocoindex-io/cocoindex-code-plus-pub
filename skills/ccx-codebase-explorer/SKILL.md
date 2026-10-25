@@ -213,7 +213,8 @@ ccx search "error handling retry logic"
   more). An empty or off-target page is a signal to rephrase the concept, or to
   widen a subtree-narrowed `--path` — not to page further. One result is one
   definition: `+ N more chunks of this definition: L356-L368` names its other
-  matching chunks, for `ccx show PATH:LINE`.
+  matching chunks, for `ccx show PATH:LINE`. Docs, tests and mocks rank under
+  code unless your words name them (`doc`, `design`, `test`, `mock`).
 - **A hit shows that code *talks about* your question, not that it *runs*.**
   Search ranks by resemblance to your words, so a doc, a default, a test, or an
   older or fallback implementation can outrank the code that actually does the
