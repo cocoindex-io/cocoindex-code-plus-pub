@@ -41,7 +41,7 @@ value, and never ask for a token to be pasted into the conversation.
 | a connection error from a sandbox that blocks outbound network | `ccx` must reach the server (and the IdP, on a cached login) | ask the user to allow network for the sandbox |
 | `agent_query_unavailable` (from `ccx ask`) | the deployment hasn't enabled agentic query (off by default: answering sends code to a model provider) — or, from `ccx ask --parent`, its answer cache is off or unreachable (the message names the cache) | answer with `search`/`grep`/`defs`/`refs`; tell the user their platform team decides; don't retry this session (on `--parent`: ask the question afresh, or retry shortly when the message says so) |
 | `scope_changed` (from `ccx ask`) | the ref the question was bound to is no longer indexed — deleted, or dropped from the index; a ref that merely moved never produces this | run `ccx git-refs <repo>` and ask again against a listed ref |
-| `agent_query_busy`, or `HTTP 503` `Request deadline exceeded` (from `ccx ask`) | the server is at its concurrent agentic-query cap, or the investigation outran the server's deadline | fall back to the other commands for this question; at most one later retry, never a loop |
+| `agent_query_busy`, or `HTTP 503` `deadline_exceeded` / `Request deadline exceeded` (from `ccx ask`) | the server's agentic-query queue is full, or the investigation outran the server's deadline | fall back to the other commands for this question; at most one later retry, never a loop |
 
 The **indexer is server-side**: no CLI command builds or refreshes an index.
 "Stale" or "missing ref" is resolved on the server; `ccx git-refs` shows which

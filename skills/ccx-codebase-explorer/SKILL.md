@@ -519,21 +519,21 @@ needs the breadth.
 What it costs: `ask` runs seconds to minutes, where `search`, `grep`, `defs`
 and `refs` answer in a second or two — so when the deliverable is a **location
 or code to read** (which file to change, where a symbol lives, its call
-sites), stay with those. Run one `ask` at a time (the server caps concurrent
-agentic requests).
+sites), stay with those. Run one `ask` at a time (past the server's cap,
+a question waits in its queue).
 
-**Where to run it.** `ask` is the one command that takes minutes, so decide
-where it runs before you start it. Start it in the background when you have
-work the answer does not gate and your harness wakes you when it finishes
-(Claude Code: `run_in_background: true` on the Bash call); keep working or end
-your turn, then read the answer from the completion notice. Otherwise run it
-in the foreground and wait. In a subagent or a one-shot run, where ending your
-turn ends your run, always the foreground, with the longest timeout your
-runner allows: a background command dies with the run. Never wrap it in a
-shell `timeout` or stop it: the server enforces its own deadline (ten minutes
-by default, twenty at `--effort high`) and cancels the investigation the
-moment the client disconnects, keeping nothing, so a stopped `ask` starts
-over.
+**Where to run it.** `ask` prints a **first answer** in seconds — the
+locations search and symbol lookup find, each with a short excerpt, labeled
+and unverified — then the investigation's answer after minutes. The
+investigation runs on the server: stopping the command, or a timeout that
+kills it, loses nothing, and the `collect: ccx ask --collect <id>` line on
+stderr prints the answer later. When your harness wakes you on completion
+(Claude Code: `run_in_background: true` on the Bash call), start it in the
+background, read the first answer's locations while it runs, and take the
+full answer from the notice. In a subagent or a one-shot run, where a
+background command dies with the run, run `ccx ask --first "<question>"` in
+the foreground, work from its locations, and run its `collect:` command in the
+foreground when you need the full answer. Don't wrap it in a shell `timeout`.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and
@@ -553,10 +553,12 @@ over.
   their platform team decides, and don't try again this session — unless it
   answered a `--parent` and names the answer cache: then ask the question
   afresh without `--parent`, or retry shortly when it says so.
-  `agent_query_busy` (concurrency cap) and an `HTTP 503` `Request deadline
-  exceeded` (the investigation outran the server's deadline): fall back to the
-  other commands for this question — at most one later retry, narrower or at
-  `--effort high` for the longer deadline, never a loop.
+  A question past the server's concurrency cap waits in its queue (stderr
+  says `queued, place N, about S s`); `agent_query_busy` means the queue is
+  full, and `deadline_exceeded` that the investigation outran the server's
+  deadline: fall back to the other commands for this question — at most one
+  later retry, narrower or at `--effort high` for the longer deadline, never a
+  loop. `investigation_not_found` from `--collect`: ask the question again.
 
 ## Reading files: what `ccx show` prints
 

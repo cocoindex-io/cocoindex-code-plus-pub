@@ -1282,7 +1282,8 @@ at once, never queued.
 agentQuery:
   maxConcurrentRequests: 4               # the default: queries one pod runs at once
   maxConcurrentRequestsPerPrincipal: 2   # the default: how many of those one caller may hold
-  busyRetryAfterSeconds: 10              # the default: the wait a refusal states
+  maxQueuedRequests: 16                  # the default: queries one pod holds waiting for a slot
+  busyRetryAfterSeconds: 10              # the default: the smallest wait a refusal states
 ```
 
 - **A caller is one signed-in user or one API-key record.** Its cap stops
@@ -1291,14 +1292,25 @@ agentQuery:
 - **Both caps are per pod.** The ingress does not spread one caller's
   requests evenly across pods, so plan on a caller reaching its cap on a
   single pod, however many pods run.
-- **A refusal is `HTTP 503` with code `agent_query_busy`** and a
-  `Retry-After` header of `busyRetryAfterSeconds`. The MCP tool error
-  carries the same wait as `retry_after_seconds`, and `ccx ask` prints it.
+- **A query past a cap waits in the pod's queue.** It starts when a slot
+  frees, first in, first out; a waiter held by its own caller's cap does not
+  hold up another caller. `ccx ask` gets its first answer at once and prints
+  its place and estimated wait (the median of the pod's recent runs).
+- **Only a full queue refuses**: `HTTP 503` with code `agent_query_busy` and
+  a `Retry-After` of the estimated wait, at least `busyRetryAfterSeconds`.
+  The MCP tool error carries the same wait as `retry_after_seconds`, and
+  `ccx ask` prints it. A query that waits its effort level's whole deadline
+  in the queue is refused the same way.
 - **The rate limit is a separate limit.** `rateLimit.agentQuery` (default 6
   per minute, burst 2, per pod) bounds how often a caller starts queries;
-  these caps bound how many run at once. Only an admitted query counts
-  against the rate limit: a busy refusal does not, and a query the rate
-  limit refuses (`HTTP 429`) takes no slot.
+  these caps bound how many run at once. A query counts against the rate
+  limit when it is admitted or joins the queue: a full-queue refusal does
+  not, and a query the rate limit refuses (`HTTP 429`) takes no slot.
+- **A started investigation is the pod's.** `ccx ask` starts the question
+  and the investigation runs on without the connection, kept
+  `investigationRetentionSeconds` (default 900) after it ends for
+  `ccx ask --collect`; `firstAnswerSeconds` (default 8) bounds the first
+  answer's lookups. A pod restart cancels its running investigations.
 
 ##### One API key that runs many queries at once
 

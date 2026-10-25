@@ -852,6 +852,8 @@ ccx ask "what are the main components?" --effort high
 ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored answer
 ccx ask "what are the main components?" --trace   # show the investigation as a tree
 ccx ask "what are the main components?" --json    # exact response model
+ccx ask --first "where is the retry policy?"      # the first answer only
+ccx ask --collect 3f9c0a1b7d2e4f60                # the full answer, later
 ```
 
 Citations use spans supplied by indexed chunks, definitions, matches, or file
@@ -870,15 +872,29 @@ answer is Markdown on stdout.
 
 Things to expect:
 
-- **It is slower.** The agent runs many reads before answering — seconds to a
-  couple of minutes for a broad question, up to the effort level's deadline
-  (10 min by default, 20 min at `--effort high`). Reach for `ccx search`/`grep`
-  when you know what you're looking for, and `ccx ask` when you don't. Let it
-  finish: stopping the command, or a harness timeout that kills it, cancels
-  the investigation on the server and keeps nothing of it, so the next ask
-  starts over. A coding agent should start it in the background where its
-  harness can wake it on completion; the [skill](#for-agents--automation)
-  carries the rule, and the Claude Code plugin states it to each agent.
+- **A first answer comes in seconds.** Before the investigation's answer,
+  `ccx ask` prints a **first answer**: the definitions of the names your
+  question spells, the files it names, and the best search hits, each with a
+  citation and a few lines of the code. It is found by search and symbol
+  lookup with no model call, and it says so: nothing in it is verified. Then
+  `--- full answer ---` and the investigation's answer follow.
+- **The full answer is slower.** The agent runs many reads before answering —
+  seconds to a couple of minutes for a broad question, up to the effort
+  level's deadline (10 min by default, 20 min at `--effort high`). Reach for
+  `ccx search`/`grep` when you know what you're looking for, and `ccx ask`
+  when you don't.
+- **Stopping loses nothing.** The investigation runs on the server, not in
+  the command: stop `ccx ask` (or let a harness timeout kill it) and the
+  `collect: ccx ask --collect <id>` line it printed on stderr fetches the
+  answer later, for 15 minutes after it finishes. `--first` prints the first
+  answer and that line and exits. On a deployment with several server pods a
+  collect can reach another pod and answer `investigation_not_found`: ask the
+  question again; with the answer cache on, a finished investigation's answer
+  comes back at once.
+- **A busy server queues the question.** Past the server's concurrency caps
+  the first answer still comes at once, and stderr says
+  `full answer: queued, place N, about S s to a slot`. Only a full queue
+  refuses, with `agent_query_busy` and its wait.
 - **It may be turned off.** It is off unless your deployment enables it,
   because answering requires sending your question and the code the agent
   reads to a model provider. When it's off the command exits non-zero with

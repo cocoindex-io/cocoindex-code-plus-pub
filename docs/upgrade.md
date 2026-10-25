@@ -307,6 +307,37 @@ Code plugin to get the new hook patterns.
 Verify: in an indexed checkout, `ccx defs <function-name>` (a name with one definition) ends with
 the function's numbered lines under a `path  kind name  L<a>-L<b>` header.
 
+### `ccx ask`: a first answer in seconds, a queue instead of `agent_query_busy`
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **`ccx ask` prints a first answer first.** Within seconds, before the
+  investigation's answer: the definitions, files and search hits for the
+  question, cited and labeled unverified. The full answer follows after a
+  `--- full answer ---` line. Scripts that read `ccx ask` stdout take the
+  text after that line, or use `--json`, which still prints only the full
+  response.
+- **Stopping `ccx ask` no longer cancels the investigation.** It runs on the
+  server; `ccx ask --collect <id>` (printed on stderr as `collect: …`)
+  prints the answer, for 15 minutes after it finishes, from the same server
+  pod. `ccx ask --first` prints the first answer and exits.
+- **Busy means queued.** A question past the concurrency caps waits in the
+  pod's queue (`maxQueuedRequests`, default 16) instead of failing
+  `agent_query_busy`; only a full queue refuses, and its `Retry-After` is the
+  estimated wait, at least `busyRetryAfterSeconds`. The synchronous
+  `POST /code/v0/query` and the MCP tool `ask_codebase` wait in the same
+  queue.
+- **New REST routes**: `POST /code/v0/query/start` and
+  `GET /code/v0/query/investigations/{id}`; a collect of an unknown id
+  answers `404` `investigation_not_found`. New chart values:
+  `agentQuery.maxQueuedRequests`, `agentQuery.firstAnswerSeconds`,
+  `agentQuery.investigationRetentionSeconds` (all optional).
+- **Usage analytics** records a started question as `agent_query_start` and
+  its investigation as the usual `agent_query` event when it ends.
+
+Verify: `ccx ask "<question>"` prints the `**First answer**` block within a
+few seconds, then `collect: ccx ask --collect <id>` on stderr.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
