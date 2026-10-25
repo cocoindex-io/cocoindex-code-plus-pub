@@ -109,11 +109,12 @@ footprint), and **Queries & agents** (operations, latency, agent reuse,
 `ccx show`, errors).
 
 **The Overview has no single headline number.** It is three groups of equal
-tiles. *Usage*: active developers, queries, agent queries, agent cost served
-from cache. *Savings*: three figures in three units, never added together —
-model cost saved by reuse, agent time saved, and potential tokens saved by
-`ccx show` — each with a caption that says what it counts. *Cost and
-health*: estimated model cost, error rate, index footprint.
+tiles. *Usage*: active developers, queries, agent queries. *Savings*: four
+figures in their own units, never added together — model cost saved by
+reuse, agent cost served from cache (the agent part of that saving as a
+share), agent time saved, and potential tokens saved by `ccx show` — each
+with a caption that says what it counts. *Cost and health*: estimated model
+cost, error rate, index footprint.
 
 **Agent cost served from cache** is the share of the agent model cost with
 no cache that reuse saved: saved ÷ (spent + saved), at your rate sheet. It
@@ -350,6 +351,9 @@ settled:
 - **Partial days** are named. Today is always partial.
 - **Comparisons are suppressed** until there is a comparable prior period, so
   a new deployment shows no misleading "+900%".
+- **A share changes in points.** A percentage — agent cost served from cache,
+  the error rate — compares in percentage points from where it was, such as
+  "▼ 9 pts from 19%", not as a relative change of a percentage.
 - **Unknown is not zero.** Token totals exclude queries whose provider
   returned no count, and say how many. Time-saved excludes cache hits with no
   stored duration, and says how many. Under the Repositories table, the note
