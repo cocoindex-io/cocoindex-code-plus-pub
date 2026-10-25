@@ -1448,6 +1448,13 @@ change section after the code results. Use `ccx search --kind code` for code
 only, `--kind change` for change records, or `--kind all` for both. `--json`
 keeps the server's change section and freshness data.
 
+A `--kind change` query can carry GitHub search syntax. `in:title`, `OR` and
+other qualifiers are dropped. `is:open`, `is:merged` and `state:closed` act as
+`--state`. `(#2811)` looks up `#2811`. A title prefix that a GitHub App files
+again and again, such as `Main is red`, returns the open, newest instance
+first. Identifiers such as `group_sort_key` also find the pull requests whose
+diff contains them.
+
 Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
 before repeating work from a brief. The command splits bullets, numbered
 lines, and paragraphs into items. It searches once per item, up to 20 items.
