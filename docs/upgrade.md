@@ -563,21 +563,52 @@ Upgrade the CLI and server together; no database change and no re-index.
 Upgrade the CLI and server together; no database change and no re-index.
 The CLI reads the diffs from the clone it runs in, with `git`.
 
-- **`ccx log SYMBOL`** prints each commit's first changed lines within the
-  symbol (four a commit, 40 in all; `--patch` still prints every diff), a
-  constant's current line under the header, and then the commits after the
-  symbol's newest change that changed its file elsewhere or added or
-  removed its name (`Since <sha>: …`, at most five).
+- **`ccx log SYMBOL`** prints the newest commit's first changed lines within
+  the symbol (four; fewer when more commits match), one line for each older
+  commit and as many as the newest for the one that brought the symbol in (24 in all;
+  `--patch` still prints every diff), a constant's current line under the
+  header, and then the commits after the symbol's newest change
+  (`Since <sha>: …`, at most five), most direct first: those that add or
+  remove its name in source (two lines each), then changes within 40
+  lines of it (`next to it`), then uses in tests only (every use of a test
+  helper counts as one), then at most two changes elsewhere in its file
+  (`in the file`, no lines). Sync merges are left out. More commits are
+  read than listed, so a call added six commits back still makes the
+  list.
+- **`ccx log`** leaves the author off each commit line when one author
+  wrote at least half of the commits listed, and names that author once on
+  stderr (`A commit line without an author is X's.`). A script that reads
+  the author column should take a line without one as that author's, or
+  ask git (`git log -1 --format=%an SHA`).
 - **`ccx log -S TEXT` / `-G REGEX`** prints the changed lines that hold the
-  text under each commit, then `Now in HEAD: N lines` with up to six
-  `path:line:text` rows: where the text stands now.
+  text under each commit (three for up to three commits, two for up to
+  six, one past that), then `Now in HEAD: N lines` with up to six
+  `path:line:text` rows: where the text stands now. The walk is split into
+  chunks of 100 commits searched side by side (up to 16 `git` processes, a
+  third of the cores), with `git grep` alongside; the commits and their
+  order are `git log -S`'s. On reduce's 3,500-commit history the median
+  lookup went from 8.6 s to 1.4 s (110 of 110 the same top 10 as git);
+  expect up to a third of the cores busy for that time.
 - **`ccx show '#N'`** for a pull request of the checkout's repository adds
-  its diff from the clone: the commit that landed it, each file's `+X/-Y`
-  and first changed lines (8 a file, 60 in all), and `git show <sha> --
-  PATH` for the rest. A number below the change index's floor no longer
-  only fails: the CLI says it is below the floor, prints the commit that
-  landed it (subject, date, author, message) with its diff, and exits 0.
+  its diff from the clone: the commit that landed it, each file's `+X/-Y`,
+  the changed lines of source files (12 a file, 22 in all; hunk headers as
+  `@@ +LINE context`), tests and docs by their counts only, and `git show
+  <sha> -- PATH` for the rest. The record above it is shorter: its times
+  on one line, the body without the title it repeats and cut at 600
+  characters, no `touched paths` line when the diff lists the files, and
+  the touched symbols as `symbols (N): ` with the first four (source before
+  tests, outer names first) in place of one `symbol:` line each. A number
+  below the change index's floor no longer only fails: the CLI says it is
+  below the floor, prints the commit that landed it (subject, date,
+  author, the first 8 lines of its message) with its diff, and exits 0.
   Exit 1 remains for a number no commit of the clone names.
+- **`ccx search --kind change`** hits drop the title their text repeats,
+  name three touched paths (and count the rest), and cut the text at 300
+  characters; a `weak · not found` hit below the top one names one path
+  and 120 characters (the top hit is shown whole: it is often the answer).
+  A sentence of 40 characters or more that a hit above already printed (a
+  bot's boilerplate) is left out, with `(the rest as above)`. Scripts that
+  read the hit lines see shorter text; `ccx show '#N'` prints the record.
 - **Change search** ranks a record titled as a sync merge (`Merge main`,
   `Merge remote-tracking branch 'origin/main' into fix/…`) with no text of
   its own under the other candidates, its `score` multiplied by 0.7,
