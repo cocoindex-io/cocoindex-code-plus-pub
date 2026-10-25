@@ -4,124 +4,6 @@ How to move a deployment from one release to the next. This page is the
 place to check before every upgrade: releases that need anything beyond the
 upgrade command have an entry below, newest first.
 
-## Complete small lookup results
-
-Upgrade the CLI and server together. Requested definitions now retain nested
-code up to 400 lines or 16 KiB. File outlines keep their compact budget.
-Text grep keeps pages with at most 60 hits complete. Small reference results
-include tests and unresolved mentions. Use `--no-tests` or
-`--no-include-unresolved` to exclude those rows explicitly.
-
-Default CLI search now requests code and preserves similarity order.
-Exact record numbers and URLs retain record lookup.
-Use `--kind all` to request the change section. File outlines omit change
-annotations; selected definitions show only recent symbol-level changes.
-No schema migration or index rebuild is required.
-
-## Compact show and text grep output
-
-Upgrade the CLI and query server together. Default show output now folds large
-bodies and outlines. Use `--full` for the expanded object, or `--lines A-B` for
-an exact source range. An ambiguous `show -s` renders one match and lists alternatives.
-Text grep defaults to 30 displayed matches, with at most 10 per file.
-Use explicit `-k N` to disable sampling. REST and MCP grep defaults remain unchanged.
-Refs now reports test-only unresolved mentions in both hidden counts.
-Enable `--tests --include-unresolved` to list them.
-Concrete reference targets precede same-named import aliases.
-No schema change or index rebuild is required.
-
-## Hybrid change search lexical ties
-
-Hybrid retrieval now prefers newer creation times when lexical scores are equal.
-Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
-order. Vector retrieval and automatic reranking keep their current defaults.
-No schema migration or index rebuild is required.
-
-## Local fallback after an indexed file miss
-
-Upgrade the CLI and query server together. `ccx show PATH` now uses the
-current checkout's file after an indexed file miss, including an explicit
-ref request. It applies only to this checkout's repository. The header
-identifies local text and names the failed read's commit and reason.
-Read that header before treating output as the requested indexed ref.
-No schema change or index rebuild is required.
-
-## Indexed record lookup and filtered change lists
-
-Upgrade the CLI, query server, and indexer together. A search query containing
-only `#N` now selects that indexed record. Use `--kind code` to search code
-for a number instead. `ccx show '#N'` and PR/issue URLs read the change index.
-
-Change search adds `--state`, `--since`, and `--sort`. An empty query requires
-`--kind change` and a filter. State/date conditions apply before ranking and
-pagination. Date order uses title/body text matching when a query is present.
-
-`ChangeFreshness.states_as_of` reports the earlier completed issue/PR listing
-check. The indexer stores these times in existing cycle statistics. Until a
-new cycle completes both listings, the CLI uses the earlier content watermark.
-No schema migration, rebuild, or manual database step is required.
-
-## Change search relevance comes from the server
-
-Upgrade the CLI and server together. Change search now returns `relevance`
-and `ranking` per hit. Clients must display the server assessment instead
-of comparing `score` with `change_freshness.near`. The vector score keeps
-its previous meaning. Automatic retrieval uses hybrid by default and vector
-candidates when optional reranking is enabled. Reranking is off by default.
-No database migration or index rebuild is required.
-
-## Change-hit host state
-
-Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer
-adds nullable columns at startup without rebuilding stored content or vectors.
-Start the new indexer before the new query server. Existing records show unknown
-state until the automatic upgrade pass reads them. Each read refreshes state,
-including unchanged text.
-The CLI shows stored state and prints a command for live checks when its
-observation predates the last sweep, or when state or sweep coverage is unknown.
-
-Status shows one change-index line per repository. `ccx log Type.method` uses
-the same name resolution as `ccx defs Type.method`.
-
-## Change-index touched sets
-
-The indexer now fills changed-file rows, symbol touches, and diff hunks.
-Search hits and change references read these rows. Indexed `ccx show` output
-also shows touched-by annotations. A touch identifies a proposal; it does not
-prove that the proposal merged.
-
-Startup adds the state columns first, then the nullable `change_meta.touch_key`
-column. Both steps are additive and run in one schema transaction. Existing content
-and usage history remain intact. The automatic upgrade pass fills old records
-without embedding their unchanged text again. No manual database step is required.
-Mirror-backed repositories read local git diffs. App-backed repositories use
-GraphQL file and blob reads within the existing quota reserve.
-
-## Existing change records upgrade automatically
-
-Stored records with missing state are stale. Pull requests with a missing
-touched-set key are stale too. The indexer reads them oldest-updated first,
-after new and updated records, within `maxRecordsPerCycle` and the GraphQL
-reserve. It batches these reads like backfill. Host timestamps and listing
-cursors do not prevent this upgrade pass.
-
-`ccx status` shows `upgrading N records to schema 3` until the remaining count
-reaches zero. The count remains visible when the GraphQL reserve stops a cycle.
-The indexer retains embeddings for unchanged text and reads mirror-backed
-touched sets from local git. The pass runs automatically on normal refreshes.
-
-## Test-aware search and grounded answer citations
-
-Search now prefers implementation code unless the query asks about tests.
-Use `ccx search --tests` to keep similarity order with tests included, or
-`--no-tests` to exclude test candidates. REST and MCP expose nullable `tests`.
-Scores remain raw cosine similarities; default ordering can differ from them.
-
-Agent answers now use observed citation spans. Unsupported coordinates become
-`line range unverified`. The CLI marks citations for changed local files.
-The answer-cache logic epoch advances; older answers are recomputed. Stored
-usage history remains intact. No operator migration is required.
-
 ## The normal upgrade
 
 Every release ships as a new chart version with matching images. The upgrade
@@ -152,7 +34,12 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## Next release — one search result per definition, imports folded
+## Next release — answers an agent can act on: change search, drift notes, 4 MiB files, compact output
+
+Upgrade the CLI and server together. No step below rebuilds the index; the
+subsections say which ones re-read files or records on the first pass.
+
+### One search result per definition, imports folded
 
 Upgrade the CLI and server together; no database change and no re-index.
 
@@ -167,7 +54,7 @@ Upgrade the CLI and server together; no database change and no re-index.
 - **`show`.** A cut response says what it left out: `omitted_lines` on the
   cut object, `dropped_objects` / `dropped_from_line` for objects left off.
 
-## Next release — checkout drift notes
+### Checkout drift notes
 
 Upgrade the CLI; no server or database change. In a checkout whose files
 differ from the indexed commit, code commands print one stderr line saying how
@@ -180,7 +67,7 @@ the working tree's line number.
 `changed` and `untracked` path lists it used to carry. It also adds `head` and
 `head_line`. Scripts that read the lists add `--files`.
 
-## Next release — index files up to 4 MiB
+### Index files up to 4 MiB
 
 The default indexed file size increases from 1 MiB to 4 MiB.
 The first pass reads newly admitted files and embeds their chunks.
@@ -192,7 +79,7 @@ No manual data migration is required. To retain the previous size policy, set
 values still override this default. Read larger files through `read-file`
 `--offset` / `--limit` windows; each window keeps its 1 MiB content cap.
 
-## Next release — query coverage notes
+### Query coverage notes
 
 Upgrade the CLI and server together. No manual database step is required.
 The indexer adds a nullable column for file-gap diagnostics at startup.
@@ -207,7 +94,7 @@ Read the error detail for the file, reason, and local grep fallback.
 Explicit change queries retain freshness notes even for empty results.
 See [When an index cannot answer](cli.md#when-an-index-cannot-answer).
 
-## Next release — Rust navigation and bounded grep output
+### Rust navigation and bounded grep output
 
 Upgrade the CLI and server together. `ccx show -s NAME` now lists ambiguous
 matches instead of rendering several bodies. Add a file path after the name,
@@ -219,7 +106,7 @@ still describe the complete match. File-scoped reference lookup can return
 `candidates` when a bare method name has several definitions. Select a candidate
 and retry its exact `path` and `entity_id`.
 
-## Next release — change ingest GraphQL reserve and mirror reads
+### Change ingest GraphQL reserve and mirror reads
 
 Change ingest reserves 1500 GraphQL points by default for other applications.
 Set `changeIndex.graphqlReserve` in Helm, or `graphqlReserve` in `CCX_CHANGE_INDEX`.
@@ -235,14 +122,14 @@ The next cycle retries the record; coverage reports `reason=partial` until repai
 Review anchors now use GraphQL positions, including null positions on outdated threads.
 Upgrade the CLI and server together for the new coverage reason.
 
-## Next release — change ingest budget validation
+### Change ingest budget validation
 
 Enabled change ingest now rejects budgets with fewer than two reads outside the reserved sweep.
 Such budgets previously stall active work or starve one of its passes.
 Increase `changeIndex.maxRecordsPerCycle` or reduce `changeIndex.sweepShare` when startup names this combination.
 The default values remain valid. Disabled change ingest requires no action.
 
-## Next release — optional change content ingest
+### Optional change content ingest
 
 The feature defaults to off. Normal upgrades require no change.
 The indexer creates six change content tables when `changeIndex.enabled` is true.
@@ -261,6 +148,124 @@ The next refresh retries change ingest; code indexing continues for every reposi
 A refused credential leaves the existing change index unchanged.
 Turning off an entry removes its change rows; re-enabling starts a new backfill.
 GitLab change ingest does not ship in this slice.
+
+### Complete small lookup results
+
+Upgrade the CLI and server together. Requested definitions now retain nested
+code up to 400 lines or 16 KiB. File outlines keep their compact budget.
+Text grep keeps pages with at most 60 hits complete. Small reference results
+include tests and unresolved mentions. Use `--no-tests` or
+`--no-include-unresolved` to exclude those rows explicitly.
+
+Default CLI search now requests code and preserves similarity order.
+Exact record numbers and URLs retain record lookup.
+Use `--kind all` to request the change section. File outlines omit change
+annotations; selected definitions show only recent symbol-level changes.
+No schema migration or index rebuild is required.
+
+### Compact show and text grep output
+
+Upgrade the CLI and query server together. Default show output now folds large
+bodies and outlines. Use `--full` for the expanded object, or `--lines A-B` for
+an exact source range. An ambiguous `show -s` renders one match and lists alternatives.
+Text grep defaults to 30 displayed matches, with at most 10 per file.
+Use explicit `-k N` to disable sampling. REST and MCP grep defaults remain unchanged.
+Refs now reports test-only unresolved mentions in both hidden counts.
+Enable `--tests --include-unresolved` to list them.
+Concrete reference targets precede same-named import aliases.
+No schema change or index rebuild is required.
+
+### Hybrid change search lexical ties
+
+Hybrid retrieval now prefers newer creation times when lexical scores are equal.
+Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
+order. Vector retrieval and automatic reranking keep their current defaults.
+No schema migration or index rebuild is required.
+
+### Local fallback after an indexed file miss
+
+Upgrade the CLI and query server together. `ccx show PATH` now uses the
+current checkout's file after an indexed file miss, including an explicit
+ref request. It applies only to this checkout's repository. The header
+identifies local text and names the failed read's commit and reason.
+Read that header before treating output as the requested indexed ref.
+No schema change or index rebuild is required.
+
+### Indexed record lookup and filtered change lists
+
+Upgrade the CLI, query server, and indexer together. A search query containing
+only `#N` now selects that indexed record. Use `--kind code` to search code
+for a number instead. `ccx show '#N'` and PR/issue URLs read the change index.
+
+Change search adds `--state`, `--since`, and `--sort`. An empty query requires
+`--kind change` and a filter. State/date conditions apply before ranking and
+pagination. Date order uses title/body text matching when a query is present.
+
+`ChangeFreshness.states_as_of` reports the earlier completed issue/PR listing
+check. The indexer stores these times in existing cycle statistics. Until a
+new cycle completes both listings, the CLI uses the earlier content watermark.
+No schema migration, rebuild, or manual database step is required.
+
+### Change search relevance comes from the server
+
+Upgrade the CLI and server together. Change search now returns `relevance`
+and `ranking` per hit. Clients must display the server assessment instead
+of comparing `score` with `change_freshness.near`. The vector score keeps
+its previous meaning. Automatic retrieval uses hybrid by default and vector
+candidates when optional reranking is enabled. Reranking is off by default.
+No database migration or index rebuild is required.
+
+### Change-hit host state
+
+Change hits add `state`, `merged_at`, `closed_at` and `read_at`. The indexer
+adds nullable columns at startup without rebuilding stored content or vectors.
+Start the new indexer before the new query server. Existing records show unknown
+state until the automatic upgrade pass reads them. Each read refreshes state,
+including unchanged text.
+The CLI shows stored state and prints a command for live checks when its
+observation predates the last sweep, or when state or sweep coverage is unknown.
+
+Status shows one change-index line per repository. `ccx log Type.method` uses
+the same name resolution as `ccx defs Type.method`.
+
+### Change-index touched sets
+
+The indexer now fills changed-file rows, symbol touches, and diff hunks.
+Search hits and change references read these rows. Indexed `ccx show` output
+also shows touched-by annotations. A touch identifies a proposal; it does not
+prove that the proposal merged.
+
+Startup adds the state columns first, then the nullable `change_meta.touch_key`
+column. Both steps are additive and run in one schema transaction. Existing content
+and usage history remain intact. The automatic upgrade pass fills old records
+without embedding their unchanged text again. No manual database step is required.
+Mirror-backed repositories read local git diffs. App-backed repositories use
+GraphQL file and blob reads within the existing quota reserve.
+
+### Existing change records upgrade automatically
+
+Stored records with missing state are stale. Pull requests with a missing
+touched-set key are stale too. The indexer reads them oldest-updated first,
+after new and updated records, within `maxRecordsPerCycle` and the GraphQL
+reserve. It batches these reads like backfill. Host timestamps and listing
+cursors do not prevent this upgrade pass.
+
+`ccx status` shows `upgrading N records to schema 3` until the remaining count
+reaches zero. The count remains visible when the GraphQL reserve stops a cycle.
+The indexer retains embeddings for unchanged text and reads mirror-backed
+touched sets from local git. The pass runs automatically on normal refreshes.
+
+### Test-aware search and grounded answer citations
+
+Search now prefers implementation code unless the query asks about tests.
+Use `ccx search --tests` to keep similarity order with tests included, or
+`--no-tests` to exclude test candidates. REST and MCP expose nullable `tests`.
+Scores remain raw cosine similarities; default ordering can differ from them.
+
+Agent answers now use observed citation spans. Unsupported coordinates become
+`line range unverified`. The CLI marks citations for changed local files.
+The answer-cache logic epoch advances; older answers are recomputed. Stored
+usage history remains intact. No operator migration is required.
 
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
