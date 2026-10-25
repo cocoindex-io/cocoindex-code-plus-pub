@@ -512,7 +512,7 @@ The CLI reads the diffs from the clone it runs in, with `git`.
 - **Change search** ranks a record titled as a sync merge (`Merge main`,
   `Merge remote-tracking branch 'origin/main' into fix/…`) with no text of
   its own under the other candidates, its `score` multiplied by 0.7,
-  unless the query names a merge. Clients that sort by `score` see it lower.
+  unless the query names a merge or a topic word of the merged branch. Clients that sort by `score` see it lower.
 
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
