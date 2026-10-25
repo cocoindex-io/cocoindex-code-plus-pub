@@ -417,6 +417,39 @@ Upgrade the CLI and server together; no database change and no re-index.
 Verify: `ccx ask "<question>"` prints the `**First answer**` block within a
 few seconds, then `collect: ccx ask --collect <id>` on stderr.
 
+### Lookup pages show the hits that matter
+
+Upgrade the CLI and server together; no database change and no re-index.
+
+- **`grep` scan order.** Both grep modes scan source files first, then test
+  files (a `tests/` directory, `test_*`, `*_test(s).*`, `*.test.*`,
+  `*.spec.*`), each in the same shuffled order as before. A first page fills
+  with source hits before any test file is read.
+- **`grep` cursors change form.** A `next_cursor` now starts with the file's
+  tier digit (33 characters before the dot). A cursor from an older server
+  is refused with a 400 (`cursor is not one this server issued`): run the
+  request again without it.
+- **`ccx grep --text` first page.** A page of more than 60 hits prints at
+  most 40: the first hit of each `a|b|c` branch, then one hit per file in
+  turns, source files before test files. A file that holds hits back ends
+  with `… N more in PATH`, and files with no printed hit share one
+  `… K files not listed` line. `-k 100` still prints the complete page.
+- **`ccx refs NAME --by-file`** lists every file that uses the name,
+  including name-only mentions (such as trait-method calls) and test files.
+  `--no-include-unresolved` / `--no-tests` drop them.
+- **Same-named definitions.** When a name's uses resolve to several
+  definitions (fields of the same name on different types), `ccx refs NAME`
+  first prints one line per definition, with its use count and the
+  `ccx refs PATH ENTITY_ID` command for it. The REST and MCP
+  `find_references` response gains `targets` and `targets_truncated` for
+  the name forms.
+- **Search ranks data files under code.** Logs, JSONL records, fixtures and
+  snapshots rank under source code, unless a `--path` / `--lang` filter is
+  set or the query asks for data (`jsonl`, `fixture`, `snapshot`, a file
+  name such as `package.json` …). When the vector index returns mostly such
+  files, the server reads the page again with an exact scan, at most 3 s;
+  that query then takes about 0.5 s longer.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
