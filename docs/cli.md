@@ -442,8 +442,12 @@ index's line numbers. Commands given `--repo` or `--git-ref` print neither.
 indexed commit (changed, deleted or untracked), the CLI answers from your
 working tree instead of the index:
 
-- `ccx grep --text` scans those files locally and lists their hits first,
-  marked `[working tree]`, in place of the index's hits in them.
+- `ccx grep --text` scans those files locally and prints their hits,
+  marked `[working tree]`, in place of the index's hits in them: a file
+  keeps its place and its share of a sampled page, and every file that does
+  not differ prints as it would without the overlay. A file only your
+  working tree holds follows the page; a changed file a later page may
+  hold is counted in the `… files not listed` line.
 - `ccx defs` and `ccx refs` keep a row in such a file only where its name
   still is, and say how many rows they left out. `ccx defs` also lists the
   definitions only your working tree has, marked `[working tree]`, with a
@@ -459,10 +463,12 @@ working tree instead of the index:
   note, or lists similar files.
 
 An answer whose differing files all came from your working tree prints no
-drift line. The overlay reads at most 500 files or 32 MiB in the command's
-scope; above that, or for a `grep --text` pattern Python's regex dialect
-cannot read, or with `-l` / `--lang`, the index's answer stands with its
-marks and a note says why.
+drift line. The overlay answers when at most 500 files or 32 MiB differ in
+the whole checkout (a clone far behind the index differs in more); above
+that, every command answers from the index with its marks, and a note says
+so. For a `grep --text` pattern Python's regex dialect cannot read, or with
+`-l` / `--lang`, the index's answer stands too, and a note says why.
+`ccx search` keeps the server's order: a differing file is only marked.
 
 Rust navigation puts the type definition before its impl fragments.
 `ccx defs` collapses impl fragments into one `[impl]` summary with complete

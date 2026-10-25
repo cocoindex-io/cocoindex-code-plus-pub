@@ -78,12 +78,36 @@ show` prints no drift line for a working-tree render.
 
 - **Output changes in place.** A `grep --text` line or a `defs` row can end
   with `[working tree]`; a script that parses rows should accept the mark.
-  Local `grep --text` hits print before the index's.
-- **Bound.** The overlay reads at most 500 files or 32 MiB per command; a
-  stderr note says when it stood aside.
+  A differing file's local `grep --text` hits print in its place on the page.
+- **Bound.** The overlay answers when at most 500 files or 32 MiB differ in
+  the checkout; a stderr note says when it stood aside.
 - **Verify.** In a checkout with a new function, `ccx defs <name>` lists
   it with `[working tree]`.
 - **Optional.** `--git-ref <branch>` still reads the index alone.
+
+### The working tree no longer takes the grep page
+
+Upgrade the CLI; no server or database change, no re-index.
+
+- **What changed.** `ccx grep --text` used to print the working tree's hits
+  of differing files first, up to 100 in path order. In a clone far behind
+  the index, they filled the page and hid the files that do not differ.
+  - Now a differing file's hits take its place on the page, and every other
+    file prints as it would without the overlay.
+  - The overlay's bound (500 files or 32 MiB) now counts every file that
+    differs in the checkout, not only those under `--path`. Above it, `grep
+    --text`, `defs`, `refs` and `show -s` answer from the index, marked,
+    with one stderr note.
+- **Output.** The note reads `N files (X MiB) differ locally from the
+  indexed commit, over the working-tree overlay's bound …`. A script that
+  matched the old `… in scope differ locally …` text should match the new
+  one. Lines marked `[working tree]` no longer come first.
+- **Verify.** In a clone a few hundred commits behind the index, `ccx grep
+  --text PATTERN --path 'DIR/**'` prints the files that do not differ with
+  the same lines, in the same order, as the same command with `--git-ref
+  main`.
+- **Optional.** `git pull` brings the clone near the index again, and the
+  overlay answers for your own edits.
 
 ### History lookups name the matching ccx command
 
