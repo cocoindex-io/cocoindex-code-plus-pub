@@ -262,6 +262,34 @@ Upgrade the query server. The CLI needs no change.
 
 There is no new setting, no schema migration and no index rebuild.
 
+### show returns what an agent reads next, and outlines of long files are faster
+
+Upgrade the CLI and server together. There is no new setting, no schema
+migration and no index rebuild.
+
+- **A type brings its impl blocks.** `ccx show -s Type` prints the type,
+  then each `impl` block of the same name in that file. An impl block of up
+  to 40 lines shows whole; a longer one shows its first 24 rows (the method
+  signatures) and a fold cue. Rendering from the index adds one request for
+  a type.
+- **A line target reads on.** When the object around `PATH:LINE` ends
+  within 20 lines after the line, the response also has a `file` object
+  with the source that follows. That object holds the items that start
+  within 40 lines of the line, whole, up to 60 lines past the line. It goes past the
+  closing brace of the enclosing scope. In Markdown, the following sibling
+  sections come with the section while the total stays within 200 lines.
+- **Design docs come whole.** A Markdown section asked for by line or name
+  shows whole up to 400 lines and 48 KB (it was cut at 16 KB). A Markdown
+  file shows whole up to 200 lines and 16 KB (it was cut at 6 KB or 150
+  lines). Longer ones are cut by section as before.
+- **Faster outlines and `-s` lookups in long files.** In Rust and Python
+  files of 1,000 lines or more, a file outline or a `-s NAME` lookup renders
+  from a copy of the file with function bodies blank. The functions that
+  the name refers to keep their bodies. On a 30,000-line file this takes
+  about 0.5 s instead of about 2.5 s, and the output is the same. When the
+  copy would show a line it blanked (a function inside a string literal),
+  the server renders the whole file, as before.
+
 ### Hybrid change search lexical ties
 
 Hybrid retrieval now prefers newer creation times when lexical scores are equal.
