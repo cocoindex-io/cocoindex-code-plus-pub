@@ -200,6 +200,35 @@ Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
 order. Vector retrieval and automatic reranking keep their current defaults.
 No schema migration or index rebuild is required.
 
+### Change search reads host syntax, polls and code names
+
+`--kind change` (and `ccx prior`) now reshapes the query before it ranks:
+
+- **Host search syntax** such as `in:title`, `label:x` and `OR` leaves the
+  query. `is:open`, `is:merged` or `state:closed` becomes the state filter,
+  unless `--state` is given. A query of only `(#2811)` looks up `#2811`.
+- **A poll** such as `Main is red` returns the open, newest instance of a
+  title that a GitHub App files again and again. It skips the rerank call.
+- **Repeated bot issues** with one title show as one result: the open,
+  newest one. The older ones follow the other results.
+- **Identifiers** such as `group_sort_key` or `settings.md` add the records
+  whose stored diff or touched paths contain them.
+
+Upgrade the server; the CLI needs no change. There is no new setting, no
+schema migration and no index rebuild.
+
+### Change ingest in the per-pass request line
+
+After each pass, the indexer logs one more line per GitHub instance that
+ingests change records:
+
+```
+Code-host requests this pass: github.com changes: 14 GraphQL requests (212 points), 31 REST calls (14 quota probes), 25 records read, 3288 points above the 1500 reserve
+```
+
+Near `0 points above` the reserve (`changeIndex.graphqlReserve`), change
+ingest skips its cycles until GitHub resets the quota. No action is needed.
+
 ### Local fallback after an indexed file miss
 
 Upgrade the CLI and query server together. `ccx show PATH` now uses the
