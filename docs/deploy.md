@@ -1135,8 +1135,9 @@ A re-walk parses every file of the repository again, but reads it from the
 index's own copy: since 0.1.74 the indexer keeps each indexed file's bytes
 beside the index and asks the code host only for files it has not stored, so
 a re-walk is bound by the database and the parse, not by the code host's
-rate limit. The one exception is the first re-walk after upgrading to 0.1.74,
-which reads every file from the code host once more and keeps the copy.
+rate limit. The one exception is the upgrade to 0.1.74 itself: its first pass
+re-walks every repository ([upgrade.md](upgrade.md#the-first-pass-after-the-upgrade-re-reads-every-repository-once)),
+reading every file from the code host once more and keeping the copies.
 
 | Change | What the next pass redoes | What it embeds |
 |---|---|---|
