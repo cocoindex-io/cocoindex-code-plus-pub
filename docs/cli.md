@@ -1239,7 +1239,22 @@ has been checked against the repositories in question.
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
      a background command). In a checkout that is not indexed the hooks stay
-     silent. Install it from this repository, which is also a plugin
+     silent.
+
+     **Block once, then allow.** A line-range read (`sed -n A,Bp`, `awk` NR,
+     `tail -n +A`) of a source file and a `git log -S`/`-G`/`-L` or `gh`
+     search with topic words get their line at every call, not once. The
+     first of each kind per agent is refused instead, with the exact ccx
+     command to run (`ccx show FILE:LINE`, plus `--lines A-B` for a wide
+     range; `ccx log …`; `ccx search --kind change …`); run the same command
+     again and it goes through. Never refused: a read piped or chained with
+     other commands, a `Read` tool call, a non-source file, a file outside
+     the indexed checkout, a `cd`/`git -C`/`gh -R` toward another repository,
+     a `--state open` poll, or any call while the server does not answer.
+     `CCX_HOOK_BLOCK=0` in Claude Code's environment turns refusals off and
+     keeps the lines. Each refusal and line is recorded, on your machine
+     only, in `~/.cache/ccx/hook-decisions.jsonl` (two files of at most
+     2 MB). Install it from this repository, which is also a plugin
      marketplace:
 
      ```text

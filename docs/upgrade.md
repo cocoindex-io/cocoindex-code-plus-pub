@@ -105,6 +105,33 @@ update ccx`); no server or database change, no re-index.
 - **Verify.** `ccx log -G 'x' --rev HEAD -n 1` prints a commit line or
   `No commit changes a line matching 'x' in HEAD.`
 
+### The plugin blocks the first range read and history lookup once
+
+Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
+update ccx`); no server or database change, no re-index.
+
+- **Block once, then allow.** In an indexed checkout, an agent's first
+  line-range read of a source file (`sed -n A,Bp`, `awk` NR, `tail -n +A`)
+  is refused with the exact `ccx show FILE:LINE` (and `--lines A-B` for a
+  wide range) to run instead; its first `git log -S/-G/-L` and its first
+  `gh` search with topic words likewise, naming the `ccx log` or `ccx
+  search --kind change` command. The same command run again goes through,
+  and every later one runs with its one-line hint, each time rather than
+  once. Each agent (a subagent too) is refused once per kind.
+- **Never refused:** a read piped or chained with other commands, the `Read`
+  tool, a non-source file, a file outside the checkout, a lookup in another
+  repository (`cd`, `git -C`, `gh -R`), `git log --grep`, a `--state open`
+  poll, or any call while the server's `/health` does not answer in 2 s.
+- **Turn it off** with `CCX_HOOK_BLOCK=0` in Claude Code's environment
+  (`env` in `settings.json`); the hints stay.
+- **A local log.** Each decision is appended to
+  `~/.cache/ccx/hook-decisions.jsonl` (rotated at 2 MB, one old file kept);
+  nothing is sent anywhere.
+- **Verify.** In an indexed checkout, ask Claude Code to run
+  `sed -n 10,40p <a source file>`: the call is refused with a reason that
+  starts "Run this instead:" and names `ccx show FILE:25`; asked again, it
+  runs.
+
 ### Fewer errors from agent mistakes and timeouts
 
 Upgrade the CLI and server together; no database change and no re-index.

@@ -74,7 +74,9 @@ lists the levers, from the MCP endpoint to a one-line repo rule and a hook.
 This repository is also a Claude Code plugin marketplace. The `ccx` plugin
 bundles the skill above with hooks that put one line of context in front of
 an agent at the moment it would grep an indexed checkout — including inside
-subagents, which skills never reach:
+subagents, which skills never reach. The first line-range read or history
+lookup of an agent is refused once with the ccx command to run instead; run
+again, it goes through (`CCX_HOOK_BLOCK=0` turns that off):
 
 ```text
 /plugin marketplace add cocoindex-io/cocoindex-code-plus-pub
