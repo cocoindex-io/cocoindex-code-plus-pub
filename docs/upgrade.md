@@ -85,6 +85,26 @@ show` prints no drift line for a working-tree render.
   it with `[working tree]`.
 - **Optional.** `--git-ref <branch>` still reads the index alone.
 
+### History lookups name the matching ccx command
+
+Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
+update ccx`); no server or database change, no re-index.
+
+- **`ccx log -G REGEX`** is `git log -G`, beside `-S TEXT`. **`--rev REV`**
+  walks another revision or range than HEAD for either (`--rev origin/main`,
+  `--rev A..B`).
+- **The plugin hints at history lookups.** `git log -S`, `-G` and `-L` earn
+  one line naming the `ccx log` command with the agent's own text, paths and
+  `-n`; a `gh pr list --search`, `gh issue list --search`, `gh search
+  prs|issues` or `git log --grep` with topic words earns the `ccx search
+  --kind change` command and `ccx prior`. Polls of open state (`--state
+  open`), `in:title` lists, PR-number lookups and `gh pr view` earn nothing.
+- **Output changes in place.** The hook's JSON `kind` is `history` for the
+  `git log -S/-G/-L` line, a marker of its own; the `change` line now quotes
+  the agent's search words instead of naming the command alone.
+- **Verify.** `ccx log -G 'x' --rev HEAD -n 1` prints a commit line or
+  `No commit changes a line matching 'x' in HEAD.`
+
 ### Index files up to 4 MiB
 
 The default indexed file size increases from 1 MiB to 4 MiB.

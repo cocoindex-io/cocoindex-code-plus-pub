@@ -372,6 +372,7 @@ ccx find-files --git-ref main                    # list files on a specific ref 
 ccx log QueryService                             # the commits that changed the symbol's lines: sha, date, PR, +X/-Y, subject
 ccx log QueryService --patch -n 20               # each commit's diff within the symbol, 20 commits
 ccx log -S 'MAX_RETRIES = 5'                     # the commits that added or removed a text, and their files
+ccx log -G 'retr(y|ies)' --rev origin/main      # git log -G (lines matching a regex), walked from origin/main
 
 # Repo / ref metadata
 ccx git-refs                                     # the current repo's indexed refs + commit shas (+ where each sits relative to your HEAD)
@@ -820,7 +821,12 @@ date) bound the walk; `--patch` adds each diff within the symbol.
 
 `ccx log -S TEXT [PATH…]` is `git log -S`: the commits that added or
 removed TEXT (`adds`, `removes`, `moves`) and the files they touched. Use it
-for a symbol the index no longer holds, or any string.
+for a symbol the index no longer holds, or any string. `ccx log -G REGEX
+[PATH…]` is `git log -G`: the commits that added or removed a line matching
+REGEX. Both walk HEAD's history; `--rev REV` (repeatable) walks another
+revision or range instead, such as `origin/main` from a branch that is behind
+it, or `A..B`. A SYMBOL is placed at HEAD, so `--rev` applies to `-S` and `-G`
+only.
 
 `ccx show --at COMMIT PATH` (or `-s NAME`) shows a file or a definition as
 any commit of your clone holds it: a sha, `HEAD~3`, a branch. The text is
@@ -1139,7 +1145,12 @@ has been checked against the repositories in question.
      commit's position relative to `HEAD`, and which local files still need
      grep); at
      a grep that found nothing or far too much; at a direct source-file read
-     with `sed -n`, `awk`, `tail`, `head`, `cat`, or windowed `Read` (naming `ccx show FILE:LINE`); and when a session or
+     with `sed -n`, `awk`, `tail`, `head`, `cat`, or windowed `Read` (naming `ccx show FILE:LINE`); at
+     a history lookup: `git log -S`, `-G` or `-L` (naming the matching
+     `ccx log` command) and a `gh` search of pull requests or issues or
+     `git log --grep` (naming `ccx search --kind change` and `ccx prior`),
+     but not a poll of what is open now (`--state open`), a title-phrase list
+     (`in:title`), a PR-number lookup or `gh pr view`; and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end

@@ -44,7 +44,8 @@ case "$event" in
     # classifies their exact command shape and reports the final kind.
     command_text=$(field command)
     case "$command_text" in
-      gh\ *|git\ log\ *) kind=change ;;
+      gh\ *|git\ log\ *--grep*) kind=change ;;
+      git\ log\ *) kind=history ;;
       sed\ *|head\ *|cat\ *|awk\ *|tail\ *) kind=read ;;
     esac
     # A shell expression may earn a different kind from its first command.
@@ -98,7 +99,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start | change | read) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change | history | read) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac
