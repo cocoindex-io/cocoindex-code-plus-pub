@@ -116,38 +116,6 @@ Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.
 - **Verify.** `ccx show <file>:<a blank line between two functions>`
   prints the function below, not `file L1-…`.
 
-### The plugin runs greps as `ccx grep --exact-as`, with the same lines
-
-Upgrade the CLI and the plugin together (the plugin's hook script now
-passes a `grep`/`rg` command to the CLI at every call). Nothing to
-configure; the kill switch is the same (`CCX_HOOK_REWRITE=0`), and so is
-the opt-out (`CCX_HOOK=off` in the command).
-
-- **What changed.** A `grep` or `rg` step of an agent's Bash command now
-  runs as `ccx grep --text --exact-as grep|rg …` when ccx prints the same
-  lines: every hit, as the tool prints it, and no other. The flags it maps
-  are `-n`, `-r`, `-i`, `-w`, `-x`, `-E`, `-F`, `-e`, `-H`/`-h`, `-l`,
-  `-A`/`-B`/`-C`, `--include='*.ext'`, and for `rg` also `-t`, `-g '*.ext'`,
-  `-S` and `-U`; a pattern is translated only where grep's dialect and
-  ripgrep's read it alike. Pipes after the grep stay; a `head -N` or
-  `tail -N` straight after it is passed down. Anything else (`-v`, `-o`,
-  `-c`, `\d`, a grep of stdin, a file outside the checkout) runs as
-  written, and a repository-wide grep that is not rewritten earns the
-  grep hint as before.
-- **Never a different match set.** `--exact-as` checks the files the tool
-  would read against what ccx reads (ignored, hidden, symlinked, oversized
-  files, files behind the index) and each hit against the working tree's
-  line; when it cannot be sure it prints nothing and exits 3, and the
-  agent's own grep runs (`{ ccx … || grep …; }`). Set
-  `CCX_GREP_EXACT_DEBUG=1` to see why on stderr.
-- **New `ccx grep` options** (with `--exact-as` only): `--no-filename`,
-  `--no-line-number`, `--files-with-matches`, `-A`/`-B`/`-C`, `--path-as
-  REL=SHOWN`, `--head N`, `--tail N`, `--at-most N`.
-- **Cost.** A rewritten grep step takes about half a second (median 493
-  ms on the box) where grep takes a few milliseconds. On 300 real
-  commands replayed both ways, every grep ccx answered printed the
-  original's lines, at the same bytes plus the `[ccx]` line.
-
 ### The prompt brief skips prompts that are not about the code
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill

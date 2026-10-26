@@ -10,9 +10,7 @@
 # CLI owns the server, the credential, the cache and the wording. Range reads
 # and history lookups (kinds read, history, change) keep no marker: the CLI
 # runs a Bash one as the ccx command that prints the same or more (an
-# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), as it
-# runs a grep as `ccx grep --exact-as` where that prints the same lines,
-# widens
+# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), widens
 # a windowed Read to the definitions it cuts (CCX_HOOK_WIDEN=0 turns that
 # off), else
 # blocks the first one of each kind per agent with the ccx command to run
@@ -104,22 +102,12 @@ if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = cle
 fi
 
 marker="$prefix-$kind"
-# Kinds the CLI answers at every call: no marker spends them. A grep it
-# runs as ccx (grep_rewrite) is one; the grep hint stays once per agent.
+# Kinds the CLI answers at every call: no marker spends them.
 every_call() {
-  case "$1" in read | history | change | grep_rewrite) return 0 ;; esac
+  case "$1" in read | history | change) return 0 ;; esac
   return 1
 }
-# A grep goes to the CLI at every call, so it can be rewritten
-# (CCX_HOOK_REWRITE=0 turns that off); a spent hint is then not printed.
-if [ "$kind" = grep ] && [ -e "$marker" ]; then
-  case "${CCX_HOOK_REWRITE:-}" in 0 | off | false | no) exit 0 ;; esac
-  case "$event:$command_text" in
-    PreToolUse:grep\ * | PreToolUse:rg\ *) ;;
-    *) exit 0 ;;
-  esac
-fi
-[ "$kind" != unknown ] && [ "$kind" != grep ] && ! every_call "$kind" && [ -e "$marker" ] && exit 0
+[ "$kind" != unknown ] && ! every_call "$kind" && [ -e "$marker" ] && exit 0
 # "Could not tell" (server down, not logged in) is retried after five minutes,
 # not at every search.
 retry="$prefix-retry"
@@ -144,7 +132,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start | change | history | read | grep_rewrite) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change | history | read) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac
