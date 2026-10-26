@@ -782,17 +782,18 @@ Upgrade the server; no database change, no re-index, no new setting.
   backend `idle in transaction` for more than a second or two, and no
   request in the audit log has `duration_ms` above the deadline plus 1 s.
 
-### A short definition comes whole; `show '#N'` prints a small diff whole
+### A short test comes whole; `show '#N'` prints a small diff whole
 
 Upgrade the CLI and the query server together. No schema change or index
 rebuild.
 
-- **`ccx show -s NAME` / `ccx show PATH:LINE`.** A definition at most half
-  again over the body budget (24 KiB and 600 lines) is sent whole. It was
-  folded row by row down to 16 KiB, which saved a third at most and cut a
-  test's assertions in half. Longer bodies fold as before.
+- **`ccx show -s NAME` / `ccx show PATH:LINE`.** A test (a test function,
+  or one in a test module) at most half again over the body budget (24 KiB
+  and 600 lines) is sent whole. It was folded row by row down to 16 KiB,
+  which saved a third at most and cut its assertions in half. Other
+  definitions, and longer tests, fold as before.
 - **`ccx show '#N'`.** When a pull request's source files change at most
-  100 lines, every changed line of them is printed; tests and docs are still
+  93 lines (hunk headers included), every changed line of them is printed; tests and docs are still
   listed by their counts. A larger diff keeps the 22-line excerpt.
 - **`ccx show '#N'` below the index's floor** now says the record's state
   when the clone can tell it (`state: merged (on origin/main)`) and the host

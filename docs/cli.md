@@ -741,7 +741,7 @@ terminal:
   `// members:` roster of what it holds and a `... N lines` cue. A test
   file itself outlines fully.
 - **Large output uses a budget.** Requested definitions use up to 16 KiB or 400 rows;
-  one at most half again over that (24 KiB, 600 rows) comes whole.
+  a test at most half again over that (24 KiB, 600 rows) comes whole.
   Outlines use about 1.5 KB or 60 rows. The server folds deeper rows first.
   A requested definition includes nested code. It keeps the signature and
   four source lines around the requested line when a larger definition folds.
@@ -1629,7 +1629,7 @@ pass `--repo acme/api` to select another repository. The output includes the
 state's read time, dates, first body part, touched paths and symbols, and the
 number of retained indexed comments. In a clone that holds the pull
 request's commit, its diff follows: every changed line of its source files
-when they change 100 lines or fewer, else a short excerpt. Missing numbers
+when they change 93 lines or fewer, else a short excerpt. Missing numbers
 report index coverage; below the index's floor the clone's landing commit
 and its state stand in.
 These reads do not call GitHub.
