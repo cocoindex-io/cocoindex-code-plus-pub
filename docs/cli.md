@@ -922,6 +922,9 @@ and REST API closely (same capabilities, same scoping).
   It is stateless and serves `POST` only. Any other method, including the
   `GET` that opens the optional server-to-client stream, gets `405` with
   `Allow: POST`; MCP clients read that as "no stream" and go on.
+- **Protocol versions:** MCP `2026-07-28`, where a client opens with one
+  `server/discover` request, and the `initialize` handshake versions
+  `2024-11-05` to `2025-11-25` for older clients.
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
