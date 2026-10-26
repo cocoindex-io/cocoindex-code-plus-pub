@@ -52,6 +52,17 @@ rewrites. Nothing to configure. Update the plugin
   line it anchors to. Without the flag the record is as before: the first
   600 characters of the body and the comment count. The request carries
   `parts: true`; an older server ignores it and answers the record alone.
+- **`ccx ask` investigations start at the first collect.** A started
+  question (`--first`, the default off a terminal) answers with the first
+  answer and keeps the investigation; it takes its slot and runs when
+  `ccx ask --collect <id>` first asks for it, so a question nobody
+  collects costs its first answer alone. On one day of this deployment's
+  transcripts 25 started questions were followed by 8 collects: the other
+  17 investigations ran for nobody. The collect now waits the
+  investigation's whole run (about a minute at the median) instead of the
+  remainder. `CCX_AGENT_QUERY_INVESTIGATION_START=at_once` on the query
+  server restores the earlier form. The launching collect can answer
+  `agent_query_busy` or `agent_query_rate_limited`; collect again.
 - **"Is it done?" on every record.** `ccx show '#N'` adds `named by:`, the
   records whose title or text name this one (for an issue, the pull
   requests that fixed it; for a pull request, its issue and any revert; the

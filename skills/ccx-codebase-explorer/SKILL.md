@@ -535,7 +535,7 @@ a question waits in its queue).
 locations search and symbol lookup find, each with a short excerpt, labeled
 and unverified — and, run by an agent (stdout not a terminal), exits there
 with a `collect: ccx ask --collect <id>` line on stderr. The investigation
-goes on on the server and its answer comes in minutes. Read the whole first
+starts at your collect and answers in about a minute. Read the whole first
 answer (no `| tail` or `| head`: its first locations are the definitions your
 question named) and work from its locations. When you need the full answer,
 run the `collect:` command: in the background when your harness wakes you on
