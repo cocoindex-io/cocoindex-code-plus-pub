@@ -55,7 +55,7 @@ before.
   steps of the command run as written. The output starts with one `[ccx]`
   line naming what ran; the same command run again runs as written.
 - **Never rewritten:** the `Read` tool (Claude Code keeps a hook's
-  rewrite within the same tool, so a windowed Read is still refused once),
+  rewrite within the same tool; a windowed Read is widened instead, below),
   a command that changes something, a filtered or redirected read, a
   substitution or loop, a file over 4 MB, a `git log` or `gh` option ccx
   does not carry (`--author`, `--follow`, `--jq`, a qualifier), a folder
@@ -72,6 +72,33 @@ before.
 - **Verify.** In an indexed checkout, ask Claude Code to run `sed -n
   10,40p <source-file>`: the result starts with a `[ccx]` line naming
   the `ccx show` command that ran; asked again, sed's own output comes.
+
+### The plugin widens a windowed Read to the definitions it cuts
+
+Upgrade the CLI; the plugin's hooks are unchanged. No server or database
+change, no re-index.
+
+- **Widened, not refused.** In an indexed checkout, a `Read` with
+  `offset`/`limit` of a source file whose window cuts a definition runs
+  with a wider window: the cut definition's first or last line, at most 30
+  lines more at each edge and 40,000 bytes in all. Every asked line stays
+  in, and the Read stays a Read, so a later Edit of the file works as
+  before. One context line says `[ccx] Read widened from lines A-B to
+  C-D`.
+- **Left alone:** a whole-file Read, a window no definition cuts or only a
+  large one does, a non-source file, a file outside the indexed checkout,
+  or while the server does not answer in 4 s; such a Read is refused once
+  and hinted, as before.
+- **Turn it off** with `CCX_HOOK_WIDEN=0` (or `CCX_HOOK_REWRITE=0`, which
+  turns off every rewrite) in Claude Code's environment.
+- **Logged** as decision `widen` in `~/.cache/ccx/hook-decisions.jsonl`,
+  with the new input.
+- **Verify.** Ask Claude Code to read lines 15-25 of a source file with
+  the Read tool where line 15 is inside a function: the result starts at
+  that function's first line, beside the `[ccx]` line.
+- **The skill** now names `ccx show FILE --lines A-B` for a range read
+  (Codex has no hooks, so this is what reaches it). Update the skill copy
+  in `~/.agents/skills` too.
 
 ### The plugin briefs a task before the agent looks
 

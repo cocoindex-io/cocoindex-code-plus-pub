@@ -55,6 +55,7 @@ ccx grep '<pattern>' -l <language>    # a syntactic shape
 ccx grep --text '<regex>'             # an exact string or regex anywhere — comments, docs, config too
 ccx show <file>                       # the file's outline, every definition at its line — before reading it whole
 ccx show <file>:<line>                # the whole function or type around a line — not sed -n 'A,Bp'
+ccx show <file> --lines A-B           # exactly lines A-B, numbered — not sed -n 'A,Bp'
 ccx ask "<question>"                  # a cited written answer
 ```
 
@@ -62,13 +63,17 @@ ccx ask "<question>"                  # a cited written answer
 so it is right on your branch, uncommitted edits included:
 
 - **A window you can name** — lines a hit or a match already printed, an edit
-  you just made → your own file read of that window.
+  you just made → `ccx show FILE --lines A-B`, not `sed -n 'A,Bp' FILE`:
+  the same lines, numbered, so a later edit or citation names the right
+  line. Example: `ccx show src/app.rs --lines 120-160`. Add
+  `--whole-definition` to get the definition holding the range instead,
+  when it is small. Fall back to `sed -n` only when ccx fails.
 - **About to run `sed -n 'A,Bp' FILE`, `head -n`, or a `grep -A40` to see a
   function body** → `ccx show FILE:A` instead. It prints the definition that
   contains line A, whole and with its signature, and folds what you did not
   ask for: on this box it sends about a fifth of the text a range read does,
   and you never cut a function in half or read the next window to finish it.
-  Keep `sed -n` for a window you can already name (the first bullet).
+  Keep `--lines A-B` for a window you can already name (the first bullet).
 - **A line, and you need the definition around it** — a search or grep hit, a
   traceback line → `ccx show PATH:LINE`: that definition whole, under its
   enclosing scopes, instead of a guessed window.

@@ -10,7 +10,9 @@
 # CLI owns the server, the credential, the cache and the wording. Range reads
 # and history lookups (kinds read, history, change) keep no marker: the CLI
 # runs a Bash one as the ccx command that prints the same or more (an
-# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), else
+# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), widens
+# a windowed Read to the definitions it cuts (CCX_HOOK_WIDEN=0 turns that
+# off), else
 # blocks the first one of each kind per agent with the ccx command to run
 # instead, allows it run again, and hints at every later one
 # (CCX_HOOK_BLOCK=0 turns blocking off). It always exits 0: a hook that fails
