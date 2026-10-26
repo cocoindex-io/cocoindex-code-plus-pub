@@ -39,6 +39,18 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### `ccx log` spans include the doc comment
+
+A CLI change only: no server change, no database change, no re-index.
+
+- **`ccx log SYMBOL`.** The span now starts at the definition's doc
+  comment, comments, attributes and decorators, as `ccx show` spans it,
+  whether or not the file changed since the indexed commit (it started at
+  the definition's own line when the file was unchanged). The header's
+  `L<start>` may be a few lines earlier, and a commit that only rewrote
+  the doc is listed. The short text under the header still prints the
+  definition's own lines.
+
 ### One search result per definition, imports folded
 
 Upgrade the CLI and server together; no database change and no re-index.
