@@ -95,6 +95,27 @@ change, match for match.
 - **Verify.** After the pass the index schema (`ccx` by default) has an
   index named `file_body_body_lower_trgm`.
 
+### A rewritten range read costs about what the agent's own read did
+
+CLI and plugin only; no server or database change, no re-index.
+
+- **`ccx show FILE --lines A-B --plain`** is what the plugin's rewrite of a
+  range read now runs (`sed -n`, `awk` NR, `head`, `tail -n +A`): the lines
+  as the file has them, without the line-number gutter, under one header,
+  `FILE  LA-LB`. No drift note: the lines are the working tree's own.
+- **A shorter first line.** A command whose rewritten steps are all range
+  reads starts with `[ccx] read by ccx show; run the same command again for
+  the original.`
+- **`--whole-definition` stretches less.** The definition holding the range
+  stands in only when it is at most twice as long **and** at most 30 lines
+  longer, and never when it is a file, module, namespace or impl block.
+- **Bytes.** On 200 logged range reads the rewrite printed 1.05× the bytes
+  of the agent's own `sed` (median 1.07×), down from about 1.35×, with every
+  non-blank asked line.
+- **Verify.** Ask Claude Code to run `sed -n 10,40p <source-file>` in an
+  indexed checkout: the result is the `[ccx]` line, `<source-file>  L10-L40`,
+  then the 31 lines without numbers.
+
 ### The plugin runs range reads and history lookups as ccx commands
 
 Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
@@ -104,8 +125,8 @@ before.
 
 - **Rewritten, not refused.** In an indexed checkout, a Bash range read of
   a source file (`sed -n A,Bp`, `awk` NR, `tail -n +A`, `head`) runs as
-  `ccx show FILE --lines A-B` — every asked line, numbered, or the whole
-  definition when it holds the range and is at most twice as long — and a
+  `ccx show FILE --lines A-B` — every asked line, or the whole definition
+  when it holds the range and is small — and a
   `git log -S/-G` runs as `ccx log`, a `gh pr|issue list --search` or `gh
   search prs|issues` with topic words as `ccx search --kind change`. Other
   steps of the command run as written. The output starts with one `[ccx]`
