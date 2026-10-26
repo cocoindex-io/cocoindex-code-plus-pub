@@ -1653,8 +1653,12 @@ state's read time, dates, first body part, touched paths and symbols, and the
 number of retained indexed comments. `--full` prints the body whole and
 then every indexed comment, review and review comment, oldest first, each
 under its author and time (a review comment names the path and line it
-anchors to); the hook runs a `gh pr view N --json body` as this. In a clone that holds the pull
-request's commit, its diff follows: every changed line of its source files
+anchors to); the hook runs a `gh pr view N --json body` as this. `named by:`
+lists the records whose title or text name this one: for an issue, the pull
+requests that fixed it; for a pull request, its issue and any revert. In a clone that holds the pull
+request's commit, its diff follows, its header saying whether the landing
+commit is still on the default branch or was reverted (`landed it; reverted
+on origin/main by <sha>, #M`): every changed line of its source files
 when they change 93 lines or fewer, else a short excerpt. Missing numbers
 report index coverage; below the index's floor the clone's landing commit
 and its state stand in.

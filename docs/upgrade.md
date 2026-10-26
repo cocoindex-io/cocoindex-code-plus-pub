@@ -52,6 +52,14 @@ rewrites. Nothing to configure. Update the plugin
   line it anchors to. Without the flag the record is as before: the first
   600 characters of the body and the comment count. The request carries
   `parts: true`; an older server ignores it and answers the record alone.
+- **"Is it done?" on every record.** `ccx show '#N'` adds `named by:`, the
+  records whose title or text name this one (for an issue, the pull
+  requests that fixed it; for a pull request, its issue and any revert; the
+  hit's `linked`, 20 at most), and the diff header says whether the landing
+  commit is still on the default branch: `landed it; on origin/main`,
+  `landed it; reverted on origin/main by <sha>, #M (<date>)`, or `not on
+  the default branch here`. A merged fix undone by a revert or a stale
+  squash reads as merged on the host; this line says it is out.
 - **The hook rewrites more `gh` lookups.** One day of this deployment's
   transcripts, replayed through the previous hook: 47 of 53 PR and issue
   searches and 41 of 43 views were left to gh, most for `--state open`, a

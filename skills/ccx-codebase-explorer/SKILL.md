@@ -129,7 +129,9 @@ counts. One query per question; read the top three hits.
 
 - **Before you start a fix or a listed task:** `ccx prior -`. A `near` hit
   that is `merged` means the work may already be on main: read it before
-  you write code.
+  you write code. For an issue number, `ccx show '#N'`: its `named by:`
+  lines are the pull requests that fixed it, and a pull request's diff
+  header says whether its landing commit is still on main or was reverted.
 - **When a test or build fails on main:** `ccx search --kind change` with the
   first error line, and `ccx refs <test> --kind change --since 2d`.
 - **When a line looks wrong:** `ccx log <symbol>`, then the PR it names.
