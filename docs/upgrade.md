@@ -61,6 +61,34 @@ Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.
 - **Verify.** `ccx show <file>:<a blank line between two functions>`
   prints the function below, not `file L1-…`.
 
+### A brief lists no patch or data file, and follows a prompt into another checkout
+
+Upgrade the CLI; the plugin picks it up. No server change, no database
+change, nothing to configure (`CCX_BRIEF=0` and `CCX_SUBAGENT_BRIEF=0` as
+before).
+
+- **No data files among the code.** Neither brief lists a search hit in a
+  patch or diff, a log, a lockfile, a snapshot or record stream (`.patch`,
+  `.diff`, `.log`, `.lock`, `.snap`, `.jsonl`, `package-lock.json`, …), or
+  in a `fixtures/`, `testdata/`, `snapshots/`, `goldens/` or `traces/`
+  folder. On five days of the box's subagent runs no such file the search
+  reached was read later (a quarter of the code hits listed were). A
+  definition or a file the prompt names is still listed wherever it is.
+- **Another checkout.** When the prompt's absolute paths name existing
+  checkouts of other repositories and none of the working directory's own
+  (a parent in one repository handing over a task in a worktree of
+  another), the brief reads the first one named, at that worktree's
+  branch. When that checkout is not indexed there is no brief
+  (`skip:other_repo`) rather than one of the wrong repository. A prompt
+  that names the working directory's repository too is briefed there, as
+  before.
+- **The log** (`~/.cache/ccx/brief.jsonl`) adds `repo` to a decision on a
+  prompt about another checkout.
+- **Verify.** From a checkout of one indexed repository, start a subagent
+  whose prompt says "Work in <a worktree of another indexed repository>"
+  and names a function there: its brief's first line names the other
+  repository.
+
 ### The prompt brief skips prompts that are not about the code
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
