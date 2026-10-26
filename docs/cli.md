@@ -184,6 +184,7 @@ ccx show src/app.py:142                          # the definition at line 142, f
 ccx show -s QueryService                         # the definitions of a name, rendered; -e expands, --git-ref reads the index
 ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
+ccx find-files --not-indexed                     # the files the index holds no text for, each with why (read those from the checkout)
 
 # Repo / ref metadata
 ccx git-refs                                     # the current repo's indexed refs + commit shas (+ where each sits relative to your HEAD)
@@ -363,7 +364,12 @@ for `find-files` it's a **skip count** for paginating results. `grep` has no
 exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤ 8 KB.
 `read-file` returns at most **5 000 lines** (and at most 1 MiB of content) per
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
-numbers show where the window ended.
+numbers show where the window ended. Files up to 4 MiB are indexed by default
+(8 MiB at most; the deployment decides); a file the indexer skipped — over the
+limit, a generated or vendored file over 1 MiB, binary, a Git LFS pointer —
+answers `read-file` with the reason, `find-files --not-indexed` lists them,
+and an empty `grep`, `defs`, `refs` or `search` over a ref that has some
+prints a warning naming how many: read such a file from your checkout.
 
 ### `ccx show` — a file's outline, or one definition's body
 
