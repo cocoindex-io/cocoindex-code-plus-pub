@@ -39,7 +39,7 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
-### The plugin rewrites more range reads: several ranges, numbered reads, loops, nested checkouts
+### The plugin rewrites more range reads: several ranges, numbered reads, docs, loops, nested checkouts
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
 switch is the same (`CCX_HOOK_REWRITE=0`).
@@ -53,20 +53,25 @@ switch is the same (`CCX_HOOK_REWRITE=0`).
   tail -N` (the range shrinks). A variable set to one literal word in the
   same command (`f=src/a.rs; sed -n 1,9p $f`) and a `for` loop over literal
   words (`for f in a.rs b.rs; do sed -n 1,40p $f; done`) are read written
-  out. `df`, `du`, `ps`, `pgrep`, `uptime`, `sleep` and a `timeout` around
+  out. A Bash range read of a doc (`.md`) runs as `ccx show F.md --lines
+  A-B`: the exact lines under their headings; a doc read is never
+  blocked, and the Read tool on a doc is left as it was. `df`, `du`, `ps`, `pgrep`, `uptime`, `sleep` and a `timeout` around
   a lookup no longer stop a rewrite.
 - **A fix.** A read in a checkout nested inside the agent's
   (`.claude/worktrees/x`) was judged as the outer checkout's, so it was
   never rewritten and its hint named a path in the wrong repository. It is
   now judged in its own checkout.
-- **`gh`.** A `gh … --search` piped into `head -N` becomes `ccx search
-  --kind change … -n N`; `in:title,body` is dropped (gh's default fields);
-  a `gh -R owner/repo` search runs as ccx from a folder that is no checkout
-  when that repository is indexed. `--state open` polls, `--jq` and other
-  qualifiers stay on gh.
-- **Measured** on 3 days of transcripts: 157 more commands rewritten (51% →
-  55% of range-read commands, 53% → 58% of their bytes); on their 245 read
-  steps every non-blank printed line came back, at 1.05× the bytes.
+- **`gh`.** `gh issue list --search` is no longer rewritten, only hinted:
+  it is mostly "is this already filed?", where gh's empty answer is the
+  answer. A `gh pr list --search` or `gh search prs|issues` piped into
+  `head -N` becomes `ccx search --kind change … -n N`; `in:title,body` is
+  dropped (gh's default fields); a `gh -R owner/repo` search runs as ccx
+  from a folder that is no checkout when that repository is indexed.
+  `--state open` polls, `--jq` and other qualifiers stay on gh.
+- **Measured** on 3 days of transcripts: 363 more commands rewritten (51% →
+  59% of range-read commands, 53% → 64% of their bytes); on their 536 read
+  steps (291 of docs) every non-blank printed line came back, at 1.04× the
+  bytes.
 
 ### Broad text greps and search phrases read a window index
 
