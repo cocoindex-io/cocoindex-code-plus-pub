@@ -39,6 +39,40 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### The plugin runs range reads and history lookups as ccx commands
+
+Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
+update ccx`); no server or database change, no re-index. The rewrite comes
+from the CLI: an older CLI behind the new plugin keeps refusing once, as
+before.
+
+- **Rewritten, not refused.** In an indexed checkout, a Bash range read of
+  a source file (`sed -n A,Bp`, `awk` NR, `tail -n +A`, `head`) runs as
+  `ccx show FILE --lines A-B` — every asked line, numbered, or the whole
+  definition when it holds the range and is at most twice as long — and a
+  `git log -S/-G` runs as `ccx log`, a `gh pr|issue list --search` or `gh
+  search prs|issues` with topic words as `ccx search --kind change`. Other
+  steps of the command run as written. The output starts with one `[ccx]`
+  line naming what ran; the same command run again runs as written.
+- **Never rewritten:** the `Read` tool (Claude Code keeps a hook's
+  rewrite within the same tool, so a windowed Read is still refused once),
+  a command that changes something, a filtered or redirected read, a
+  substitution or loop, a file over 4 MB, a `git log` or `gh` option ccx
+  does not carry (`--author`, `--follow`, `--jq`, a qualifier), a folder
+  that is not an indexed checkout, or while `/health` does not answer in
+  2 s. A ccx failure at run time falls back to the original command.
+- **`ccx show --lines A-B --whole-definition`** is the new option behind
+  the read rewrite; usable by hand.
+- **Turn it off** with `CCX_HOOK_REWRITE=0` in Claude Code's environment
+  (`env` in `settings.json`): calls are refused once and hinted, as before.
+  Prefix one command with `CCX_HOOK=off` to keep the hook out of it.
+- **Logged.** `~/.cache/ccx/hook-decisions.jsonl` gets `rewrite` (with the
+  command that ran) and `original` lines; `scripts/ccx_hook_follow_rate.py`
+  counts them.
+- **Verify.** In an indexed checkout, ask Claude Code to run `sed -n
+  10,40p <source-file>`: the result starts with a `[ccx]` line naming
+  the `ccx show` command that ran; asked again, sed's own output comes.
+
 ### `ccx log` spans include the doc comment
 
 A CLI change only: no server change, no database change, no re-index.
