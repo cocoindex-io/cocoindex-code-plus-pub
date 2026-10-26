@@ -1233,8 +1233,9 @@ has been checked against the repositories in question.
      a history lookup: `git log -S`, `-G` or `-L` (naming the matching
      `ccx log` command) and a `gh` search of pull requests or issues or
      `git log --grep` (naming `ccx search --kind change` and `ccx prior`),
-     but not a poll of what is open now (`--state open`), a title-phrase list
-     (`in:title`), a PR-number lookup or `gh pr view`; and when a session or
+     a poll of open issues (naming the same search with `--state open`) and
+     a PR-number lookup (naming `ccx show '#N'`), each once, but not `gh pr
+     view`; and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
@@ -1495,8 +1496,11 @@ change section after the code results. Use `ccx search --kind code` for code
 only, `--kind change` for change records, or `--kind all` for both. `--json`
 keeps the server's change section and freshness data.
 
-A `--kind change` query can carry GitHub search syntax. `in:title`, `OR` and
-other qualifiers are dropped. `is:open`, `is:merged` and `state:closed` act as
+A `--kind change` query can carry GitHub search syntax. Qualifiers are
+dropped. A query with `OR` or `in:title` is read as gh reads it: each
+alternative's title matches (a word prefix such as `integrat` counts) and the
+records whose diff holds its identifiers come first, in turn, before the
+results ranked by meaning. `is:open`, `is:merged` and `state:closed` act as
 `--state`. `(#2811)` looks up `#2811`. A title prefix that a GitHub App files
 again and again, such as `Main is red`, returns the open, newest instance
 first. Identifiers such as `group_sort_key` also find the pull requests whose
@@ -1506,7 +1510,7 @@ Use `ccx prior <file>`, `ccx prior -` with stdin, or `ccx prior "<text>"`
 before repeating work from a brief. The command splits bullets, numbered
 lines, and paragraphs into items. It searches once per item, up to 20 items.
 Each item shows the first record in the server's relevance order and its
-vector score. The server supplies `near` and `weak` assessments. Hybrid
+vector score; when that record is not `near`, the next two follow. The server supplies `near` and `weak` assessments. Hybrid
 search combines vocabulary matches with vector similarity. An exact error
 can qualify below the usual score floor. Optional reranking checks whether
 a record addresses the query. These labels do not prove that work shipped.

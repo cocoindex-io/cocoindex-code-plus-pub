@@ -40,11 +40,12 @@ case "$event" in
     kind=grep
     tool_name=$(field tool_name)
     [ "$tool_name" = Read ] && kind=read
-    # Keep the event marker separate for host-history commands. The CLI
-    # classifies their exact command shape and reports the final kind.
+    # A host-history command earns one of several change kinds (a search, an
+    # open-state poll, a number lookup), each once: the CLI classifies its
+    # shape and reports the kind, which is claimed below.
     command_text=$(field command)
     case "$command_text" in
-      gh\ *|git\ log\ *--grep*) kind=change ;;
+      gh\ *|git\ log\ *--grep*) kind=unknown ;;
       git\ log\ *) kind=history ;;
       sed\ *|head\ *|cat\ *|awk\ *|tail\ *) kind=read ;;
     esac
@@ -99,7 +100,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start | change | history | read) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change | change_poll | change_number | history | read) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac
