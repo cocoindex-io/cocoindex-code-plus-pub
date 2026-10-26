@@ -1054,6 +1054,21 @@ Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
 order. Vector retrieval and automatic reranking keep their current defaults.
 No schema migration or index rebuild is required.
 
+### Host alternatives and three weak prior hits
+
+Upgrade the server and the CLI together. There is no new setting, no schema migration and no
+index rebuild.
+
+- **`OR` lists and `in:title`** in a `--kind change` query are read as gh
+  reads them. Each alternative brings up to three records: titles holding
+  its words as word prefixes (`integrat` finds "integrator"), an open issue
+  first, then the newest; then records whose diff or touched paths hold its
+  identifiers. They come first, labelled `near`, before the ranked results.
+- **`ccx prior`** prints the next two records under an item whose best
+  record is not `near`.
+- **Verify.** `ccx search --kind change "integrat in:title"` lists a record
+  whose title has "integrat…" first.
+
 ### Change search reads host syntax, polls and code names
 
 `--kind change` (and `ccx prior`) now reshapes the query before it ranks:
