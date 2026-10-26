@@ -241,6 +241,24 @@ A server and CLI change: no database change, no re-index, no new setting.
   logs `delivery: "prompt"` for briefs beside the prompt.
 - **Turning it off.** `CCX_BRIEF=0`, as before.
 
+### The symbol step's read line says where its seconds go
+
+An indexer change only: no server or CLI change, no database change, no
+re-index. The rows the symbol step writes do not change.
+
+- **What changed.** The `symbol graph: … read N parsed_module rows` line
+  now names the rows' size and splits its seconds between the database
+  and the engine's build of the tree: `read 1694 parsed_module rows
+  (100.4 MiB) in 9 rounds in 1.2s (fetch 0.3s, build 0.9s)`. A log query
+  that matched the old `rows in N rounds` wording needs the size added.
+- **Reading it.** A released engine builds about 100 MiB of IR a second.
+  A build ten times slower is a locally built engine left at the `dev`
+  profile's opt-level 0: on a 1,500-module Rust repository that cost every
+  symbol step 11 s and put symbols 15 s behind a one-function commit
+  instead of 4 s. Rebuild it with `CARGO_PROFILE_DEV_OPT_LEVEL=3 uv run
+  maturin develop`.
+- **Verify.** After a commit, the line's `build` is under 1 s per 100 MiB.
+
 ### A moved local branch starts the next indexer pass
 
 An indexer change only: no server or CLI change, no database change, no

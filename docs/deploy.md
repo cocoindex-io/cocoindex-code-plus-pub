@@ -1055,7 +1055,7 @@ notes:
   wrote:
 
   ```
-  symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows in 9 rounds in 2.3s; checking 3954 modules; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
+  symbol graph: github:github.com:4242 heads/main read 4108 parsed_module rows (212.4 MiB) in 9 rounds in 2.3s (fetch 0.5s, build 1.8s); checking 3954 modules; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
   symbol graph: github:github.com:4242 heads/main: resolving 3954 of 3954 modules (0 to check their records), reusing 0; memory 1.2 GiB used (cgroup; peak 1.4 GiB)
   symbol graph: github:github.com:4242 heads/main: 1200/3954 modules resolved, 0 rows compared, 1 min
   symbol graph: github:github.com:4242 heads/main: all 3954 modules resolved in 71.4s; comparing rows, 450000 compared, 2 min
