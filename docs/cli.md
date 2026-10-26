@@ -933,6 +933,7 @@ ccx ask --parent 7e3a0012 "and where is that retried?"   # continue a stored ans
 ccx ask "what are the main components?" --trace   # show the investigation as a tree
 ccx ask "what are the main components?" --json    # exact response model
 ccx ask --first "where is the retry policy?"      # the first answer only
+ccx ask --wait "where is the retry policy?" | less   # off a terminal, wait for the full answer
 ccx ask --collect 3f9c0a1b7d2e4f60                # the full answer, later
 ```
 
@@ -956,8 +957,13 @@ Things to expect:
   `ccx ask` prints a **first answer**: the definitions of the names your
   question spells, the files it names, and the best search hits, each with a
   citation and a few lines of the code. It is found by search and symbol
-  lookup with no model call, and it says so: nothing in it is verified. Then
-  `--- full answer ---` and the investigation's answer follow.
+  lookup with no model call, and it says so: nothing in it is verified. On a
+  terminal, `--- full answer ---` and the investigation's answer follow.
+- **Run by an agent or a script, it ends at the first answer.** When stdout
+  is not a terminal (an agent's tool call, a pipe, a file), `ccx ask` prints
+  the first answer and the `collect:` line and exits; the investigation goes
+  on on the server. `--wait` waits for the full answer in the same call;
+  `--json` and `--trace` wait too.
 - **The full answer is slower.** The agent runs many reads before answering —
   seconds to a couple of minutes for a broad question, up to the effort
   level's deadline (10 min by default, 20 min at `--effort high`). Reach for
@@ -967,7 +973,7 @@ Things to expect:
   the command: stop `ccx ask` (or let a harness timeout kill it) and the
   `collect: ccx ask --collect <id>` line it printed on stderr fetches the
   answer later, for 15 minutes after it finishes. `--first` prints the first
-  answer and that line and exits. On a deployment with several server pods a
+  answer and that line and exits, on a terminal too. On a deployment with several server pods a
   collect can reach another pod and answer `investigation_not_found`: ask the
   question again; with the answer cache on, a finished investigation's answer
   comes back at once.

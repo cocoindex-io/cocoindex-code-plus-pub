@@ -860,6 +860,29 @@ Upgrade the CLI. No server change, schema change or index rebuild.
   when the clone can tell it (`state: merged (on origin/main)`) and the host
   command for its branch and review state.
 
+### `ccx ask` run by an agent ends at the first answer
+
+Upgrade the CLI; the server is unchanged.
+
+When stdout is not a terminal (an agent's tool call, a pipe, a file),
+`ccx ask "<question>"` now prints the first answer and the
+`collect: ccx ask --collect <id>` line, and exits, as `--first` does; the
+investigation goes on on the server. On a terminal it still waits and prints
+the full answer. Agents waited a median 57 s, up to 224 s, for an answer most
+of them piped into `tail`, which also hid the first answer until the end.
+
+- **A script that reads the full answer from a pipe** adds `--wait`, or uses
+  `--json` (which still prints the full response) or `--collect <id>`.
+- **The Claude Code plugin's start hints and the skill** now say where to run
+  the collect: with `run_in_background` in the main conversation, in the
+  foreground in a subagent. The hints come from the CLI; update the skill
+  with it.
+- `--first --wait` is refused; `--collect` takes neither.
+
+Verify: `ccx ask "<question>" | cat` returns within seconds and ends with the
+`collect:` line on stderr; `ccx ask --wait "<question>" | cat` ends with the
+full answer.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or

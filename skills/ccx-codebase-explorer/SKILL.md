@@ -525,16 +525,17 @@ a question waits in its queue).
 
 **Where to run it.** `ask` prints a **first answer** in seconds — the
 locations search and symbol lookup find, each with a short excerpt, labeled
-and unverified — then the investigation's answer after minutes. The
-investigation runs on the server: stopping the command, or a timeout that
-kills it, loses nothing, and the `collect: ccx ask --collect <id>` line on
-stderr prints the answer later. When your harness wakes you on completion
-(Claude Code: `run_in_background: true` on the Bash call), start it in the
-background, read the first answer's locations while it runs, and take the
-full answer from the notice. In a subagent or a one-shot run, where a
-background command dies with the run, run `ccx ask --first "<question>"` in
-the foreground, work from its locations, and run its `collect:` command in the
-foreground when you need the full answer. Don't wrap it in a shell `timeout`.
+and unverified — and, run by an agent (stdout not a terminal), exits there
+with a `collect: ccx ask --collect <id>` line on stderr. The investigation
+goes on on the server and its answer comes in minutes. Read the whole first
+answer (no `| tail` or `| head`: its first locations are the definitions your
+question named) and work from its locations. When you need the full answer,
+run the `collect:` command: in the background when your harness wakes you on
+completion and ending your turn does not end your run (Claude Code's main
+conversation: `run_in_background: true` on the Bash call), so the notice
+brings it; in the foreground otherwise (a subagent, a one-shot run), where a
+background command dies with the run. `ccx ask --wait` waits for the full
+answer in the one call. Don't wrap it in a shell `timeout`.
 
 - **Read it as evidence, not proof.** Citations look like `[s0:path#L40-L52]`;
   `s0` resolves on stderr as `s0: <owner>/<repo> @ <ref> (commit <sha>)`, and
