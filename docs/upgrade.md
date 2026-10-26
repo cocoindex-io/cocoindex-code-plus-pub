@@ -39,6 +39,48 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### Broad text greps and search phrases read a window index
+
+Upgrade the server and indexer together. The first indexer pass re-reads
+every file once; nothing is re-embedded. The answers do not change, match
+for match.
+
+- **What changed.** `ccx grep --text` with no `--path`, or with paths that
+  keep more than 512 files, first asks a trigram index which files hold the
+  pattern's literals; the search asks the same of each phrase in its query.
+  That index works per file, and a long source file holds almost every
+  trigram, so it named hundreds of files for a literal a handful hold, and
+  read them all. The indexer now also stores every file in windows of 16
+  lines (`file_body_chunk`) with a trigram index on them, and both lookups
+  read the windows: a window holds a literal's trigrams only where the
+  literal could be. On the 602 distinct broad greps of three days of
+  agent transcripts, against a scratch index of reduce: p50 331 ms → 109 ms,
+  p95 1.1 s → 0.6 s, every answer identical; a phrase lookup p50 105 ms →
+  10 ms, the same files found for all 1,148 phrases.
+- **Disk and build time.** The windows are the file text again, plus their
+  index: for reduce (77 MB of text) 130 MB beside `file_body`'s 51 MB; for
+  the six repositories of the dev box about 265 MB beside 136 MB, some 5%
+  of the index schema. The index is built at the end of the first pass,
+  about 9 s for reduce and 17 s for the box, and blocks writes to the
+  table while it runs (the indexer's own, which come after it in the
+  pass).
+- **The first pass re-reads every file.** Adding the windows changed the
+  indexer's walk, so its first pass after the upgrade visits every file of
+  every repository again (from the indexer's read cache where it holds the
+  file, else the code host); it re-parses files and re-extracts symbols,
+  and re-embeds nothing. On the dev box that pass took 4 min 12 s for
+  reduce, against 13 min 46 s for its first pass ever. Until a
+  repository's pass has written its windows, its lookups use the
+  file-level index as before.
+- **Without `pg_trgm`** no window is stored and the lookups run as
+  before; installing the extension later re-reads every file once more to
+  write them
+  ([deploy.md → Text search index](deploy.md#text-search-index)).
+- **Verify.** After the pass the index schema (`ccx` by default) has a
+  table `file_body_chunk` and an index `file_body_chunk_body_lower_trgm`;
+  `SELECT count(*) FROM file_body f WHERE NOT EXISTS (SELECT 1 FROM
+  file_body_chunk c WHERE c.repo_key = f.repo_key AND c.sha1 = f.sha1)` is 0.
+
 ### `show` keeps the asked place in reach; search snippets move to your lines
 
 Upgrade the server and the CLI; no database change, no re-index.
