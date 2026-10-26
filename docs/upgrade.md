@@ -39,6 +39,29 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### `show` keeps the asked place in reach; search snippets move to your lines
+
+Upgrade the server and the CLI; no database change, no re-index.
+
+- **A small file shows whole.** `ccx show PATH` on a file of at most 60
+  lines and 2.5 KB prints the numbered file, as `-e` does, instead of an
+  outline that folded its bodies away. A depth, `--match` or a line keeps
+  what was asked.
+- **A line deep in a long definition gets a smaller answer.** `ccx show
+  PATH:LINE` more than 40 lines into its definition prints the header, the
+  lines around the asked one and the shallow rows within 6 KB (was 16 KB),
+  so a client that caps a command's output (Codex keeps its head and tail)
+  no longer cuts the asked place out of the middle. A line near the head
+  keeps the 16 KB budget.
+- **Search snippets in a file you changed.** On a page of several hits, a
+  hit in a locally differing file now prints its snippet at your working
+  tree's line numbers, marked `[local differs]`, when every row is placed
+  there; `[local differs, lines from index]` now means some row could not
+  be.
+- **Verify.** `ccx show` a short file: the header's view is the whole file.
+  `ccx show PATH:LINE` 200 lines into a long function: the output is under
+  6 KB and holds the asked line and the lines around it.
+
 ### The plugin runs range reads and history lookups as ccx commands
 
 Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
