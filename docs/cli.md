@@ -919,6 +919,9 @@ CLI remains the path for humans and shell scripts. The MCP tools track the CLI
 and REST API closely (same capabilities, same scoping).
 
 - **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP; `/mcp/` is the same endpoint).
+  It is stateless and serves `POST` only. Any other method, including the
+  `GET` that opens the optional server-to-client stream, gets `405` with
+  `Allow: POST`; MCP clients read that as "no stream" and go on.
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
