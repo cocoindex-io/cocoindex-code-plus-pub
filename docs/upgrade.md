@@ -109,6 +109,37 @@ Upgrade the CLI; no server or database change, no re-index.
 - **Optional.** `git pull` brings the clone near the index again, and the
   overlay answers for your own edits.
 
+### The overlay covers your branch's changes, not the files the index moved
+
+Upgrade the CLI; no server or database change, no re-index.
+
+- **What changed.** A worktree cut from an older `main` used to differ from
+  the indexed commit in hundreds of files. That went over the overlay's
+  bound, so the overlay stood aside for every command. ccx now splits the
+  differing files at the branch's merge base with the indexed commit:
+  - **Branch changes** are the files your branch or working tree changed
+    since that base, plus untracked files. The overlay and its 500-file /
+    32 MiB bound cover only these.
+  - **Files behind the index** are the files that differ only because the
+    index moved on. Hits in them answer as the index has them: the index's
+    line numbers, and no `[local differs]` mark on each hit. `show PATH`
+    and `show -s NAME` still render your file, headed `(working tree)`.
+- **Output.**
+  - The drift line counts files behind the index in one clause: `N of the
+    M files in this answer changed in the index after your branch's base
+    (SHA): shown as the index has them`.
+  - The bound note reads `N files (X MiB) your branch changed since its
+    base with the indexed commit, over the working-tree overlay's bound …`.
+    The old text `… differ locally from the indexed commit …` remains when
+    no base can be found. A script that matches the note should accept
+    both.
+- **No base, no split.** With a shallow clone, or an indexed commit that
+  is not in the clone, every differing file counts as before.
+- **Verify.** In a worktree a few hundred commits behind the index, with
+  a few commits of its own, `ccx grep --text PATTERN` prints no bound
+  note, marks hits only in your branch's files, and ends with the
+  `changed in the index after your branch's base` clause.
+
 ### History lookups name the matching ccx command
 
 Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
