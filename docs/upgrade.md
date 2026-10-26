@@ -51,6 +51,32 @@ A CLI change only: no server change, no database change, no re-index.
   the doc is listed. The short text under the header still prints the
   definition's own lines.
 
+### A trigram index on code terms keeps search's word lookup fast
+
+Upgrade the server and indexer together; no re-index.
+
+- **What changed.** Before ranking, `ccx search` looks up the query's words
+  among the repo's identifiers and string literals. That lookup read every
+  term of the repo on each search (about 120 ms on three cores for 600,000
+  terms), and under heavy load it passed its 1 s bound, so the search fell
+  back to vector results alone and its results changed with load. With
+  `pg_trgm` installed, the indexer now keeps a trigram index on
+  `lower(term)` of `code_terms`, and the lookup reads only the terms that
+  hold a query word: 5–100 ms on one core. The search also no longer looks
+  up a run of more than six words as a quoted phrase (no such run was ever
+  found in a file, and each lookup read every file of the repo), and a
+  phrase lookup past its bound keeps the word matches.
+- **Build time and disk.** The indexer builds the index at the end of its
+  first pass after the upgrade: about 1.5 s and 18 MB per 600,000 term rows
+  (reduce's repo: 59 MB of `code_terms` rows), so about 30% of the
+  `code_terms` table's size. The build blocks writes to `code_terms` while
+  it runs (the indexer's own, which come after it in the pass); searches
+  and greps go on reading.
+- **Without `pg_trgm`** nothing is built and the lookup scans as before
+  ([deploy.md → Text search index](deploy.md#text-search-index)).
+- **Verify.** After the pass the index schema (`ccx` by default) has an
+  index named `code_terms_term_trgm`.
+
 ### One search result per definition, imports folded
 
 Upgrade the CLI and server together; no database change and no re-index.
