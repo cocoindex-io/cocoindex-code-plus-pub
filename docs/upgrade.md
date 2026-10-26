@@ -78,12 +78,36 @@ show` prints no drift line for a working-tree render.
 
 - **Output changes in place.** A `grep --text` line or a `defs` row can end
   with `[working tree]`; a script that parses rows should accept the mark.
-  Local `grep --text` hits print before the index's.
-- **Bound.** The overlay reads at most 500 files or 32 MiB per command; a
-  stderr note says when it stood aside.
+  A differing file's local `grep --text` hits print in its place on the page.
+- **Bound.** The overlay answers when at most 500 files or 32 MiB differ in
+  the checkout; a stderr note says when it stood aside.
 - **Verify.** In a checkout with a new function, `ccx defs <name>` lists
   it with `[working tree]`.
 - **Optional.** `--git-ref <branch>` still reads the index alone.
+
+### The working tree no longer takes the grep page
+
+Upgrade the CLI; no server or database change, no re-index.
+
+- **What changed.** `ccx grep --text` used to print the working tree's hits
+  of differing files first, up to 100 in path order. In a clone far behind
+  the index, they filled the page and hid the files that do not differ.
+  - Now a differing file's hits take its place on the page, and every other
+    file prints as it would without the overlay.
+  - The overlay's bound (500 files or 32 MiB) now counts every file that
+    differs in the checkout, not only those under `--path`. Above it, `grep
+    --text`, `defs`, `refs` and `show -s` answer from the index, marked,
+    with one stderr note.
+- **Output.** The note reads `N files (X MiB) differ locally from the
+  indexed commit, over the working-tree overlay's bound …`. A script that
+  matched the old `… in scope differ locally …` text should match the new
+  one. Lines marked `[working tree]` no longer come first.
+- **Verify.** In a clone a few hundred commits behind the index, `ccx grep
+  --text PATTERN --path 'DIR/**'` prints the files that do not differ with
+  the same lines, in the same order, as the same command with `--git-ref
+  main`.
+- **Optional.** `git pull` brings the clone near the index again, and the
+  overlay answers for your own edits.
 
 ### History lookups name the matching ccx command
 
@@ -104,6 +128,33 @@ update ccx`); no server or database change, no re-index.
   the agent's search words instead of naming the command alone.
 - **Verify.** `ccx log -G 'x' --rev HEAD -n 1` prints a commit line or
   `No commit changes a line matching 'x' in HEAD.`
+
+### The plugin blocks the first range read and history lookup once
+
+Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
+update ccx`); no server or database change, no re-index.
+
+- **Block once, then allow.** In an indexed checkout, an agent's first
+  line-range read of a source file (`sed -n A,Bp`, `awk` NR, `tail -n +A`)
+  is refused with the exact `ccx show FILE:LINE` (and `--lines A-B` for a
+  wide range) to run instead; its first `git log -S/-G/-L` and its first
+  `gh` search with topic words likewise, naming the `ccx log` or `ccx
+  search --kind change` command. The same command run again goes through,
+  and every later one runs with its one-line hint, each time rather than
+  once. Each agent (a subagent too) is refused once per kind.
+- **Never refused:** a read piped or chained with other commands, the `Read`
+  tool, a non-source file, a file outside the checkout, a lookup in another
+  repository (`cd`, `git -C`, `gh -R`), `git log --grep`, a `--state open`
+  poll, or any call while the server's `/health` does not answer in 2 s.
+- **Turn it off** with `CCX_HOOK_BLOCK=0` in Claude Code's environment
+  (`env` in `settings.json`); the hints stay.
+- **A local log.** Each decision is appended to
+  `~/.cache/ccx/hook-decisions.jsonl` (rotated at 2 MB, one old file kept);
+  nothing is sent anywhere.
+- **Verify.** In an indexed checkout, ask Claude Code to run
+  `sed -n 10,40p <a source file>`: the call is refused with a reason that
+  starts "Run this instead:" and names `ccx show FILE:25`; asked again, it
+  runs.
 
 ### Fewer errors from agent mistakes and timeouts
 
@@ -701,6 +752,35 @@ migration, no re-index.
   `just`, `whose`, `about` and `again` are dropped from the lexical lookup
   and from the lines a merged hit reveals. As rare words they counted most
   ("move a session to another machine" weighed `another` over `machine`).
+
+### A loaded host no longer stalls the server in a log write
+
+Upgrade the server; no database change, no re-index, no new setting.
+
+- **Logging never blocks a request.** Log records go on a queue that one
+  thread writes to stdout and stderr. When the log collector falls behind
+  (a full journald or container-runtime pipe on a loaded host), the server
+  keeps serving; past 20,000 waiting records it drops new ones and then
+  logs `N log records dropped: the log stream took no writes`. Before,
+  every thread that logged waited for the pipe: at load 250 the event loop
+  stalled for tens of seconds and two searches answered their deadline
+  `503` 13 s and 33 s late.
+- **Event-loop stall WARNING.** A stall of 2 s or more logs one line from
+  `cocoindex_code_plus.query_server.loop_watch`: its seconds on CPU, waiting
+  for a CPU and blocked, the major page faults (swap), the loop thread's
+  scheduler states and stack, and the other threads that were running.
+- **The deadline `503` goes out at the deadline.** It no longer waits for
+  the cancelled work to unwind (a statement's cancel, the rollback); that
+  finishes detached and logs `cancelled request work unwound Ns after its
+  503`. The deadline WARNING now measures how late the timer fired, not
+  the unwind.
+- **No search holds a transaction idle.** A search that reads code and the
+  change section on two connections commits each one when its part is
+  done; before, the first one done sat idle in transaction until the other
+  finished (37 s and 45 s seen under load).
+- **Verify.** Under load, `pg_stat_activity` shows no `ccx-query-server`
+  backend `idle in transaction` for more than a second or two, and no
+  request in the audit log has `duration_ms` above the deadline plus 1 s.
 
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 

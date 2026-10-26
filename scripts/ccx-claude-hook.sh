@@ -7,8 +7,12 @@
 # Division of labour: this script only keeps the per-agent markers that make
 # each kind of hint fire once per agent (Claude Code's `once` applies to skill
 # hooks only), and leaves every judgement to `ccx indexed --claude-hook`: the
-# CLI owns the server, the credential, the cache and the wording. It always
-# exits 0: a hook that fails must never interrupt the agent.
+# CLI owns the server, the credential, the cache and the wording. Range reads
+# and history lookups (kinds read, history, change) keep no marker: the CLI
+# blocks the first one of each kind per agent with the ccx command to run
+# instead, allows it run again, and hints at every later one
+# (CCX_HOOK_BLOCK=0 turns blocking off). It always exits 0: a hook that fails
+# must never interrupt the agent.
 set -u
 
 input=$(cat)
@@ -39,7 +43,12 @@ case "$event" in
   PreToolUse)
     kind=grep
     tool_name=$(field tool_name)
-    [ "$tool_name" = Read ] && kind=read
+    if [ "$tool_name" = Read ]; then
+      kind=read
+      # Only a windowed Read earns anything; reads keep no marker, so skip
+      # the CLI for every whole-file Read here.
+      case "$input" in *'"offset"'* | *'"limit"'*) ;; *) exit 0 ;; esac
+    fi
     # Keep the event marker separate for host-history commands. The CLI
     # classifies their exact command shape and reports the final kind.
     command_text=$(field command)
@@ -74,7 +83,12 @@ if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = cle
 fi
 
 marker="$prefix-$kind"
-[ "$kind" != unknown ] && [ -e "$marker" ] && exit 0
+# Kinds the CLI answers at every call: no marker spends them.
+every_call() {
+  case "$1" in read | history | change) return 0 ;; esac
+  return 1
+}
+[ "$kind" != unknown ] && ! every_call "$kind" && [ -e "$marker" ] && exit 0
 # "Could not tell" (server down, not logged in) is retried after five minutes,
 # not at every search.
 retry="$prefix-retry"
@@ -104,7 +118,9 @@ case "$status" in
         *) ;; # Newer CLIs fall back to the event marker.
       esac
       # Claim this (agent, kind) once, even when tool hooks run in parallel.
-      (set -C; : >"$marker") 2>/dev/null || exit 0
+      if ! every_call "${reported_kind:-$kind}"; then
+        (set -C; : >"$marker") 2>/dev/null || exit 0
+      fi
       printf '%s\n' "$output"
     fi
     ;;
