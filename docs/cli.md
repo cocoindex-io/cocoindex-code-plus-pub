@@ -1624,7 +1624,11 @@ Use `ccx show '#2901'` or `ccx show https://github.com/acme/api/pull/2901`
 to read a record from the change index. A number uses the current repository;
 pass `--repo acme/api` to select another repository. The output includes the
 state's read time, dates, first body part, touched paths and symbols, and the
-number of retained indexed comments. Missing numbers report index coverage.
+number of retained indexed comments. In a clone that holds the pull
+request's commit, its diff follows: every changed line of its source files
+when they change 93 lines or fewer, else a short excerpt. Missing numbers
+report index coverage; below the index's floor the clone's landing commit
+and its state stand in.
 These reads do not call GitHub.
 A search query containing only `#N` selects that record too; pass `--kind code`
 to search code for the number instead.
