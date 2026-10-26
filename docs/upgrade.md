@@ -174,7 +174,7 @@ update ccx`); no server or database change, no re-index.
   and every later one runs with its one-line hint, each time rather than
   once. Each agent (a subagent too) is refused once per kind.
 - **Never refused:** a read piped or chained with other commands, the `Read`
-  tool, a non-source file, a file outside the checkout, a lookup in another
+  tool (both reach further in a later release, below), a non-source file, a file outside the checkout, a lookup in another
   repository (`cd`, `git -C`, `gh -R`), `git log --grep`, a `--state open`
   poll, or any call while the server's `/health` does not answer in 2 s.
 - **Turn it off** with `CCX_HOOK_BLOCK=0` in Claude Code's environment
@@ -186,6 +186,41 @@ update ccx`); no server or database change, no re-index.
   `sed -n 10,40p <a source file>`: the call is refused with a reason that
   starts "Run this instead:" and names `ccx show FILE:25`; asked again, it
   runs.
+
+### The plugin's block reaches chained lookups, and logs each call once
+
+Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace
+update ccx`); no server or database change, no re-index. Either one alone
+still works: the old plugin with the new CLI, or the reverse, logs each call
+once too.
+
+- **Chained lookups may be blocked once.** Agents chain their lookups
+  (`cd ../fix-x && grep -n X a.rs | head; git log -S X | cat`), so the
+  first-call block never reached a history lookup. A read or history lookup
+  beside commands that only print (`cd`, `echo`, `grep … | head`, `sed -n`,
+  `git show`, `gh pr view`, `ccx`) is now refused once like a lone one, and
+  the lookup's own output may go through `cat` or `head`/`tail -N`. The
+  command named runs where the agent's did: `cd DIR && ccx log -S X`, or
+  `--repo owner/repo` for `gh -R`. A folder that is not an indexed checkout
+  earns nothing.
+- **Still never refused:** a substitution or heredoc (`L=$(grep -n …)`), a
+  loop, `||`, a redirection, a filter on the lookup's own output (`| grep`),
+  any command that changes something (`git checkout`, `cargo test`, `sed
+  -i`), or a folder or repository named by a variable.
+- **The Read tool with `offset` or `limit`** is a range read: it may be the
+  call that is refused.
+- **Reshaped is not new.** After a refusal, the same file read with
+  overlapping lines (the range moved by a line, `Read` instead of `sed`) or
+  the same history search goes through silently, logged `reshaped`.
+- **One log line per tool call.** Claude Code starts the hook once per
+  matching handler, up to ten times for one command; the plugin and the CLI
+  now answer once per `tool_use_id`. `scripts/ccx_hook_follow_rate.py`
+  dedupes older logs, prints the tool calls it kept, and adds a "worked
+  around" column for refusals followed by the same lookup in another shape.
+- **Verify.** In an indexed checkout, ask Claude Code to run `cd <a
+  subfolder> && git log --oneline -S <a word> | cat`: the call is refused
+  with "Run this instead: `cd … && ccx log -S …`"; asked again, it runs.
+  `~/.cache/ccx/hook-decisions.jsonl` has one line for it.
 
 ### Fewer errors from agent mistakes and timeouts
 
