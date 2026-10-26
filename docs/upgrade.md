@@ -195,6 +195,17 @@ switch is the same (`CCX_BRIEF=0`).
   `~/.cache/ccx/brief.jsonl` logs `skip:not_code` (`skip:other_repo` for a
   link to another repository).
 
+### Several names in one `ccx defs`
+
+Upgrade the CLI; nothing on the server changes. The skill's revision moves
+to `2026-10-26.1`, so the CLI asks for the plugin update.
+
+- **`ccx defs A B C`** looks several names up in one call, in parallel: one
+  line per definition (`path:start-end [kind] Type.name  signature`), the
+  names with none on one `no definition: a, b` line, bodies only with
+  `--body`. Exit 1 only when no name was found. One name is as before.
+- **Verify**: `ccx defs <a name> <another>` prints a line for each.
+
 ### A subagent's brief places the names its task spells
 
 Upgrade the server and the CLI together; the plugin picks the CLI up. No

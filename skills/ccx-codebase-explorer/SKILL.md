@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-25.1"
+  ccx-skill-revision: "2026-10-26.1"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -49,6 +49,7 @@ One command per question, from a checkout of the repo (no flags needed):
 
 ```bash
 ccx defs <Name>                       # where is it defined — then paste the row's `uses:` command
+ccx defs <A> <B> <C>                  # several names: one call, one line each (--body for bodies)
 ccx refs <Name> --role call           # who calls it
 ccx search "<what the code does>"     # no exact term to grep
 ccx grep '<pattern>' -l <language>    # a syntactic shape
@@ -383,6 +384,7 @@ ccx defs Repo.find                           # a member with its qualifier (C++/
 ccx defs python:db.Repo.find                 # exact qualified name (the ':' selects the mode)
 ccx defs lookup:withDefault:                 # an Objective-C method: its full selector
 ccx defs Config --kind class --lang python   # filter: --kind / --lang / --path
+ccx defs answered refused Rig --path src     # several names in one call, not `ccx defs A; ccx defs B` or `grep 'fn A|fn B'`
 ccx refs QueryService                        # uses, by base name (broad recall)
 ccx refs Repo.find                           # uses of every definition the dotted name matches
 ccx refs python:db.Repo.find                 # every use of this exact qualified name
