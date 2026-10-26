@@ -6,9 +6,13 @@
 # answers in about 0.4 s, within about 1.5 s at most; a brief not ready by
 # then is left for the agent's next tool call, and this script's PreToolUse
 # entry delivers it. That entry runs at every tool call, so it starts the CLI
-# only when a brief is waiting for this agent. CCX_BRIEF=0 turns it off. It
-# always exits 0 and prints nothing on failure: a prompt hook must never
-# hold up or fail a prompt.
+# only when a brief is waiting for this agent, or when the call is an Agent
+# (Task) call: then the CLI appends a brief of the subagent's own task to the
+# prompt it hands the subagent (`updatedInput`; a subagent never gets
+# UserPromptSubmit), reading for up to 2 s. CCX_BRIEF=0 turns every brief
+# off, CCX_SUBAGENT_BRIEF=0 the subagent's alone. It always exits 0 and
+# prints nothing on failure: a prompt hook must never hold up or fail a
+# prompt, nor a subagent's start.
 set -u
 
 case "${CCX_BRIEF:-}" in 0 | off | false | no | OFF | False | NO) exit 0 ;; esac
@@ -25,7 +29,14 @@ case "$event" in
     case "$session" in "" | *[!a-zA-Z0-9_-]*) exit 0 ;; esac
     case "$agent" in *[!a-zA-Z0-9_-]*) exit 0 ;; esac
     pending="${XDG_CACHE_HOME:-$HOME/.cache}/ccx/brief-state/$session-${agent:-main}.pending"
-    [ -e "$pending" ] || exit 0
+    case "$(field tool_name)" in
+      Agent | Task)
+        case "${CCX_SUBAGENT_BRIEF:-}" in
+          0 | off | false | no | OFF | False | NO) [ -e "$pending" ] || exit 0 ;;
+        esac
+        ;;
+      *) [ -e "$pending" ] || exit 0 ;;
+    esac
     ;;
   *) exit 0 ;;
 esac

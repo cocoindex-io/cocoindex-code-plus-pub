@@ -198,6 +198,27 @@ server's new brief route (next entry), so upgrade the server with the CLI.
   gets one line per prompt (the decision, the locations given, never the
   prompt's text).
 
+### A subagent gets a brief of its own
+
+A CLI and plugin change: no server change, no re-index.
+
+- **What changed.** A subagent never sees `UserPromptSubmit`: its task is
+  the `prompt` of the parent's `Agent` call. The plugin's `PreToolUse`
+  entry for the brief (already on every tool) now starts the CLI on an
+  `Agent` (or `Task`) call too, and the CLI appends a brief of that task to
+  the prompt the subagent receives (`updatedInput`): the definitions of the
+  symbols the parent named, the files it named by a bare name, and the
+  search's files, leaving out the files the parent spelled in full. The
+  parent's call waits for it up to 2 s (about 0.3 s with the route); the
+  parent's own context keeps the call as its model wrote it.
+- **What to do.** Upgrade the CLI and update the plugin together.
+- **Turning it off.** `CCX_SUBAGENT_BRIEF=0` for this one alone;
+  `CCX_BRIEF=0` turns off every brief.
+- **Verify.** Have an agent start a subagent in an indexed checkout: the
+  subagent's first message ends with `ccx brief (added by the ccx plugin
+  …)`, and `~/.cache/ccx/brief.jsonl` logs `delivery: "subagent"` with the
+  call's `tool_use_id`.
+
 ### The brief reads its evidence in one call
 
 A server and CLI change: no database change, no re-index, no new setting.
