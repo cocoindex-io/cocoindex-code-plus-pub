@@ -147,31 +147,6 @@ the opt-out (`CCX_HOOK=off` in the command).
   ms on the box) where grep takes a few milliseconds. On 300 real
   commands replayed both ways, every grep ccx answered printed the
   original's lines, at the same bytes plus the `[ccx]` line.
-### The plugin adds the definition a definition grep found
-
-Upgrade the CLI and the plugin together: the plugin's script now asks the
-CLI after a definition grep even once its result hint is spent. The kill
-switch is `CCX_HOOK_DEFINITION=0` (`CCX_HOOK_REWRITE=0` turns it off too).
-
-- **What changed.** After a grep for one definition — `grep -n "fn
-  hand_to_journal" crates/…/nested.rs`, `rg -n "struct Returned" crates`
-  — in Bash or with the Grep tool, with no `-A`/`-B`/`-C`, at most 10 hit lines and exactly one of them
-  defining the name, the agent gets the whole definition after the grep's
-  output: `[ccx] function hand_to_journal, crates/…/nested.rs:1329-1354,
-  whole:` and its lines numbered as `grep -n` numbers them, from the
-  working tree. Only definitions of at most 30 lines and 3,000 bytes that
-  the grep did not print already. The grep runs as written and its output
-  is unchanged.
-- **Why so narrow.** Replayed on three days of subagent greps, a body
-  added to every definition grep cost 386 KB and spared reads worth 31 KB:
-  65% of definition greps already carry `-A`, and the read after one is
-  mostly wider than the definition. The narrow case is the only one with
-  a positive bound (45 greps in three days), so expect it to fire about
-  once in three subagent runs: agents mostly grep several names at once.
-- **Verify.** In an indexed checkout, run a definition grep from Claude
-  Code; `~/.cache/ccx/hook-decisions.jsonl` logs kind `definition`,
-  decision `append`.
-
 
 ### The prompt brief skips prompts that are not about the code
 
