@@ -113,7 +113,7 @@ spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 |---|---|
 | `gh pr list --search "sidebar animation" --state all` | `ccx search --kind change "sidebar plays drop animations on restart"` |
 | `gh pr list --state open --search "fix clippy"` (is a fix already in?) | `ccx search --kind change "<the failing test or error line>"`: it also sees merged fixes, which `--state open` hides |
-| `gh pr view 2901` | `ccx show '#2901'` (a PR or issue URL also works) |
+| `gh pr view 2901 --json body`, `--comments` | `ccx show '#2901' --full` (the body whole, every comment and review; a PR or issue URL also works) |
 | `gh issue list --state open --search "Main is red"` | `ccx search --kind change "Main is red" --state open --sort updated` |
 | `gh search prs "rate limit breaker"` | `ccx search --kind change "GitHub calls fail with 403 until the reset"` |
 | `git log --oneline --grep="landing"` | `ccx search --kind change "landing retries after a rate limit"` |
@@ -130,7 +130,9 @@ counts. One query per question; read the top three hits.
 
 - **Before you start a fix or a listed task:** `ccx prior -`. A `near` hit
   that is `merged` means the work may already be on main: read it before
-  you write code.
+  you write code. For an issue number, `ccx show '#N'`: its `named by:`
+  lines are the pull requests that fixed it, and a pull request's diff
+  header says whether its landing commit is still on main or was reverted.
 - **When a test or build fails on main:** `ccx search --kind change` with the
   first error line, and `ccx refs <test> --kind change --since 2d`.
 - **When a line looks wrong:** `ccx log <symbol>`, then the PR it names.

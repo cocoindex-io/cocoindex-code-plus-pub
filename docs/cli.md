@@ -1256,10 +1256,12 @@ has been checked against the repositories in question.
      a grep that found nothing or far too much; at a direct source-file read
      with `sed -n`, `awk`, `tail`, `head`, `cat`, or windowed `Read` (naming `ccx show FILE:LINE`); at
      a history lookup: `git log -S`, `-G` or `-L` (naming the matching
-     `ccx log` command) and a `gh` search of pull requests or issues or
-     `git log --grep` (naming `ccx search --kind change` and `ccx prior`),
-     but not a poll of what is open now (`--state open`), a title-phrase list
-     (`in:title`), a PR-number lookup or `gh pr view`; and when a session or
+     `ccx log` command), a `gh` search of pull requests or issues or
+     `git log --grep` (naming `ccx search --kind change` and `ccx prior`; a
+     poll of open state too, dated by the index's last sweep) and a `gh pr
+     view N` or `gh issue view N` of content fields (naming `ccx show '#N'
+     --full`), but not a view of live state (`--json state,mergeable`, the
+     head branch) or a PR-number search; and when a session or
      subagent starts, where the line also says how to run `ccx ask` there
      (in the background from the main conversation; in the foreground with
      the full ten-minute timeout from a subagent, whose run ending would end
@@ -1648,8 +1650,15 @@ Use `ccx show '#2901'` or `ccx show https://github.com/acme/api/pull/2901`
 to read a record from the change index. A number uses the current repository;
 pass `--repo acme/api` to select another repository. The output includes the
 state's read time, dates, first body part, touched paths and symbols, and the
-number of retained indexed comments. In a clone that holds the pull
-request's commit, its diff follows: every changed line of its source files
+number of retained indexed comments. `--full` prints the body whole and
+then every indexed comment, review and review comment, oldest first, each
+under its author and time (a review comment names the path and line it
+anchors to); the hook runs a `gh pr view N --json body` as this. `named by:`
+lists the records whose title or text name this one: for an issue, the pull
+requests that fixed it; for a pull request, its issue and any revert. In a clone that holds the pull
+request's commit, its diff follows, its header saying whether the landing
+commit is still on the default branch or was reverted (`landed it; reverted
+on origin/main by <sha>, #M`): every changed line of its source files
 when they change 93 lines or fewer, else a short excerpt. Missing numbers
 report index coverage; below the index's floor the clone's landing commit
 and its state stand in.
