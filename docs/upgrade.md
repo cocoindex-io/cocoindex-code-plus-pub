@@ -95,6 +95,31 @@ search, definitions).
   gets one line per prompt (the decision, the locations given, never the
   prompt's text).
 
+### A moved local branch starts the next indexer pass
+
+An indexer change only: no server or CLI change, no database change, no
+re-index.
+
+- **What changed.** In cycle mode (`--cycle-seconds`), between two passes
+  the indexer reads, every 5 s, the heads of the branches its last pass
+  indexed from a `localgit` repository. When one moved, the next pass
+  starts at once instead of at the next cycle. Such an early pass indexes
+  code only: the change ingest keeps the cycle's cadence, so its GraphQL
+  use and reserve are unchanged. Full passes keep their schedule. The log
+  says `Early pass (code only) finished` for one, and names the ref that
+  moved.
+- **Fetching a mirror.** `CCX_LOCALGIT_FETCH_SECONDS` (default `0`, off)
+  makes the indexer ask a bare `localgit` repository's `origin` for those
+  branches at that period (`git ls-remote`), and fetch the ones that
+  moved. Working checkouts are never fetched. With `15`, a commit merged
+  on the code host is searchable after about one pass (under a minute for
+  a large repo) instead of after the mirror's fetch and the next cycle.
+- **Turning it off.** `CCX_INDEXER_WATCH_SECONDS=0` restores the plain
+  cycle. A deployment with no `localgit` entry behaves as before.
+- **What it costs.** A pass per merged commit, so more passes, each
+  clearing and republishing the completeness stamps. Each early pass
+  resolves the commits of `github`/`gitlab` repos' refs, as any pass does.
+
 ### `ccx log` spans include the doc comment
 
 A CLI change only: no server change, no database change, no re-index.
