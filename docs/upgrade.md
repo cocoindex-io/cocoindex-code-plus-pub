@@ -58,7 +58,7 @@ before.
   rewrite within the same tool, so a windowed Read is still refused once),
   a command that changes something, a filtered or redirected read, a
   substitution or loop, a file over 4 MB, a `git log` or `gh` option ccx
-  does not carry (`--author`, `--follow`, `--jq`, a qualifier), a folder
+  does not carry (`--follow`, `--grep`, `--jq`, a qualifier), a folder
   that is not an indexed checkout, or while `/health` does not answer in
   2 s. A ccx failure at run time falls back to the original command.
 - **`ccx show --lines A-B --whole-definition`** is the new option behind
@@ -119,6 +119,26 @@ re-index.
 - **What it costs.** A pass per merged commit, so more passes, each
   clearing and republishing the completeness stamps. Each early pass
   resolves the commits of `github`/`gitlab` repos' refs, as any pass does.
+
+### `ccx log -S/-G` walks every ref, by author, oldest first
+
+A CLI change only: no server change, no database change, no re-index.
+Upgrade the plugin with it for the rewrite.
+
+- **`--all`** searches every local ref (branches, tags, remotes, stash),
+  as `git log --all -S` does; `--author PATTERN` (repeatable) keeps the
+  commits whose author matches; `--reverse` prints the `-n` oldest first,
+  so `ccx log -S X --all --reverse -n 1` names the commit that first
+  added X. With a SYMBOL they exit 1, as `--rev` does.
+- **Rewritten.** The plugin now runs `git log -S/-G` with `--all`,
+  `--author` or `--reverse` as `ccx log` (`… --reverse | head -1` becomes
+  `--reverse -n 1`). `--reverse` with a count (`-n 3`) is still run as
+  written: git keeps the newest three there.
+- **Speed.** `--all` and `--reverse` search the whole walk in chunks side
+  by side: 2.6 s on a 5,800-commit history where `git log --all -S` takes
+  15 s.
+- **Verify.** `ccx log -S <text> --all --reverse -n 1` names the same
+  commit as `git log --all --reverse --format=%h -S <text> | head -1`.
 
 ### `ccx log` spans include the doc comment
 
