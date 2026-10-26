@@ -390,9 +390,9 @@ terminal:
   level, -e everything.` `--depth N` sets the level yourself and is never
   folded further; `-e` and `--depth` are exclusive.
 
-It reads the file from your **working tree** when it is there (inside or
-outside a checkout; outside one no repo is needed), so it is right on the
-branch you are on; the index serves only the fallbacks below. `ccx show
+It reads the file from your **working tree** (inside or outside a checkout;
+outside one no repo is needed), so it is right on the branch you are on;
+`--git-ref` or `--repo` reads the indexed copy instead. `ccx show
 PATH:LINE` renders one definition whole, its doc included; on an import line
 it prints the imports. `-e/--expand` renders everything verbatim.
 
@@ -456,10 +456,12 @@ src/db.py  method Repo.find  L27-L42  (working tree)
 42:         return row
 ```
 
-**Where the text comes from.** The working tree is the default source; the
-index serves the file when it is not on disk, when `--git-ref` names a ref or
-`--repo` a repo, or when the file is over the request-body bound (8 MiB) — a
-stderr note says which, and the header says `indexed`. `-s NAME` resolves the
+**Where the text comes from.** The working tree is the source unless
+`--git-ref` names a ref or `--repo` a repo; then the index serves the file and
+the header says `indexed`. Without a flag, a file that is not on disk or is
+over the request-body bound (8 MiB) is an error, exit 1, naming the flag to
+pass — inside an indexed checkout, with the ref and commit it would read; the
+index is never read in the file's place. `-s NAME` resolves the
 name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
@@ -477,14 +479,14 @@ and the audit record holds the path, counts (objects rendered, lines and
 characters sent and folded) and, inside a checkout, the repository the file
 belongs to: the CLI sends the repository it detected as a hint, the server
 authorizes it as it authorizes any repository, and usage analytics attributes
-the request to it — nothing else depends on the hint. Nothing is sent for a
-file over the bound or when `--git-ref` is given; a file with NUL bytes is
-refused as binary.
+the request to it — nothing else depends on the hint. Nothing is sent when
+`--git-ref` or `--repo` is given, nor for a file over the bound (an error); a
+file with NUL bytes is refused as binary.
 
 Exit codes: 0 with output (the listing included); 1 when `-s` matches
-nothing, when the path is on neither side (not on disk, not in the ref), or
-on a usage error such as `-s` together with a `PATH:LINE`; 2 on a malformed
-command line.
+nothing, when a path is not on disk or over the bound (no flag) or not in the
+ref (with a flag), or on a usage error such as `-s` together with a
+`PATH:LINE`; 2 on a malformed command line.
 
 ### `ccx ask` — ask a question, get an answer
 
