@@ -39,6 +39,28 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### The plugin briefs a task before the agent looks
+
+A CLI and plugin change only: no server change, no database change, no
+re-index. It reads what the server already serves (code search, change
+search, definitions).
+
+- **What changed.** When a user submits a task in Claude Code, the plugin's
+  new `UserPromptSubmit` hook (`scripts/ccx-brief-hook.sh`, running
+  `ccx brief --claude-hook`) puts a brief beside it: up to 8 code locations
+  and 3 pull requests or issues the task most likely touches, each with a
+  short excerpt, in about 3 KB. The prompt waits at most about 1.5 s; a
+  brief that is not ready by then goes beside the agent's next tool call (a
+  `PreToolUse` entry on every tool that starts the CLI only when a brief is
+  waiting). Chit-chat ("yes", "continue"), commands and machine turns get
+  nothing.
+- **What to do.** Upgrade the CLI and update the plugin together: an older
+  CLI has no `brief` command, and the hook then says nothing.
+- **Turning it off.** `CCX_BRIEF=0` in the agent's environment.
+- **Verify.** Submit a task in an indexed checkout; `~/.cache/ccx/brief.jsonl`
+  gets one line per prompt (the decision, the locations given, never the
+  prompt's text).
+
 ### `ccx log` spans include the doc comment
 
 A CLI change only: no server change, no database change, no re-index.
