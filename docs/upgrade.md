@@ -39,6 +39,28 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### `show PATH:LINE` on a blank line shows one definition; `ccx log` keeps the fixes next to a symbol
+
+Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.
+
+- **`show PATH:LINE` on a gap.** A blank or comment-only line between
+  definitions resolves at the nearest definition: the one below, or the
+  one above when the line follows its end and nothing is defined next (the
+  blank line before an impl's `}`). A line past the end resolves at the
+  file's last line of code. Before, such a line opened the object around
+  the gap, which between two top-level items was the file's outline: 33 KB
+  for one function on a 10,150-line file. In a long file, a line that no
+  object holds (a top-level `const`) shows its run of lines, never the
+  outline. Markdown and languages without structure keep the line as
+  asked.
+- **`ccx log SYMBOL`, "Since …".** A commit's hunk is now placed against
+  the symbol's lines as they stood at that commit, not at HEAD. Lines added
+  above a symbol after a fix no longer push the fix out of `next to it`
+  and off a short list (`ccx log dialog_in … -n 3` lists #3284 and #3268
+  again). A hunk within the symbol's lines ranks first.
+- **Verify.** `ccx show <file>:<a blank line between two functions>`
+  prints the function below, not `file L1-…`.
+
 ### The prompt brief skips prompts that are not about the code
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
