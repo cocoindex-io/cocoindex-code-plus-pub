@@ -39,6 +39,28 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### The prompt brief skips prompts that are not about the code
+
+Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
+switch is the same (`CCX_BRIEF=0`).
+
+- **What changed.** A prompt gets no brief when it only asks, approves or
+  speaks of the work around the code ("fix all and merge", "what's latest
+  ccx effect", "skip the gate and push"), or links to another repository
+  and names nothing in this one. A prompt that spells a symbol or a path
+  always passes; "#3393 fix this bug" still gets one. The sentences Reduce
+  adds to a prompt (its reply-style paragraph, an account move's
+  "Continue.", a parent session's message header) no longer count as the
+  task's words, so a short approval stays below the four-word floor. On
+  three days of the box's prompts, half the briefs went to prompts that
+  were not code tasks; now about a third do, and 4 of 102 code tasks lose
+  theirs (prompts with no subject, such as "review this PR and find bugs").
+- **`ccx brief`** prints `Not a code task: no brief (not_code).` for such
+  a prompt; with `--json`, `{"skip": "not_code", …}`.
+- **Verify.** Submit "fix all and merge" in an indexed checkout:
+  `~/.cache/ccx/brief.jsonl` logs `skip:not_code` (`skip:other_repo` for a
+  link to another repository).
+
 ### The plugin rewrites more range reads: several ranges, numbered reads, docs, loops, nested checkouts
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
