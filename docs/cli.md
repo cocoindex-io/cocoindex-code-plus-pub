@@ -951,7 +951,8 @@ and REST API closely (same capabilities, same scoping).
     definition whose qualified name ends with it. The response's `coverage`
     states how complete the symbol index is for the ref, and `warnings`
     explains a miss on a dotted `name` sent as a base name (naming the
-    `name_path` lookup to run instead).
+    `name_path` lookup to run instead), or says that an empty result covers a
+    ref with files that are not indexed.
   - `find_references(repo, path?+entity_id?|qualified_name?|name_path?|base_name?,
     git_ref?, roles?, include_unresolved?, limit?, offset?)` → where a symbol is
     used — one exact definition (`path` + `entity_id` from `find_definitions`),
@@ -960,12 +961,13 @@ and REST API closely (same capabilities, same scoping).
     `Repo.find`), or by `base_name`; rows carry `resolution` (`resolved` /
     `ambiguous` / `name_only`) and a reference role (`roles` filters on those, a
     different vocabulary from `find_definitions.kinds`), plus the same
-    `coverage`. An exact or qualified target that matches no definition fails
-    with `target_not_found` (a `name_path` or `base_name` answers an empty
-    list); when a `qualified_name` lacks its pack tag (e.g. `Store::fetch`), the
-    error says to pass it as `name_path`, or to look its base name up with
-    `find_definitions` (`suggested_base_name` in its metadata) and pass a
-    result's `path` + `entity_id`.
+    `coverage`, and `warnings` when an empty result covers a ref with files
+    that are not indexed. An exact or qualified target that matches no
+    definition fails with `target_not_found` (a `name_path` or `base_name`
+    answers an empty list); when a `qualified_name` lacks its pack tag (e.g.
+    `Store::fetch`), the error says to pass it as `name_path`, or to look its
+    base name up with `find_definitions` (`suggested_base_name` in its
+    metadata) and pass a result's `path` + `entity_id`.
   - `show_code(repo, path, git_ref?, line?, col?, layer_path?, start_line?,
     end_line?, expand?)` → the MCP form of
     [`ccx show`](#ccx-show--a-files-outline-or-one-definitions-body) over
