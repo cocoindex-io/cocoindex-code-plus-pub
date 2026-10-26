@@ -120,6 +120,29 @@ re-index.
   clearing and republishing the completeness stamps. Each early pass
   resolves the commits of `github`/`gitlab` repos' refs, as any pass does.
 
+### New code is searchable before its symbols are built
+
+An indexer change, with new wording in the CLI and the server's ask agent:
+no database change, no re-index.
+
+- **What changed.** A pass now moves a branch's indexed head as soon as
+  the changed files are stored, before it builds the symbols. `grep`,
+  `search`, `show` and file reads answer at the new commit about half a
+  pass sooner (on a large Rust repository, about 20 s); `defs` and `refs`
+  catch up when the symbol step ends.
+- **What you see meanwhile.** `ccx defs` and `ccx refs` print `Symbols for
+  the ref's indexed head <commit> are still being built: symbol results
+  describe <older-commit>…` on stderr, and the ask agent reads such a
+  lookup as `pending`, never as current. A symbol step that fails leaves
+  the same note until a later pass builds it, where it used to hold the
+  whole branch at the previous commit.
+- **On the first pass.** Each branch's `git_ref_roots` row moves to a new
+  owner inside the indexer's state; the row is kept, not rewritten. An
+  older indexer started on the same schema takes it back the same way.
+- **Verify.** After a merge, the indexer log's `walk: … finished` line is
+  when the commit became searchable; `ccx grep` finds the new line before
+  the `symbol graph: … step over` line.
+
 ### `ccx log` spans include the doc comment
 
 A CLI change only: no server change, no database change, no re-index.
