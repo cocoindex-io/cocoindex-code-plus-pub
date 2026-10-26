@@ -678,15 +678,28 @@ Upgrade the CLI and server together; no database change and no re-index.
 
 ### Index files up to 4 MiB
 
-The default indexed file size increases from 1 MiB to 4 MiB.
-The first pass reads newly admitted files and embeds their chunks.
-The symbol extraction ceiling also changes, so existing files extract symbols
-once more. Existing content-keyed embeddings remain reusable.
+This build's own 4 MiB limit is now v0.1.76's (below): the default is
+4 MiB, the ceiling 8 MiB, and a file over 1 MiB is indexed only when it
+looks hand-written (`indexer.largeFiles` / `large_files`). Coming from a
+release before v0.1.76, read its section; everything there applies.
 
-No manual data migration is required. To retain the previous size policy, set
-`indexer.maxFileSizeBytes: 1048576` before upgrading. Repo `max_file_size`
-values still override this default. Read larger files through `read-file`
-`--offset` / `--limit` windows; each window keeps its 1 MiB content cap.
+- **From an earlier build of this release** (a 4 MiB ceiling, no
+  large-file policy): a `max_file_size` up to 8 MiB is now accepted, and
+  files over 1 MiB that look generated, vendored or minified leave the
+  index. The first pass re-walks every repository once (the large-file
+  policy is part of the walk); it re-parses files, keeps their embeddings,
+  and records each skipped file with its reason (`ccx find-files
+  --not-indexed`). To keep every file up to the limit, set
+  `indexer.largeFiles: all`.
+- **Two records of a skipped file.** The query-coverage diagnostics below
+  (on the symbol coverage row) and v0.1.76's `file_skip` rows name the same
+  files. A read of a skipped file answers the `file_skip` reason first, the
+  diagnostic when the index holds no row for it.
+- **Retaining the previous size policy.** Set
+  `indexer.maxFileSizeBytes: 1048576`, or `indexer.largeFiles: none`. Repo
+  `max_file_size` values still override the default. Read larger files
+  through `read-file` `--offset` / `--limit` windows; each window keeps its
+  1 MiB content cap.
 
 ### Query coverage notes
 
@@ -907,12 +920,14 @@ ingest skips its cycles until GitHub resets the quota. No action is needed.
 
 ### Local fallback after an indexed file miss
 
-Upgrade the CLI and query server together. `ccx show PATH` now uses the
-current checkout's file after an indexed file miss, including an explicit
-ref request. It applies only to this checkout's repository. The header
-identifies local text and names the failed read's commit and reason.
-Read that header before treating output as the requested indexed ref.
-No schema change or index rebuild is required.
+Upgrade the CLI and query server together. `ccx show PATH --git-ref REF` (or
+`--repo`) now uses the current checkout's file after an indexed file miss
+(`not_on_ref`, `not_indexed`, or a file too large to render). It applies only
+to this checkout's repository. The header identifies local text and names the
+failed read's commit and reason. Read that header before treating output as
+the requested indexed ref. Without a flag, `ccx show PATH` reads the working
+tree only and never the index (v0.1.76 below). No schema change or index
+rebuild is required.
 
 ### Indexed record lookup and filtered change lists
 
@@ -1306,6 +1321,73 @@ of them piped into `tail`, which also hid the first answer until the end.
 Verify: `ccx ask "<question>" | cat` returns within seconds and ends with the
 `collect:` line on stderr; `ccx ask --wait "<question>" | cat` ends with the
 full answer.
+
+## v0.1.76 — source files up to 4 MiB are indexed, every skipped file says why; `ccx show PATH` without a flag never reads the index
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on to know what the first indexing pass after the upgrade does and
+which files it adds, to keep the old 1 MiB behaviour, or if a script or an
+agent prompt of yours relies on `ccx show PATH` rendering a file that is not
+in the working tree.
+
+### Files over 1 MiB are indexed
+
+- **What changed.** The largest file the indexer stores was 1 MiB of decoded
+  text, which is also the largest window `ccx read-file` returns; the two
+  were one setting, and a repository's biggest hand-written source files
+  (1.2 MB, 30 000 lines) were missing from `defs`, `refs`, `grep` and
+  `search`. The default `max_file_size` is now **4 MiB** and the ceiling
+  **8 MiB** (`read-file` reads a large file in windows, as before). A file
+  over 1 MiB is indexed only when it looks hand-written: the indexer skips
+  files the repository's `.gitattributes` marks `linguist-generated` or
+  `linguist-vendored`, files under vendored directories, lockfiles,
+  generated-file names, files with a generated-code header in their first
+  2 KiB, and minified files, and it does not embed a large file whose type it
+  does not recognize ([deploy.md § File size limits](deploy.md#file-size-limits)).
+- **Every skipped file says why.** `ccx read-file` on a file the indexer
+  skipped answers the reason (over the limit, generated, vendored, binary,
+  Git LFS pointer) instead of a generic sentence; `ccx find-files
+  --not-indexed` lists a ref's skipped files with reasons; an empty `grep`,
+  `defs`, `refs` or `search` over a ref with skipped files prints one
+  warning saying how many, so an agent never reads an empty answer as proof
+  of absence. The indexer's walk log line carries the same counts.
+- **Expected after the upgrade.** The first pass re-walks every repository
+  once, from the index's own copy of each file: every file is parsed again,
+  symbols are re-extracted and reused where unchanged, and the files the new
+  limit admits are fetched from the code host, embedded and indexed. Expect
+  that pass to take about as long as the pass after v0.1.74 did, plus the
+  new files' embeddings. Memory: the files in progress now hold at most
+  `indexer.maxBytesInFlight` of source together (64 MiB) and large files are
+  parsed in a narrower lane, so the indexer's peak rises by at most about
+  650 MiB on a repository with several files near 4 MiB
+  ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+- **To keep the old behaviour**, set `indexer.largeFiles: none` (or
+  `large_files: none` per repo): files over 1 MiB stay out of the index, and
+  the pass still records why. `indexer.maxFileSizeBytes: 1048576` has the
+  same effect by size.
+- **Verify.** After the first pass, `ccx find-files --not-indexed` in an
+  indexed checkout lists the files the index skipped with their reasons;
+  `ccx read-file <path>` on a file between 1 and 4 MiB prints it; the indexer log
+  shows `walk: … finished …; N files not indexed (…); M large files indexed
+  (…)` once per repository.
+
+### `ccx show PATH` without a flag never reads the index
+
+- **What changed.** `ccx show PATH[:LINE]` with no `--git-ref` or `--repo`
+  reads your working tree only. Before, a path not on disk, or a file over
+  the 8 MiB request bound, fell back to the indexed copy with a stderr note;
+  on a branch that rendered the default branch's copy of a file the branch
+  had deleted or renamed. Now the command exits 1 with one line naming the
+  flag to pass — inside an indexed checkout, `--git-ref <ref>` with the ref
+  and commit it would read. `--git-ref` and `--repo` read the index as
+  before, and `ccx show -s NAME` still renders an indexed definition, with a
+  note, when the working tree lacks its file.
+- **What to do.** Where a script shows a file it does not have on disk, add
+  `--git-ref <ref>` (or `--repo <owner>/<repo>`); the error line prints the
+  exact flag.
+- **Verify.** `ccx show no/such/file.py` in an indexed checkout exits 1 and
+  prints `pass --git-ref <ref> to read the indexed copy`; with `--git-ref`
+  the same path reads the index, or says the ref lacks it.
 
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 

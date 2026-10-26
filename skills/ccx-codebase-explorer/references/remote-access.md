@@ -1,7 +1,7 @@
 # Reading files — `ccx show`, `ccx read-file`, `ccx find-files`
 
 `ccx show` renders a file's **outline** or one definition's **body** from your
-working tree (the index only when it must); `ccx read-file` and `ccx find-files`
+working tree (the index only with `--git-ref` or `--repo`); `ccx read-file` and `ccx find-files`
 fetch file **contents** and **paths** exactly as they exist in an indexed ref,
 over HTTP, for code you **don't have on disk** — a repo that isn't checked out
 locally, or a **different ref** than your working tree.
@@ -40,9 +40,10 @@ direct member) and `... N lines`; the server folds an outline over about 300 row
 to depth 1 on its own and the CLI notes it (`outline folded to depth 1: the full
 outline is N rows; …`), never when you passed `--depth`.
 
-By default the working tree supplies a file that exists locally; the header says `indexed`
-when the index served instead (the file is not on disk, is over the 8 MiB request
-bound, or `--repo` or `--git-ref` was given). `-s NAME` renders one unique definition.
+The working tree is the source unless `--repo` or `--git-ref` was given; then the
+header says `indexed`. Without a flag, a file not on disk or over the 8 MiB request
+bound is an error that names the flag to pass: run it again with `--git-ref <ref>` to
+read the indexed copy. `-s NAME` renders one unique definition.
 Several matches are **listed** with paths; pick one with `ccx show PATH:LINE`,
 or add a file path after `-s NAME` to narrow the lookup. A stderr
 note says to narrow with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on

@@ -369,6 +369,7 @@ ccx show -s QueryService                         # the definitions of a name, re
 ccx show --at HEAD~3 src/app.py                  # the file as a commit of your clone holds it (read from local git)
 ccx find-files "*.py"                            # list files by glob
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
+ccx find-files --not-indexed                     # the files the index holds no text for, each with why (read those from the checkout)
 
 # Commit history (from your clone, up to HEAD)
 ccx log QueryService                             # the commits that changed the symbol's lines: sha, date, PR, +X/-Y, subject
@@ -692,7 +693,12 @@ for `find-files` it's a **skip count** for paginating results. `grep` has no
 exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤ 8 KB.
 `read-file` returns at most **5 000 lines** (and at most 1 MiB of content) per
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
-numbers show where the window ended.
+numbers show where the window ended. Files up to 4 MiB are indexed by default
+(8 MiB at most; the deployment decides); a file the indexer skipped — over the
+limit, a generated or vendored file over 1 MiB, binary, a Git LFS pointer —
+answers `read-file` with the reason, `find-files --not-indexed` lists them,
+and an empty `grep`, `defs`, `refs` or `search` over a ref that has some
+prints a warning naming how many: read such a file from your checkout.
 
 Semantic search ranks implementation code first. Docs (Markdown) and tests
 rank 0.06 lower in similarity; design mocks (HTML, CSS, files under
@@ -751,9 +757,9 @@ terminal:
   `--depth N` sets the outline depth and bypasses the default budget.
   `-e` and `--depth` remain exclusive.
 
-It reads the file from your **working tree** when it is there (inside or
-outside a checkout; outside one no repo is needed), so it is right on the
-branch you are on; the index serves only the fallbacks below. `ccx show
+It reads the file from your **working tree** (inside or outside a checkout;
+outside one no repo is needed), so it is right on the branch you are on;
+`--git-ref` or `--repo` reads the indexed copy instead. `ccx show
 PATH:LINE` renders one definition with the default budget; on an import line
 it prints the imports. `-e/--expand` renders everything verbatim.
 
@@ -823,10 +829,16 @@ type. Rust structural grep `SessionView { \* }` excludes impl and type
 declarations. Each grep hit displays at most 40 lines and 4096 bytes. A note
 names a cut; the hit retains its full line bounds for `ccx show PATH:LINE`.
 
-**Where the text comes from.** The working tree is the default source; the
-index serves the file when it is not on disk, when `--git-ref` names a ref or
-`--repo` a repo, or when the file is over the request-body bound (8 MiB) — a
-stderr note says which, and the header says `indexed`. `-s NAME` resolves the
+**Where the text comes from.** The working tree is the source unless
+`--git-ref` names a ref or `--repo` a repo; then the index serves the file and
+the header says `indexed`. Without a flag, a file that is not on disk or is
+over the request-body bound (8 MiB) is an error, exit 1, naming the flag to
+pass — inside an indexed checkout, with the ref and commit it would read; the
+index is never read in the file's place. (A path no commit holds that plainly
+names one moved file shows that file, with a note; with a flag, a file of this
+checkout the ref holds no text for is read from your working tree — see
+[Local fallback for unavailable indexed files](#local-fallback-for-unavailable-indexed-files).)
+`-s NAME` resolves the
 name in the index (as `ccx defs` does), then renders each definition from your
 working-tree file **by structure**, so lines that shifted since the indexed
 commit do not matter; where the name is ambiguous in the local file, or the
@@ -859,14 +871,14 @@ and the audit record holds the path, counts (objects rendered, lines and
 characters sent and folded) and, inside a checkout, the repository the file
 belongs to: the CLI sends the repository it detected as a hint, the server
 authorizes it as it authorizes any repository, and usage analytics attributes
-the request to it — nothing else depends on the hint. Nothing is sent for a
-file over the bound or when `--git-ref` is given; a file with NUL bytes is
-refused as binary.
+the request to it — nothing else depends on the hint. Nothing is sent when
+`--git-ref` or `--repo` is given, nor for a file over the bound (an error); a
+file with NUL bytes is refused as binary.
 
 Exit codes: 0 with output (the listing included); 1 when `-s` matches
-nothing, when the path is on neither side (not on disk, not in the ref), or
-on a usage error such as `-s` together with a `PATH:LINE`; 2 on a malformed
-command line.
+nothing, when a path is not on disk or over the bound (no flag) or not in the
+ref (with a flag), or on a usage error such as `-s` together with a
+`PATH:LINE`; 2 on a malformed command line.
 
 #### Recent change annotations
 
@@ -1388,6 +1400,9 @@ CLI remains the path for humans and shell scripts. The MCP tools track the CLI
 and REST API closely (same capabilities, same scoping).
 
 - **Endpoint:** `<CCX_SERVER_URL>/mcp` (Streamable HTTP; `/mcp/` is the same endpoint).
+  It is stateless and serves `POST` only. Any other method, including the
+  `GET` that opens the optional server-to-client stream, gets `405` with
+  `Allow: POST`; MCP clients read that as "no stream" and go on.
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
@@ -1421,7 +1436,8 @@ and REST API closely (same capabilities, same scoping).
     definition whose qualified name ends with it. The response's `coverage`
     states how complete the symbol index is for the ref, and `warnings`
     explains a miss on a dotted `name` sent as a base name (naming the
-    `name_path` lookup to run instead).
+    `name_path` lookup to run instead), or says that an empty result covers a
+    ref with files that are not indexed.
   - `find_references(repo, path?+entity_id?|qualified_name?|name_path?|base_name?,
     git_ref?, roles?, include_unresolved?, limit?, offset?)` → where a symbol is
     used — one exact definition (`path` + `entity_id` from `find_definitions`),
@@ -1430,12 +1446,13 @@ and REST API closely (same capabilities, same scoping).
     `Repo.find`), or by `base_name`; rows carry `resolution` (`resolved` /
     `ambiguous` / `name_only`) and a reference role (`roles` filters on those, a
     different vocabulary from `find_definitions.kinds`), plus the same
-    `coverage`. An exact or qualified target that matches no definition fails
-    with `target_not_found` (a `name_path` or `base_name` answers an empty
-    list); when a `qualified_name` lacks its pack tag (e.g. `Store::fetch`), the
-    error says to pass it as `name_path`, or to look its base name up with
-    `find_definitions` (`suggested_base_name` in its metadata) and pass a
-    result's `path` + `entity_id`.
+    `coverage`, and `warnings` when an empty result covers a ref with files
+    that are not indexed. An exact or qualified target that matches no
+    definition fails with `target_not_found` (a `name_path` or `base_name`
+    answers an empty list); when a `qualified_name` lacks its pack tag (e.g.
+    `Store::fetch`), the error says to pass it as `name_path`, or to look its
+    base name up with `find_definitions` (`suggested_base_name` in its
+    metadata) and pass a result's `path` + `entity_id`.
   - `show_code(repo, path, git_ref?, line?, col?, layer_path?, start_line?,
     end_line?, expand?)` → the MCP form of
     [`ccx show`](#ccx-show--a-files-outline-or-one-definitions-body) over
