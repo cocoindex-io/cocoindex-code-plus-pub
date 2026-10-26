@@ -460,9 +460,10 @@ Reading `refs` output — each row carries:
 
 **Check the stderr coverage note before trusting absence.** It reports when the
 symbol index for this ref is *not built*, *skipped* (ref too large to resolve),
-*partial* (some files failed to parse), or *at another commit than the ref's
-indexed head* — in every one of those, a missing symbol may simply be
-unindexed. Absence is not completeness.
+*partial* (some files failed to parse), or *still being built* for the ref's
+newest indexed commit (the results describe the commit the note names, and
+can differ from `grep`, `search` and `show`) — in every one of those, a
+missing symbol may simply be unindexed. Absence is not completeness.
 A stale exact target (definition renamed/removed since the `defs` call) errors
 and tells you to re-run `ccx defs` for a current target.
 
