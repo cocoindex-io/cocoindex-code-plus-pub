@@ -7,7 +7,9 @@
 # Division of labour: this script only keeps the per-agent markers that make
 # each kind of hint fire once per agent (Claude Code's `once` applies to skill
 # hooks only), and leaves every judgement to `ccx indexed --claude-hook`: the
-# CLI owns the server, the credential, the cache and the wording. Range reads
+# CLI owns the server, the credential, the cache and the wording. A grep
+# for one definition gets that definition after its output (kind
+# definition, no marker; CCX_HOOK_DEFINITION=0 turns it off). Range reads
 # and history lookups (kinds read, history, change) keep no marker: the CLI
 # runs a Bash one as the ccx command that prints the same or more (an
 # `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), as it
@@ -71,7 +73,14 @@ case "$event" in
       *'&'*|*'|'*|*';'*|*'$('*|*'`'*|*'\n'*) kind=unknown ;;
     esac
     ;;
-  PostToolUse) kind=result ;;
+  PostToolUse)
+    kind=result
+    # A grep for a definition may earn the definition at every call, after
+    # the result hint is spent too: the CLI judges it (kind definition).
+    case "$(field command)$(field pattern)" in
+      *'fn '*|*'struct '*|*'enum '*|*'trait '*|*'type '*|*'const '*|*'static '*|*'mod '*|*'class '*|*'def '*|*'interface '*|*'function '*|*'union '*|*'macro_rules!'*|*'impl '*|*' ='*) definition=1 ;;
+    esac
+    ;;
   SessionStart) kind=start ;;
   SubagentStart) kind=subagent_start ;;
   *) exit 0 ;;
@@ -107,7 +116,7 @@ marker="$prefix-$kind"
 # Kinds the CLI answers at every call: no marker spends them. A grep it
 # runs as ccx (grep_rewrite) is one; the grep hint stays once per agent.
 every_call() {
-  case "$1" in read | history | change | grep_rewrite) return 0 ;; esac
+  case "$1" in read | history | change | grep_rewrite | definition) return 0 ;; esac
   return 1
 }
 # A grep goes to the CLI at every call, so it can be rewritten
@@ -119,7 +128,12 @@ if [ "$kind" = grep ] && [ -e "$marker" ]; then
     *) exit 0 ;;
   esac
 fi
-[ "$kind" != unknown ] && [ "$kind" != grep ] && ! every_call "$kind" && [ -e "$marker" ] && exit 0
+if [ "$kind" != unknown ] && [ "$kind" != grep ] && ! every_call "$kind" && [ -e "$marker" ]; then
+  # A spent result hint leaves only the definition to earn.
+  [ "$kind" = result ] && [ -n "${definition:-}" ] || exit 0
+  CCX_HOOK_RESULT_SPENT=1
+  export CCX_HOOK_RESULT_SPENT
+fi
 # "Could not tell" (server down, not logged in) is retried after five minutes,
 # not at every search.
 retry="$prefix-retry"
@@ -144,7 +158,7 @@ case "$status" in
     if [ -n "$output" ]; then
       reported_kind=$(printf '%s' "$output" | sed -n 's/.*"kind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
       case "$reported_kind" in
-        indexing | grep | result | start | subagent_start | change | history | read | grep_rewrite) marker="$prefix-$reported_kind" ;;
+        indexing | grep | result | start | subagent_start | change | history | read | grep_rewrite | definition) marker="$prefix-$reported_kind" ;;
         "") ;; # Older CLIs identify the kind by the event.
         *) ;; # Newer CLIs fall back to the event marker.
       esac
