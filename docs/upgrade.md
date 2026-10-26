@@ -39,6 +39,35 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+### The plugin rewrites more range reads: several ranges, numbered reads, loops, nested checkouts
+
+Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
+switch is the same (`CCX_HOOK_REWRITE=0`).
+
+- **What changed.** The hook now runs as `ccx show` any range read whose
+  printed lines it can name from the files' line counts: `sed -n
+  'A,Bp;C,Dp' FILE` and `-e` lists (one `ccx show` per range), `sed -n
+  A,Bp F1 F2` and `head -N F1 F2` (one per file), `nl -ba FILE | sed -n
+  A,Bp` and `cat -n FILE | sed -n A,Bp` (numbered, as asked), `cat FILE |
+  head -N`, `tail -N FILE`, and any of them followed by `| head -N` or `|
+  tail -N` (the range shrinks). A variable set to one literal word in the
+  same command (`f=src/a.rs; sed -n 1,9p $f`) and a `for` loop over literal
+  words (`for f in a.rs b.rs; do sed -n 1,40p $f; done`) are read written
+  out. `df`, `du`, `ps`, `pgrep`, `uptime`, `sleep` and a `timeout` around
+  a lookup no longer stop a rewrite.
+- **A fix.** A read in a checkout nested inside the agent's
+  (`.claude/worktrees/x`) was judged as the outer checkout's, so it was
+  never rewritten and its hint named a path in the wrong repository. It is
+  now judged in its own checkout.
+- **`gh`.** A `gh … --search` piped into `head -N` becomes `ccx search
+  --kind change … -n N`; `in:title,body` is dropped (gh's default fields);
+  a `gh -R owner/repo` search runs as ccx from a folder that is no checkout
+  when that repository is indexed. `--state open` polls, `--jq` and other
+  qualifiers stay on gh.
+- **Measured** on 3 days of transcripts: 157 more commands rewritten (51% →
+  55% of range-read commands, 53% → 58% of their bytes); on their 245 read
+  steps every non-blank printed line came back, at 1.05× the bytes.
+
 ### Broad text greps and search phrases read a window index
 
 Upgrade the server and indexer together. The first indexer pass re-reads
