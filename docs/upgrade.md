@@ -984,10 +984,9 @@ Set `changeIndex.recencyTiebreak: false` to restore the previous lexical tie
 order. Vector retrieval and automatic reranking keep their current defaults.
 No schema migration or index rebuild is required.
 
-### Host alternatives, three weak prior hits, and a hint per lookup shape
+### Host alternatives and three weak prior hits
 
-Upgrade the server, the CLI and the Claude Code plugin together (`/plugin
-marketplace update ccx`). There is no new setting, no schema migration and no
+Upgrade the server and the CLI together. There is no new setting, no schema migration and no
 index rebuild.
 
 - **`OR` lists and `in:title`** in a `--kind change` query are read as gh
@@ -997,12 +996,6 @@ index rebuild.
   identifiers. They come first, labelled `near`, before the ranked results.
 - **`ccx prior`** prints the next two records under an item whose best
   record is not `near`.
-- **The plugin hints at more history lookups.** An issue list with `--state
-  open` names `ccx search --kind change "<words>" --state open` (JSON kind
-  `change_poll`); a lookup of one PR number names `ccx show '#N'` (kind
-  `change_number`); a PR search with `--state open` names the search without
-  the state; an `OR` or `in:title` search keeps its syntax in the named
-  command. Each kind has its own marker, so each fires once per agent.
 - **Verify.** `ccx search --kind change "integrat in:title"` lists a record
   whose title has "integrat…" first.
 
