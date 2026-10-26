@@ -75,14 +75,13 @@ before.
 
 ### The plugin briefs a task before the agent looks
 
-A CLI and plugin change only: no server change, no database change, no
-re-index. It reads what the server already serves (code search, change
-search, definitions).
+No database change, no re-index. The brief reads its evidence from the
+server's new brief route (next entry), so upgrade the server with the CLI.
 
 - **What changed.** When a user submits a task in Claude Code, the plugin's
   new `UserPromptSubmit` hook (`scripts/ccx-brief-hook.sh`, running
   `ccx brief --claude-hook`) puts a brief beside it: up to 8 code locations
-  and 3 pull requests or issues the task most likely touches, each with a
+  and the pull requests or issues the task names, each with a
   short excerpt, in about 3 KB. The prompt waits at most about 1.5 s; a
   brief that is not ready by then goes beside the agent's next tool call (a
   `PreToolUse` entry on every tool that starts the CLI only when a brief is
@@ -94,6 +93,28 @@ search, definitions).
 - **Verify.** Submit a task in an indexed checkout; `~/.cache/ccx/brief.jsonl`
   gets one line per prompt (the decision, the locations given, never the
   prompt's text).
+
+### The brief reads its evidence in one call
+
+A server and CLI change: no database change, no re-index, no new setting.
+
+- **What changed.** The server has a new route, `POST /code/v0/brief`
+  (rate class `query`), that answers a prompt brief's evidence in one call:
+  a cut-down code search (one embedding, the lexical probe's terms, one
+  vector read that skips logs, JSON records and fixtures), the definitions
+  of the symbols the prompt spells, the files it spells and the `#N`
+  records it names. It answers in about 0.35 s where the brief's two
+  searches took 1 to 3 s, so the brief now arrives beside the prompt
+  rather than at the agent's first tool call. The brief ranks files by how
+  often the search reaches them, keeps design docs where the search ranks
+  them, and lists only the pull requests and issues the prompt names.
+- **What to do.** Upgrade the server and the CLI together: a CLI of this
+  release against an older server gets a 404 from the route, and its hook
+  says nothing (it never fails a prompt).
+- **Verify.** `ccx brief --json "<a task>"` prints `stages_ms` (the
+  route's milliseconds per part) and `read_ms`; `~/.cache/ccx/brief.jsonl`
+  logs `delivery: "prompt"` for briefs beside the prompt.
+- **Turning it off.** `CCX_BRIEF=0`, as before.
 
 ### A moved local branch starts the next indexer pass
 

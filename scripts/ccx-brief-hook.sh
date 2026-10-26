@@ -1,8 +1,9 @@
 #!/bin/sh
 # The ccx plugin's prompt brief (specs: cocoindex-code-plus
 # specs/product/cli/prompt_brief.md). On UserPromptSubmit, `ccx brief
-# --claude-hook` names the code and the changes the task most likely
-# touches, in about 3 KB, within about 1.5 s; a brief that is not ready by
+# --claude-hook` names the code the task most likely touches and the changes
+# it names, in about 3 KB, from one server call (POST /code/v0/brief) that
+# answers in about 0.4 s, within about 1.5 s at most; a brief not ready by
 # then is left for the agent's next tool call, and this script's PreToolUse
 # entry delivers it. That entry runs at every tool call, so it starts the CLI
 # only when a brief is waiting for this agent. CCX_BRIEF=0 turns it off. It
