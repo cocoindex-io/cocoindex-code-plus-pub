@@ -109,11 +109,38 @@ footprint), and **Queries & agents** (operations, latency, agent reuse,
 `ccx show`, errors).
 
 **The Overview has no single headline number.** It is three groups of equal
-tiles. *Usage*: active developers, queries, agent queries, answer-cache hit
-rate. *Savings*: three figures in three units, never added together — model
-cost saved by reuse, agent time saved, and potential tokens saved by `ccx
-show` — each with a caption that says what it counts. *Cost and health*:
-estimated model cost, error rate, index footprint.
+tiles. *Usage*: active developers, queries, agent queries (ccx ask).
+*Savings*: four figures in their own units, never added together — model
+cost saved (ccx ask + indexing), agent cost served from cache (ccx ask; the
+agent part of that saving as a share), agent time saved (ccx ask cache), and
+potential tokens saved (ccx show) — each with a caption that says what it
+counts. *Cost and
+health*: estimated model cost (ccx ask + indexing), error rate, index
+footprint.
+
+**Each cost and savings figure names its scope in its label.** ccx measures
+its own model calls and its own answer cache, so the figures cover only
+those parts:
+
+- **ccx ask** is the agent behind `ccx ask`: an agent query is one
+  `ccx ask` run, and its agent cost is that agent's model calls. Queries
+  your coding agent sends to search, grep or show are counted under
+  *Queries*, not here.
+- **ccx ask + indexing** is the agent model behind `ccx ask` and the
+  embeddings the indexer computes. Your coding agent's own model calls are
+  not in it.
+- **ccx ask cache** is the waiting the answer cache removed from `ccx ask`.
+- **What an agent saves by searching with ccx** instead of reading files is
+  not measured. The one part counted is the text `ccx show` folds out,
+  labelled potential.
+
+**Agent cost served from cache** is the share of the agent model cost with
+no cache that reuse saved: saved ÷ (spent + saved), at your rate sheet. It
+counts every kind of reuse — whole answers, subquery answers and replayed
+turns — weighted by what that work would have cost. Its caption gives the
+whole-answer hit rate: the agent queries answered entirely from the cache. A
+query that ran live but replayed most of its turns is a miss there and still
+counts toward the share.
 
 **Potential tokens saved** is the text `ccx show` folded out of its output
 — the bodies an outline left out of a file, in estimated tokens. An agent can
@@ -136,7 +163,8 @@ stays flat is a re-walk — an upgrade or a setting change made the indexer
 visit every file again and found every chunk already embedded — not new code.
 
 **Repositories** gives each repository you can read its own row: queries,
-developers, agent queries, estimated model cost and what reuse saved,
+developers, agent queries, estimated model cost and what reuse saved (both
+ccx ask + indexing, as on the Overview),
 **agent time saved** — the waiting the answer cache removed for queries
 naming that repository — and **potential tokens saved**, the text `ccx show`
 folded on that repository's files. A small time figure reads in minutes, so
@@ -342,6 +370,9 @@ settled:
 - **Partial days** are named. Today is always partial.
 - **Comparisons are suppressed** until there is a comparable prior period, so
   a new deployment shows no misleading "+900%".
+- **A share changes in points.** A percentage — agent cost served from cache,
+  the error rate — compares in percentage points from where it was, such as
+  "▼ 9 pts from 19%", not as a relative change of a percentage.
 - **Unknown is not zero.** Token totals exclude queries whose provider
   returned no count, and say how many. Time-saved excludes cache hits with no
   stored duration, and says how many. Under the Repositories table, the note
