@@ -40,6 +40,26 @@ Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
 
+
+### A localgit entry indexes the branches its checkout's worktrees are on
+
+Upgrade the indexer. Off until an entry names the checkout.
+
+- **`worktrees` on a localgit entry** (`worktrees: <checkout path>`, or
+  `{checkout, recentHours: 24, cap: 8}`): each pass indexes, beside the
+  configured refs, the branches the checkout's worktrees have checked out
+  and touched within `recentHours`, newest first, at most `cap`, as
+  `heads/<branch>` — the ref the CLI picks for a session in that worktree —
+  sharing blobs with `main`. A worktree still on `main`'s commit adds
+  nothing. The objects come from the checkout into the mirror under
+  `refs/worktrees/<branch>` (a local fetch; the mirror's `refs/heads`
+  fetch and prune never touch them); a branch whose worktree goes or goes
+  stale is reconciled away. The watch starts the next pass when a worktree
+  branch moves.
+- **Verify.** `ccx git-refs <owner>/<repo>` lists the worktree branches
+  beside `main`; from a worktree on one of them `ccx indexed` names the
+  branch, and `ccx defs <a symbol new on the branch>` finds it.
+
 ### `gh pr view` and every `gh` search run as ccx; `ccx show '#N' --full` prints a record whole
 
 Upgrade the server for `--full` (the parts of a record), the CLI for the
