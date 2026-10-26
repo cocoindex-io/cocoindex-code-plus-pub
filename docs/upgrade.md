@@ -83,6 +83,35 @@ switch is the same (`CCX_BRIEF=0`).
   `~/.cache/ccx/brief.jsonl` logs `skip:not_code` (`skip:other_repo` for a
   link to another repository).
 
+### A subagent's brief places the names its task spells
+
+Upgrade the server and the CLI together; the plugin picks the CLI up. No
+database change, no re-index, nothing to configure (`CCX_SUBAGENT_BRIEF=0`
+still turns it off).
+
+- **Where the names sit.** For up to four files the parent's prompt names
+  (spelled in full, or a bare name that resolves to one file), the brief
+  lists each definition whose name the prompt spells, with its line:
+  `- src/watches.rs: read_from 226, Facts 120 (+40 more)`, at most 400
+  bytes a file and 1 KB in all. The brief's route reads them in the same
+  call from the definition index (`map_paths`, `map_found`; a server
+  before this release ignores both and the brief is as before). A named
+  file listed there is no longer listed as "the file the prompt names".
+- **No doc hits.** A subagent's brief leaves out search hits in prose and
+  data files (`.md`, `.json`, …): on two days of the box's subagent runs,
+  5% of them were read later, against 33% of the code hits.
+- **The not-code guard.** A parent's prompt that only hands over process
+  or status, or links to another repository and names nothing here, gets
+  no brief, as a user's prompt: the log says `skip:not_code` or
+  `skip:other_repo` with `delivery: "subagent"`.
+- **Measured** by replay on 91 subagent runs: the brief answers 39 of the
+  runs' later definition lookups (63.5 KB of their output) against 17
+  (22.3 KB) before, for 3 KB more of briefs in all (p50 1.6 KB, at most
+  3.3 KB a brief).
+- **Verify.** Start a subagent whose prompt names a file and a function
+  in it: its first message ends with the brief, whose "Names the task
+  spells" block gives the function's line.
+
 ### The plugin rewrites more range reads: several ranges, numbered reads, docs, loops, nested checkouts
 
 Upgrade the CLI; the plugin picks it up. Nothing to configure, and the kill
