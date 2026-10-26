@@ -34,11 +34,56 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.76 — `ccx show PATH` without a flag never reads the index
+## v0.1.76 — source files up to 4 MiB are indexed, every skipped file says why; `ccx show PATH` without a flag never reads the index
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
-Read on if a script or an agent prompt of yours relies on `ccx show PATH`
-rendering a file that is not in the working tree.
+Read on to know what the first indexing pass after the upgrade does and
+which files it adds, to keep the old 1 MiB behaviour, or if a script or an
+agent prompt of yours relies on `ccx show PATH` rendering a file that is not
+in the working tree.
+
+### Files over 1 MiB are indexed
+
+- **What changed.** The largest file the indexer stores was 1 MiB of decoded
+  text, which is also the largest window `ccx read-file` returns; the two
+  were one setting, and a repository's biggest hand-written source files
+  (1.2 MB, 30 000 lines) were missing from `defs`, `refs`, `grep` and
+  `search`. The default `max_file_size` is now **4 MiB** and the ceiling
+  **8 MiB** (`read-file` reads a large file in windows, as before). A file
+  over 1 MiB is indexed only when it looks hand-written: the indexer skips
+  files the repository's `.gitattributes` marks `linguist-generated` or
+  `linguist-vendored`, files under vendored directories, lockfiles,
+  generated-file names, files with a generated-code header in their first
+  2 KiB, and minified files, and it does not embed a large file whose type it
+  does not recognize ([deploy.md § File size limits](deploy.md#file-size-limits)).
+- **Every skipped file says why.** `ccx read-file` on a file the indexer
+  skipped answers the reason (over the limit, generated, vendored, binary,
+  Git LFS pointer) instead of a generic sentence; `ccx find-files
+  --not-indexed` lists a ref's skipped files with reasons; an empty `grep`,
+  `defs`, `refs` or `search` over a ref with skipped files prints one
+  warning saying how many, so an agent never reads an empty answer as proof
+  of absence. The indexer's walk log line carries the same counts.
+- **Expected after the upgrade.** The first pass re-walks every repository
+  once, from the index's own copy of each file: every file is parsed again,
+  symbols are re-extracted and reused where unchanged, and the files the new
+  limit admits are fetched from the code host, embedded and indexed. Expect
+  that pass to take about as long as the pass after v0.1.74 did, plus the
+  new files' embeddings. Memory: the files in progress now hold at most
+  `indexer.maxBytesInFlight` of source together (64 MiB) and large files are
+  parsed in a narrower lane, so the indexer's peak rises by at most about
+  650 MiB on a repository with several files near 4 MiB
+  ([deploy.md § Indexer memory sizing](deploy.md#indexer-memory-sizing)).
+- **To keep the old behaviour**, set `indexer.largeFiles: none` (or
+  `large_files: none` per repo): files over 1 MiB stay out of the index, and
+  the pass still records why. `indexer.maxFileSizeBytes: 1048576` has the
+  same effect by size.
+- **Verify.** After the first pass, `ccx find-files --not-indexed` in an
+  indexed checkout lists the files the index skipped with their reasons;
+  `ccx read-file <path>` on a file between 1 and 4 MiB prints it; the indexer log
+  shows `walk: … finished …; N files not indexed (…); M large files indexed
+  (…)` once per repository.
+
+### `ccx show PATH` without a flag never reads the index
 
 - **What changed.** `ccx show PATH[:LINE]` with no `--git-ref` or `--repo`
   reads your working tree only. Before, a path not on disk, or a file over
