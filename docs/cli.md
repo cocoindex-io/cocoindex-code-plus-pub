@@ -741,8 +741,7 @@ terminal:
   `// members:` roster of what it holds and a `... N lines` cue. A test
   file itself outlines fully.
 - **Large output uses a budget.** Requested definitions use up to 16 KiB or 400 rows;
-  a test at most half again over that (24 KiB, 600 rows) comes whole.
-  Outlines use about 1.5 KB or 60 rows. The server folds deeper rows first.
+  outlines use about 1.5 KB or 60 rows. The server folds deeper rows first.
   A requested definition includes nested code. It keeps the signature and
   four source lines around the requested line when a larger definition folds.
   These protected lines can exceed the budget. Headers add some overhead.
@@ -898,9 +897,7 @@ date) bound the walk; `--patch` adds each diff within the symbol.
 removed TEXT (`adds`, `removes`, `moves`) and the files they touched. Use it
 for a symbol the index no longer holds, or any string. `ccx log -G REGEX
 [PATH…]` is `git log -G`: the commits that added or removed a line matching
-REGEX. With PATH and no commit there, the three newest commits that
-change the text in other files follow, under `In other files:`. Both walk
-HEAD's history; `--rev REV` (repeatable) walks another
+REGEX. Both walk HEAD's history; `--rev REV` (repeatable) walks another
 revision or range instead, such as `origin/main` from a branch that is behind
 it, or `A..B`. A SYMBOL is placed at HEAD, so `--rev` applies to `-S` and `-G`
 only.

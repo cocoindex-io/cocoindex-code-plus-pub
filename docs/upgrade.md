@@ -782,25 +782,17 @@ Upgrade the server; no database change, no re-index, no new setting.
   backend `idle in transaction` for more than a second or two, and no
   request in the audit log has `duration_ms` above the deadline plus 1 s.
 
-### A short test comes whole; `show '#N'` prints a small diff whole
+### `show '#N'` prints a small diff whole
 
-Upgrade the CLI and the query server together. No schema change or index
-rebuild.
+Upgrade the CLI. No server change, schema change or index rebuild.
 
-- **`ccx show -s NAME` / `ccx show PATH:LINE`.** A test (a test function,
-  or one in a test module) at most half again over the body budget (24 KiB
-  and 600 lines) is sent whole. It was folded row by row down to 16 KiB,
-  which saved a third at most and cut its assertions in half. Other
-  definitions, and longer tests, fold as before.
 - **`ccx show '#N'`.** When a pull request's source files change at most
-  93 lines (hunk headers included), every changed line of them is printed; tests and docs are still
-  listed by their counts. A larger diff keeps the 22-line excerpt.
+  93 lines (hunk headers included), every changed line of them is printed;
+  tests and docs are still listed by their counts. A larger diff keeps the
+  22-line excerpt.
 - **`ccx show '#N'` below the index's floor** now says the record's state
   when the clone can tell it (`state: merged (on origin/main)`) and the host
   command for its branch and review state.
-- **`ccx log -S/-G TEXT PATH`** that finds no commit in PATH lists the three
-  newest commits that add or remove the text in other files, under
-  `In other files:`.
 
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
