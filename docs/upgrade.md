@@ -62,6 +62,39 @@ Upgrade the server and the CLI; no database change, no re-index.
   `ccx show PATH:LINE` 200 lines into a long function: the output is under
   6 KB and holds the asked line and the lines around it.
 
+### `ccx grep --text` answers scoped greps without the index, and case-insensitive ones lower each file once
+
+Upgrade the server and indexer together; no re-index. The answers do not
+change, match for match.
+
+- **What changed.** Before scanning, `ccx grep --text` asked the trigram
+  index for every file of the repo that holds the pattern's literals, then
+  read those files again. The index works per file, and a long source file
+  holds almost every trigram, so for a common identifier it named about
+  1,000 of reduce's 2,500 files and read them all, even when `--path` kept
+  one file. Now a grep whose paths keep at most 512 files reads just those
+  files; the index serves the others. And a case-insensitive pattern
+  (smart case without an uppercase letter, `-i`) lowers each file's text
+  once per required literal group instead of once per alternative of
+  `a|b|c`, which was most of its cost. On 100 real `ccx grep --text`
+  commands from three days of agent transcripts, against a copy of reduce's
+  index on the dev box: p50 537 ms → 40 ms, p95 2.1 s → 0.35 s, the slowest
+  4.5 s → 0.7 s; with 24 more cores busy, p95 2.1–3.4 s → 0.35 s. All 700 answers
+  compared (600 distinct commands) were identical.
+- **A new index, built at the end of the indexer's first pass after the
+  upgrade.** `file_body_body_lower_trgm`, a trigram index on
+  `lower(body)` of `file_body`, beside `file_body_body_trgm` and the same
+  size: 17 MB and 12 s for the dev box's 133 MB of file text (about 13% of
+  the text; 8% on a large repo such as llvm-project, at about 100 s per GB).
+  The build blocks writes to `file_body` while it runs (the indexer's own,
+  which come after it in the pass); greps and reads go on. Until it exists
+  the case-insensitive lookup uses the old index as before.
+- **Without `pg_trgm`** nothing is built; greps scan as before, now with
+  the cheaper case-insensitive filter
+  ([deploy.md → Text search index](deploy.md#text-search-index)).
+- **Verify.** After the pass the index schema (`ccx` by default) has an
+  index named `file_body_body_lower_trgm`.
+
 ### The plugin runs range reads and history lookups as ccx commands
 
 Upgrade the CLI and the Claude Code plugin together (`/plugin marketplace

@@ -834,9 +834,11 @@ the statement to run.
 - **The indexer builds the index at the end of its first pass after it finds
   the extension** — restart the indexer after installing it on a running
   deployment — at about 100 seconds per gigabyte of indexed text, and
-  maintains it as files change. Budget about **8% of the indexed text's
-  size** in disk for the index. Writing a file's text costs about twenty
-  times more with the index than without, a small share of a pass.
+  maintains it as files change. A second index of the same size serves
+  case-insensitive patterns, so budget about **16–26% of the indexed text's
+  size** in disk for the two, and twice that build time. Writing a file's
+  text costs about twenty times more with the indexes than without, a small
+  share of a pass.
 
 ### Indexer memory sizing
 
