@@ -34,6 +34,28 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.76 — `ccx show PATH` without a flag never reads the index
+
+Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
+Read on if a script or an agent prompt of yours relies on `ccx show PATH`
+rendering a file that is not in the working tree.
+
+- **What changed.** `ccx show PATH[:LINE]` with no `--git-ref` or `--repo`
+  reads your working tree only. Before, a path not on disk, or a file over
+  the 8 MiB request bound, fell back to the indexed copy with a stderr note;
+  on a branch that rendered the default branch's copy of a file the branch
+  had deleted or renamed. Now the command exits 1 with one line naming the
+  flag to pass — inside an indexed checkout, `--git-ref <ref>` with the ref
+  and commit it would read. `--git-ref` and `--repo` read the index as
+  before, and `ccx show -s NAME` still renders an indexed definition, with a
+  note, when the working tree lacks its file.
+- **What to do.** Where a script shows a file it does not have on disk, add
+  `--git-ref <ref>` (or `--repo <owner>/<repo>`); the error line prints the
+  exact flag.
+- **Verify.** `ccx show no/such/file.py` in an indexed checkout exits 1 and
+  prints `pass --git-ref <ref> to read the indexed copy`; with `--git-ref`
+  the same path reads the index, or says the ref lacks it.
+
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
