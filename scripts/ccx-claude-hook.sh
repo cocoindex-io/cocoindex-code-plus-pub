@@ -54,6 +54,7 @@ case "$event" in
     command_text=$(field command)
     case "$command_text" in
       gh\ *|git\ log\ *--grep*) kind=change ;;
+      git\ -C\ *) kind=unknown ;;
       git\ log\ *) kind=history ;;
       sed\ *|head\ *|cat\ *|awk\ *|tail\ *) kind=read ;;
     esac
@@ -72,6 +73,20 @@ esac
 
 state="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/ccx-claude-hook}/markers"
 mkdir -p "$state" 2>/dev/null || exit 0
+
+# Claude Code starts this script once per handler whose `if` matches a part
+# of the command, and once per handler for a command it cannot split (a
+# substitution, a loop): up to ten parallel runs of one tool call. The first
+# run answers; the others exit before the CLI starts.
+tool_use_id=$(field tool_use_id)
+case "$event:$tool_use_id" in
+  PreToolUse:?* | PostToolUse:?*)
+    case "$tool_use_id" in
+      *[!a-zA-Z0-9_-]*) ;;
+      *) (set -C; : >"$state/call-$event-$tool_use_id") 2>/dev/null || exit 0 ;;
+    esac
+    ;;
+esac
 # Older scripts set all five hint markers after a 404. A new namespace
 # leaves those final markers behind without confusing them with earned hints.
 prefix="$state/${session:-nosession}-${agent:-main}-v2"
