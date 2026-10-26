@@ -39,6 +39,42 @@ prints the upgrade command, so no announcement is needed for the CLI.
 Upgrade the CLI and server together. No step below rebuilds the index; the
 subsections say which ones re-read files or records on the first pass.
 
+
+### `gh pr view` and every `gh` search run as ccx; `ccx show '#N' --full` prints a record whole
+
+Upgrade the server for `--full` (the parts of a record), the CLI for the
+rewrites. Nothing to configure. Update the plugin
+(`claude plugin update ccx@…`) for the hook's new shapes.
+
+- **`ccx show '#N' --full`** (`-e`, `--expand`) prints the body whole, line
+  by line, then every indexed comment, review and review comment, oldest
+  first, each under its author and time, a review comment with the path and
+  line it anchors to. Without the flag the record is as before: the first
+  600 characters of the body and the comment count. The request carries
+  `parts: true`; an older server ignores it and answers the record alone.
+- **The hook rewrites more `gh` lookups.** One day of this deployment's
+  transcripts, replayed through the previous hook: 47 of 53 PR and issue
+  searches and 41 of 43 views were left to gh, most for `--state open`, a
+  `-q` or a body read.
+  - `gh pr view N` / `gh issue view N` of content fields (`--json
+    title,body,files,comments,…`, `-q`, `--comments`, a URL) runs as
+    `ccx show '#N' --full`; a view of live state (`--json
+    state,mergeable`, `headRefName`, `statusCheckRollup`), of the current
+    branch's PR or `--web` stays on gh.
+  - `gh pr list --search`, `gh issue list --search` and `gh search
+    prs|issues` run as `ccx search --kind change`, with `--state open` too
+    (the header dates the sweep; merged fixes rank beside the open ones),
+    `-q`/`--jq`/`--template` dropped, `in:title` read as words,
+    `--sort updated|created` carried.
+  - A `gh` lookup piped into `grep`, `head` or `tail` keeps those pipes
+    after the fallback group: `{ ccx show '#12' --full || gh pr view 12
+    --json body -q .body; } | grep -i flaky -A2 | head -20`. A count
+    (`grep -c`, `wc -l`), `-l`, `-v` or `-q` is not rewritten.
+  - The hint names the same commands; `gh pr view` is hinted, never blocked.
+- **Verify.** In an indexed checkout with a change index,
+  `printf '%s' '{"hook_event_name":"PreToolUse","session_id":"s","tool_name":"Bash","tool_input":{"command":"gh pr view 12 --json body"}}' | ccx indexed --claude-hook`
+  prints an `allow` whose `updatedInput` names `ccx show '#12' --full`.
+
 ### `show PATH:LINE` on a blank line shows one definition; `ccx log` keeps the fixes next to a symbol
 
 Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.

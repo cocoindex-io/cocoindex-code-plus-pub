@@ -112,7 +112,7 @@ spends no GitHub API quota, so it still answers when `gh` is rate-limited.
 |---|---|
 | `gh pr list --search "sidebar animation" --state all` | `ccx search --kind change "sidebar plays drop animations on restart"` |
 | `gh pr list --state open --search "fix clippy"` (is a fix already in?) | `ccx search --kind change "<the failing test or error line>"`: it also sees merged fixes, which `--state open` hides |
-| `gh pr view 2901` | `ccx show '#2901'` (a PR or issue URL also works) |
+| `gh pr view 2901 --json body`, `--comments` | `ccx show '#2901' --full` (the body whole, every comment and review; a PR or issue URL also works) |
 | `gh issue list --state open --search "Main is red"` | `ccx search --kind change "Main is red" --state open --sort updated` |
 | `gh search prs "rate limit breaker"` | `ccx search --kind change "GitHub calls fail with 403 until the reset"` |
 | `git log --oneline --grep="landing"` | `ccx search --kind change "landing retries after a rate limit"` |
