@@ -1063,12 +1063,14 @@ notes:
       resolveTimeoutSeconds: 1800    # default 30 min; how long one ref's resolve may run
       reuseMaxAgeSeconds: 86400      # default 1 day; how long a file's symbols are reused unchecked
       maxConcurrentResolves: 1       # default; refs' symbol steps running at once, across repositories
+      smallStepIrBytes: 134217728    # default 128 MiB; a smaller ref's step may run beside them (0: off)
   ```
 
   (They map to `CCX_SYMBOL_INDEX_ENABLED`,
   `CCX_SYMBOL_MAX_FILES_PER_GIT_REF`, `CCX_SYMBOL_MAX_IR_BYTES_PER_GIT_REF`,
   `CCX_SYMBOL_RESOLVE_TIMEOUT_SECONDS`, `CCX_SYMBOL_REUSE_MAX_AGE_SECONDS`,
-  `CCX_SYMBOL_MAX_CONCURRENT_RESOLVES` should you set the env directly.)
+  `CCX_SYMBOL_MAX_CONCURRENT_RESOLVES`, `CCX_SYMBOL_SMALL_STEP_IR_BYTES` should
+  you set the env directly.)
 - **Turning it off reclaims storage — it is not a pause.** `enabled: false`
   changes what the indexer's incremental state is keyed on, so the next pass
   re-runs without symbols and the symbol rows (plus their shared parsed-module
