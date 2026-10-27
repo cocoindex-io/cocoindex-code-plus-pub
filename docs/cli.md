@@ -1762,3 +1762,26 @@ library paths. Public re-exports, explicit standard pointer fields, and standard
 Callbacks without those bounds produce candidate uses with `--include-unresolved`.
 Use `--tests` when the call appears only in test code. SQL column names inside
 strings require `grep --text` rather than symbol references.
+
+## Source and diagnostic safeguards
+
+CLI failures use stderr. Successful records stay on stdout. This includes
+partial results printed before a later page fails.
+
+`ccx show PATH:LINE` rejects a line past the file's end. `--lines` also rejects
+an invalid start line. C# member targets include properties, indexers, events,
+operators, delegates, records, and expression-bodied methods. File-scoped
+namespaces retain their qualified path. During initial indexing, an unscoped
+local symbol lookup can use checkout source when the server returns HTTP 503.
+
+`ccx red-test` accepts standard `dotnet test` failure lines. `ccx grep DIR`
+includes new local files within that directory. History marks shallow-clone
+boundaries rather than attributing all boundary content to that commit.
+
+The dependency graph reads declared NuGet dependencies from project files,
+`packages.config`, and imported `.props` files. It reads central package versions
+and literal relative imports. It does not evaluate MSBuild conditions or SDK
+imports. Project references do not create external package edges.
+
+Answer citations use source windows of at most 120 lines. Broad source reads
+need a narrower read before the answer can cite them.
