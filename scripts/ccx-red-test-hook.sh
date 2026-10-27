@@ -3,7 +3,8 @@
 # specs/product/cli/red_test.md). After a Bash call whose output shows failing
 # tests (nextest `FAIL [`, `TRY n FAIL [`, cargo `test result: FAILED`,
 # `---- name stdout ----`, pytest `FAILED path::name`, go `--- FAIL: Name`,
-# `gate: FAILED`), `ccx red-test --claude-hook` adds a few lines of
+# `gate: FAILED`, dotnet `Failed Name [`, `[FAIL]`, `failed Name (`, Maven
+# `<<< FAILURE!`, Gradle `> name FAILED`), `ccx red-test --claude-hook` adds a few lines of
 # context per failing test (three at most, four lines each): where it
 # stopped (the function holding the panic's line), what it exercises (for a
 # test new or changed on the branch, read from its working-tree body), the
@@ -34,6 +35,11 @@ log_skip() {
 [ "$(field hook_event_name)" = PostToolUse ] || exit 0
 case "$input" in
   *'FAIL ['* | *'test result: FAILED'* | *' stdout ----'* | *'gate: FAILED'* | *'FAILED '*'::'* | *'... FAILED'* | *'--- FAIL: '*) ;;
+  # dotnet: VSTest `  Failed Ns.Type.Method [12 ms]` and its `Failed!  - Failed:`
+  # summary, the xUnit console's `[FAIL]`, Microsoft.Testing.Platform's
+  # `failed Ns.Type.Method (12ms)`; Maven Surefire `<<< FAILURE!`; Gradle
+  # `pkg.Type > name() FAILED`.
+  *'Failed '* | *'Failed!  - Failed:'* | *'[FAIL]'* | *'failed '*'('* | *'<<< FAILURE!'* | *'<<< ERROR!'* | *' > '*' FAILED'*) ;;
   *) exit 0 ;;
 esac
 case "${CCX_RED_TEST:-}" in 0 | off | false | no | OFF | False | NO) log_skip skip:off; exit 0 ;; esac
