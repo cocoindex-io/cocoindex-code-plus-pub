@@ -156,7 +156,7 @@ acme/app main: first pass 37% (742 of 2,004 files, 5,318 chunks), about 10 min; 
 1 of 2 ready. To wait: ccx status --wait-ready --timeout 600
 ```
 
-Pipes and `--plain` use this format. MCP status text uses the same ref lines.
+Right after a restart the first line reads `warming up (search)` for a few seconds: the server answers, and `/health` returns 503 `warming` until its first searches are warm (at most `CCX_SERVER_WARMUP_SECONDS`, 60 s). Pipes and `--plain` use this format. MCP status text uses the same ref lines.
 Each ref occupies one line, without colors, bars, or column padding.
 A terminal shows REPO, REF, and INDEXED AGE / COMMIT columns.
 A state mark appears before each repository name.
@@ -202,6 +202,7 @@ The heartbeat supplies the cycle deadline. No log command is invented.
 | `finishing` | the engine commits the ref |
 | `first pass failed (attempt N)` | the next cycle retries; check the indexer's log |
 | `not reporting since` | the reporting indexer is no longer running |
+| `…, N h behind <host> (M merged pull requests since; mirror last fetched …)` | a mirrored repo has not followed its host for 2 h or more: answers miss the work merged since; `ccx indexed` and the session-start line say it too |
 
 During the walk, the report can say:
 
