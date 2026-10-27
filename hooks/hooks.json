@@ -93,6 +93,16 @@
         ]
       },
       {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-edit-notes-hook.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "*",
         "hooks": [
           {
@@ -134,6 +144,16 @@
             "if": "Bash(git grep *)",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-claude-hook.sh",
             "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-red-test-hook.sh",
+            "timeout": 5
           }
         ]
       }
