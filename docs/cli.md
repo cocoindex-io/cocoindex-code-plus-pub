@@ -148,6 +148,7 @@ ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (singl
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
+ccx search config --stats                         # where the time went: one stderr line with the server's stages and the request's wall time
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)

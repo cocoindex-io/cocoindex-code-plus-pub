@@ -34,6 +34,42 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.77 — semantic search answers in milliseconds of database time; search pages may change slightly; three new chart values
+
+Nothing is required. Read on if you tune the bundled Postgres, run an
+external database, or compare search results across releases.
+
+**What changed.** The semantic-search statement now fences its vector scan so
+PostgreSQL can only answer it from the HNSW index, runs with PostgreSQL's JIT
+off, and fails after 10 s (`503 statement_budget_exceeded`) instead of
+spending the whole request deadline on a wrong plan. The query vector of a
+repeated query is reused for 10 minutes, and the server no longer holds a
+database connection during the embedding call. `ccx search --stats` prints
+where a search's time went.
+
+**Search pages may change slightly.** The HNSW scan now considers 100
+candidates instead of pgvector's 40 (`hnsw.ef_search`). The page is closer
+to the exact nearest neighbours: on the reference index the first ten were
+90 % of the exact first ten before and all of it after. A deployment whose
+database had been taking the slow plan was returning the exact page already
+and sees no change in content, only in time.
+
+**Three new chart values**, all with defaults that need no action:
+
+- `database.bundled.jit` (default `false`): the bundled Postgres runs with
+  `jit=off`. On an external database set `jit=off` on the instance; the
+  server pins it per search statement regardless.
+- `database.bundled.maxConnections` (default `200`, PostgreSQL's own default
+  was 100): the indexer holds up to ~70 slots and each query-server replica up
+  to `queryServer.dbPoolMaxSize`. On an external database check
+  `max_connections` covers indexer + replicas × pool.
+- `queryServer.dbPoolMaxSize` (default `32`): the query server's pool size,
+  up from asyncpg's 10.
+
+**Verify.** `ccx search deadline --stats` prints a `sql` figure in the single
+milliseconds warm and `embed … (hit)` on an immediate repeat; the bundled
+Postgres pod's args show `jit=off` and `max_connections=200`.
+
 ## v0.1.76 — source files up to 4 MiB are indexed, every skipped file says why; `ccx show PATH` without a flag never reads the index
 
 Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
@@ -100,7 +136,6 @@ in the working tree.
 - **Verify.** `ccx show no/such/file.py` in an indexed checkout exits 1 and
   prints `pass --git-ref <ref> to read the indexed copy`; with `--git-ref`
   the same path reads the index, or says the ref lacks it.
-
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
