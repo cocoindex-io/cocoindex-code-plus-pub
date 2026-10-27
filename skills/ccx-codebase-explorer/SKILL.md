@@ -648,6 +648,11 @@ ccx ask "<question>" --deps --dependents  # an answer that may follow the code i
   indexed commit, not a guess or a stale copy under `site-packages` or
   `node_modules`. The requirement `ccx deps` prints says whether that commit
   is the version you pin.
+- `--dependents` also covers repos that ship the same Python module under
+  another package name (a fork or a vendored copy: the change reaches them when
+  they sync) and the repos that use that copy. Headers say which is which; a
+  repo "at the same commit as" another is a separate repo with the same code,
+  and its uses count too.
 - In a dependent repo, `refs` lists uses as `name_only`: matched by name, since
   the index does not resolve imports across repos. Read the import line before
   trusting a common name.
