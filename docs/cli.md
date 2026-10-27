@@ -1300,13 +1300,18 @@ has been checked against the repositories in question.
      **The tests to run.** `ccx tests-for` reads your diff against its base
      (the merge base with `origin`'s default branch; `--base REF`, or name
      files or `PATH:LINE`), finds the definitions the changed lines sit in,
-     asks the index for each one's tests, and prints one command per runner
-     that runs them all — `cargo nextest run -p A -p B -E '…'` (or `cargo
-     test -p A -- x y`), `pytest a.py::t b.py::u`, `go test ./a ./b -run
-     '^(TestA|TestB)$'` — and the changed definitions no test uses (`--json`
-     for scripts). The plugin hands the same answer over at two moments:
-     after an edit of a `.rs`, `.py` or `.go` file, the tests of what that
-     edit changed (once per file content and per set of tests, within about
+     asks the index in one request for their tests and their callers'
+     tests (two steps up), and prints one command per runner that runs
+     them — `cargo nextest run -p A -p B -E '…'` (or `cargo test -p A -- x
+     y`), `pytest a.py::t b.py::u`, `go test ./a ./b -run
+     '^(TestA|TestB)$'`. The tests your diff adds or edits come first, then
+     each definition's own tests, then its callers'; at most 40 (`--all`
+     for every one). A definition the index has not seen yet counts through
+     its uses in your working tree; for code no test reaches, it names the
+     test module to write one in (`--json` for scripts). The plugin hands
+     the same answer over at two moments: after an edit of a `.rs`, `.py`
+     or `.go` file, the tests of what that edit changed, or where a test
+     for new code goes (once per file content and per answer, within about
      1.5 s or nothing); and before `git commit`, `script/ship.py` or
      `script/gate.py`, the command for the whole diff when the session has
      run no test command naming those tests. After a failing test run
