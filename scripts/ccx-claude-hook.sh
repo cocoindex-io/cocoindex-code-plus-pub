@@ -147,12 +147,12 @@ every_call() {
   case "$1" in read | history | change | grep_rewrite | definition) return 0 ;; esac
   return 1
 }
-# A grep goes to the CLI at every call, so it can be rewritten
+# A grep (`git grep` too) goes to the CLI at every call, so it can be rewritten
 # (CCX_HOOK_REWRITE=0 turns that off); a spent hint is then not printed.
 if [ "$kind" = grep ] && [ -e "$marker" ]; then
   case "${CCX_HOOK_REWRITE:-}" in 0 | off | false | no) exit 0 ;; esac
   case "$event:$command_text" in
-    PreToolUse:grep\ * | PreToolUse:rg\ *) ;;
+    PreToolUse:grep\ * | PreToolUse:rg\ * | PreToolUse:git\ grep\ *) ;;
     *) exit 0 ;;
   esac
 fi
