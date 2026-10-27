@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.8"
+  ccx-skill-revision: "2026-10-27.9"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -666,9 +666,11 @@ Line windows (`--offset`/`--limit`), paging, and case mode:
 ## Working across repos
 
 `ccx deps` names the indexed repos this one depends on and the ones that
-depend on it, read from package manifests (`pyproject.toml`, `package.json`,
-`Cargo.toml`, `go.mod`) at each repo's default branch: the package, the version
-requirement, and the manifest line's file. Two flags carry any query across
+depend on it, read from package manifests at each repo's default branch
+(Python, npm, Cargo, Go, NuGet, Maven, Gradle, RubyGems, Composer, SwiftPM):
+the package, the version requirement, and the manifest line's file. An edge
+marked `import not found` names a package another repo also builds, but no
+import of it was found: trust it less. Two flags carry any query across
 that edge, each repo at its default branch, under a `── <repo> (<role>) ──`
 header:
 
@@ -688,15 +690,19 @@ ccx ask "<question>" --deps --dependents  # an answer that may follow the code i
   `ccx defs <Name> --deps` reads the real definition at the dependency's
   indexed commit, not a guess or a stale copy under `site-packages` or
   `node_modules`. The requirement `ccx deps` prints says whether that commit
-  is the version you pin.
+  is the version you pin; when it is not, or the version is unknown, `--deps`
+  reads the newest indexed release tag that meets the pin, and the header says
+  which ref it read and why.
 - `--dependents` also covers repos that ship the same Python module under
   another package name (a fork or a vendored copy: the change reaches them when
   they sync) and the repos that use that copy. Headers say which is which; a
   repo "at the same commit as" another is a separate repo with the same code,
   and its uses count too.
 - In a dependent repo, `refs` lists uses as `name_only`: matched by name, since
-  the index does not resolve imports across repos. Read the import line before
-  trusting a common name.
+  the index does not resolve imports across repos. `--dependents` keeps only
+  the files that import the name from the module that defines or re-exports
+  it, and says on stderr how many it hid; read the import line of what is left
+  when the name is common.
 
 ## Repo & ref metadata
 
@@ -707,7 +713,9 @@ and recorded data count less), each with its nearest `file:line`s. A repo
 `search` or `ask` when the repo is not obvious, instead of guessing from names
 or searching repo after repo. The answer lists a few repos on purpose: siblings
 (a UI crate beside its engine) often both hold the code, and the nearest files
-tell them apart.
+tell them apart. It also takes a name (`ccx repos --for PatternFilePathMatcher`):
+the repos that define it come first, at the definition (`defines`); repos that
+only import or call it are marked `uses`.
 
 `--repo` on `search` and `ask` takes a glob too: `--repo 'acme/*'` (or `'*'`)
 searches the matching repos, and when more match than the per-query cap, the
@@ -716,7 +724,10 @@ ones `--for` ranks nearest to the query.
 `ccx repos` lists the indexed repos you can target (alias, stable uid, default
 branch, up to three refs it is indexed at as `<ref>@<commit>`, how long ago it
 was indexed, and what the repo is in one line, from its manifest or README).
-Read the last column before picking a repo by its name. With many repos, narrow it rather than scrolling: `ccx repos <text>`
+Read the last column before picking a repo by its name. An age column that
+reads `failed 3h`, `indexing` or `not-indexed` means its answers are stale or
+empty: stderr gives the reason; search another repo or read a checkout. With
+many repos, narrow it rather than scrolling: `ccx repos <text>`
 (a case-insensitive name fragment, or a glob such as `'acme/*-api'`),
 `--owner <owner>`, `--here` (this checkout's repo), `--sort recent|stale`,
 `--json`.
