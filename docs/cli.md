@@ -317,7 +317,11 @@ A committed ref whose repository is still blocked earns the same indexing hint, 
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs as <ref>@<commit>
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs as <ref>@<commit>, index age
+ccx repos acme                                   # only repos whose <owner>/<repo> contains "acme" (any case); 'acme/*-api' is a glob
+ccx repos --owner acme --sort stale              # one owner's repos, the longest since indexed first (also: recent, name)
+ccx repos --here                                 # the repo of the checkout you are in
+ccx repos --json                                 # one JSON object per repo, every field
 
 # Semantic search (targets explicitly-named repos; no global "search everything")
 ccx search "how are vector embeddings stored"   # scopes to the current repo + branch (see note below)
@@ -1408,10 +1412,11 @@ and REST API closely (same capabilities, same scoping).
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):
-  - `list_repos(limit?, cursor?)` → the accessible indexed repos (stable
-    `repo_key` uid + alias + default branch + up to ten indexed refs, each
-    with the commit indexed for it), as a cursor walk — the discovery call
-    before a search.
+  - `list_repos(limit?, cursor?, match?)` → the accessible indexed repos
+    (stable `repo_key` uid + alias + default branch + up to ten indexed refs,
+    each with the commit indexed for it and when its last pass finished), as
+    a cursor walk — the discovery call before a search. `match` keeps only
+    the repos whose `<owner>/<repo>` contains it, case-insensitively.
   - `code_search(query, repos, top_k?, offset?, paths?, languages?)` → one
     cross-repo-ranked list of code chunks (repo, filename, line range, code,
     score), one per definition — the definition's other matching chunks in
