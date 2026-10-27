@@ -34,11 +34,12 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.82 — a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type
+## v0.1.82 — a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
 
 Nothing is required on the deployment, and nothing is re-indexed; the
 indexer's first start builds one new index. Upgrade the CLI with the server,
-as always. Three changes affect scripts and agents that read `ccx` output.
+as always. Three changes affect scripts and agents that read `ccx` output; a
+fourth indexes large files the old rule skipped, as each one changes.
 
 ### Semantic search with a path filter
 
@@ -100,6 +101,26 @@ as always. Three changes affect scripts and agents that read `ccx` output.
   Before, it rendered the whole type.
 - **Kotlin outlines fold.** A Kotlin outline now collapses its classes and
   functions, and a line in a Kotlin function renders that function.
+
+### Fewer large files are skipped as minified
+
+- **What changed.** A file over 1 MiB was skipped as minified when its
+  lines averaged over 110 bytes, or one of them passed 10 000 bytes,
+  whatever its type. That left out text listings (one API signature per
+  line, as in Roslyn's `PublicAPI.Shipped.txt`), test tables, and
+  hand-written code with long lines. Now a file over 1 MiB is minified only
+  when the indexer recognizes its type and it holds under one line per KiB,
+  a mean line over 1 KiB: the shape of a bundle such as `jquery.min.js`. A
+  file whose type the indexer does not recognize is never judged minified;
+  it keeps its text for `read-file`, `show` and `grep --text`, as every
+  large file of that kind does
+  ([deploy.md § File size limits](deploy.md#file-size-limits)).
+- **Expected after the upgrade.** Nothing is re-indexed, and no file the
+  old rule indexed is skipped now. A file the old rule skipped is indexed
+  when its content next changes; until then, `ccx read-file` on it still
+  answers that it looks minified.
+- **Verify.** After such a file changes, `ccx find-files --not-indexed` no
+  longer lists it, and `ccx read-file` prints it.
 
 ## v0.1.81 — embedding savings count whole trees, priced in measured tokens; the first indexing pass re-walks every repository once from the index's own copy
 
