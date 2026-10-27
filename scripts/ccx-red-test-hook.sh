@@ -4,13 +4,15 @@
 # tests (nextest `FAIL [`, `TRY n FAIL [`, cargo `test result: FAILED`,
 # `---- name stdout ----`, pytest `FAILED path::name`, go `--- FAIL: Name`,
 # `gate: FAILED`), `ccx red-test --claude-hook` adds a few lines of
-# context per failing test (three at most, four lines each): where it
-# stopped (the function holding the panic's line), what it exercises (for a
-# test new or changed on the branch, read from its working-tree body), the
-# PRs merged in the day before the checkout's base that changed those (the
-# likely culprits), and any fix already open or merged past the base. It
-# reads the local clone and the index under about 2 s. This script starts
-# the CLI only when the output carries one of those markers.
+# context per failing test (three at most, four lines each), the action
+# first: the place to read (where it stopped: the function holding the
+# panic's line), the command that reruns just that test, then why — what it
+# exercises (for a test new or changed on the branch, read from its
+# working-tree body), any fix already open or merged past the base, the PRs
+# merged in the day before the base that changed those (the likely
+# culprits). It reads the checkout the command ran in (a `cd`, Codex's
+# workdir) and the index under about 2 s. This script starts the CLI only
+# when the output carries one of those markers.
 # CCX_RED_TEST=0 turns it off. It always exits 0 and prints nothing on
 # failure: a tool hook must never hold up or fail the agent. A failing run
 # it does not hand to the CLI (switched off, no `ccx`) is one line of
