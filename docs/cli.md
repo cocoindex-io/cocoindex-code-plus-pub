@@ -1883,6 +1883,8 @@ The command restores packages, optionally builds the solution, and exports
 `.ccx/csharp-context.json.gz` at the Git root. Use `--property NAME=VALUE` for
 custom build properties. Repeat the option when needed. Use `--output` to
 write an inspection copy elsewhere.
+Select `--framework` when a project declares multiple target frameworks.
+The exporter refuses outer-build package facts without a target selection.
 
 Stage current source inputs before export. Commit the default artifact with
 those inputs. It supplies compiler bindings for
