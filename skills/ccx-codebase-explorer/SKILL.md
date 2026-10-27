@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.1"
+  ccx-skill-revision: "2026-10-27.3"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-27.1`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-27.3`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -40,6 +40,14 @@ tools reach only after a chain of greps:
   you need a branch or tag other than your checkout, or the question spans
   several indexed repos (`--repo`, repeatable for `search` and `ask`;
   `--git-ref`).
+- **You don't know which repo holds it** — "where is the code that …" across
+  many repos, or a search here that finds nothing → `ccx repos --for "<need>"`
+  ranks every indexed repo by how much of its code is about the need, with the
+  nearest files; then search the top one or two.
+- **Code in another repo** — a name this repo imports from a package another
+  indexed repo builds, or a public name other repos call → `ccx deps`, then
+  `ccx defs NAME --deps` / `ccx refs NAME --dependents` (see "Working across
+  repos").
 - **A question, not a lookup** — the deliverable is a written, cited
   explanation ("how does re-embedding get decided, end to end?", "compare auth
   in these two services"), or the question is too broad for one search or
@@ -618,7 +626,49 @@ ccx find-files 'src/*.py' --repo acme/api --git-ref v1.2  # paths there, by glob
 Line windows (`--offset`/`--limit`), paging, and case mode:
 [references/remote-access.md](references/remote-access.md).
 
+## Working across repos
+
+`ccx deps` names the indexed repos this one depends on and the ones that
+depend on it, read from package manifests (`pyproject.toml`, `package.json`,
+`Cargo.toml`, `go.mod`) at each repo's default branch: the package, the version
+requirement, and the manifest line's file. Two flags carry any query across
+that edge, each repo at its default branch, under a `── <repo> (<role>) ──`
+header:
+
+```bash
+ccx deps                                  # this repo: what it builds, depends on, is used by
+ccx defs <Name> --deps                    # a name you import: its definition in the repo that builds it
+ccx refs <Name> --dependents              # before changing a public name: its callers in other repos
+ccx grep --text '<regex>' --dependents    # the same for any text, e.g. a config key or an import path
+ccx search "<concept>" --deps             # one ranked list over this repo and its dependencies
+ccx ask "<question>" --deps --dependents  # an answer that may follow the code into related repos
+```
+
+- **Before you change an exported name, signature or wire format**, run
+  `ccx refs <Name> --dependents`. Your tests pass without those callers; theirs
+  will not.
+- **An import from a package this repo does not build** is not a dead end:
+  `ccx defs <Name> --deps` reads the real definition at the dependency's
+  indexed commit, not a guess or a stale copy under `site-packages` or
+  `node_modules`. The requirement `ccx deps` prints says whether that commit
+  is the version you pin.
+- `--dependents` also covers repos that ship the same Python module under
+  another package name (a fork or a vendored copy: the change reaches them when
+  they sync) and the repos that use that copy. Headers say which is which; a
+  repo "at the same commit as" another is a separate repo with the same code,
+  and its uses count too.
+- In a dependent repo, `refs` lists uses as `name_only`: matched by name, since
+  the index does not resolve imports across repos. Read the import line before
+  trusting a common name.
+
 ## Repo & ref metadata
+
+`ccx repos --for "<what you need, in words>"` answers "which repo?" in one call:
+the repos ranked by how many of the nearest code chunks are theirs (docs, tests
+and recorded data count less), each with its nearest `file:line`s. A repo
+"same code as" another is a fork or mirror. Use it before naming `--repo`s for
+`search` or `ask` when the repo is not obvious, instead of guessing from names
+or searching repo after repo.
 
 `ccx repos` lists the indexed repos you can target (alias, stable uid, default
 branch, the refs each is indexed at as `<ref>@<commit>`, and how long ago it was
