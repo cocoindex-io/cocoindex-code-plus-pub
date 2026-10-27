@@ -165,7 +165,9 @@ if [ -e "$absent_retry" ] && [ -n "$(find "$absent_retry" -mmin -15 2>/dev/null)
 fi
 
 command -v ccx >/dev/null 2>&1 || exit 0
-output=$(printf '%s' "$input" | ccx indexed --claude-hook 2>/dev/null)
+# CCX_HOOK_HOST tells the CLI which agent's words to use (how to wait for
+# `ccx ask` differs between Claude Code and Codex).
+output=$(printf '%s' "$input" | CCX_HOOK_HOST="$host" ccx indexed --claude-hook 2>/dev/null)
 status=$?
 case "$status" in
   0)
