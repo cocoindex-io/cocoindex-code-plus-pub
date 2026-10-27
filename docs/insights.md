@@ -30,9 +30,8 @@ usageAnalytics:
   enabled: true
 ```
 
-Enabling it also defaults `indexer.cycleSeconds` to `300`, because the
-indexing metrics count *cycles* and live mode has no pass boundary to count.
-An explicit `indexer.cycleSeconds` still wins.
+It changes nothing about how the indexer runs: each repository's refresh
+records its own *cycle* — one repository's refresh that did work.
 
 There is no analytics-specific provisioning. The query server creates the
 schema at startup and the indexer writes its own tables into it; what that
