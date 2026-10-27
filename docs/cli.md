@@ -1381,6 +1381,51 @@ has been checked against the repositories in question.
        library's skills stay installed.
      - **The reminder.** From `ccx` 0.1.74 on, the hook tells you once a
        day, as a warning in the session, until you move.
+
+     **The plugin under Codex.** The OpenAI Codex CLI (0.164 or later)
+     runs the same hooks from the same repository; the plugin brings its
+     own Codex wiring (`codex/hooks.json`). Codex differs from Claude Code
+     in two ways that decide the steps: it copies a plugin when you add it
+     and never refreshes that copy, and it runs a plugin's hooks only once
+     you trust them — any change to the plugin's files leaves every hook
+     untrusted again, and Codex then skips them without a word. So install
+     and every update are the same three steps: refresh the marketplace,
+     add the plugin again, trust its hooks. The plugin's
+     `scripts/ccx-codex-update.sh` runs all three.
+
+     On a Mac (Terminal; Codex, `ccx` and a login to your deployment
+     already installed):
+
+     ```bash
+     # 1. Once: a copy of this repository to run the script from.
+     git clone https://github.com/cocoindex-io/cocoindex-code-plus-pub ~/ccx-pub
+     # 2. Install, and after every update of the plugin: update the copy,
+     #    then add the plugin again and trust its hooks.
+     git -C ~/ccx-pub pull --ff-only
+     sh ~/ccx-pub/scripts/ccx-codex-update.sh cocoindex-io/cocoindex-code-plus-pub
+     ```
+
+     The script ends with `N ccx hook(s) trusted for Codex.` (or `The ccx
+     hooks were trusted already.`); `/hooks` in `codex` lists them as
+     trusted.
+
+     The script adds the marketplace the first time (`codex plugin
+     marketplace add cocoindex-io/cocoindex-code-plus-pub`) and refreshes it
+     after (`codex plugin marketplace upgrade ccx`), runs `codex plugin add
+     ccx@ccx`, then trusts the ccx hooks as Codex's own `/hooks` screen does
+     (only `ccx@ccx`'s; it prints each one). To trust by hand instead, start
+     `codex`, type `/hooks` and trust each ccx hook. Sessions started after
+     that get the hooks. With a marketplace from a local folder (a clone,
+     or a deployment's copy), pass that folder instead of the GitHub name;
+     the steps are the same. Under Codex the test hooks fire at
+     `apply_patch` (the tests of the files the patch changed), before a
+     `git commit`, `script/ship.py` or `script/gate.py`, and after a failing
+     test run; a command Codex runs in another folder than the session's
+     (its `workdir`) is read in that folder.
+
+     Updating the Claude Code side on the same Mac stays as above:
+     `/plugin marketplace update ccx`, then `/reload-plugins` (or start a
+     new session).
   4. **One line in the repo's agent instructions** (`AGENTS.md` /
      `CLAUDE.md`), for a team that wants `ccx` used on every task:
 
