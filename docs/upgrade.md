@@ -34,10 +34,14 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.81 — search is hybrid: names and rare words count beside meaning; the indexer builds one index at its first start; search output lists every hit first
+## v0.1.81 — search is hybrid: names and rare words count beside meaning; embedding savings count whole trees, priced in measured tokens; at its first start the indexer builds one index and re-walks every repository once from the index's own copy; search output lists every hit first
 
 Nothing is required. Read on if you compare search results across releases,
-script against `ccx search` output, or roll the two workloads separately.
+script against `ccx search` output, or roll the two workloads separately —
+or to know what the first indexing pass does and why the Insights embedding
+figures change.
+
+### Search is hybrid
 
 **What changed.** `ccx search` (and the `code_search` MCP tool, and the
 agent behind `ccx ask`) fuses three lists: the chunks nearest the query's
@@ -72,6 +76,46 @@ the server checks again within a minute of the indexer building it.
 prints `words …ms, N candidates; definitions …ms, M found` with N and M at
 least 1 on the stderr line, and a hit's header carries `lexical` or
 `definition`; no `lexical candidates skipped` warning.
+
+### Embedding savings count whole trees
+
+- **What changed.** *Saved by embedding reuse* now counts, for every
+  change, the whole tree of each branch or tag that changed, less what the
+  pass embedded — what re-indexing on every change would have cost. Before,
+  it counted only the unchanged parts of the files that changed, which
+  undercounted it many times over on a repository with many files.
+- **Priced in measured tokens.** Embedding cost and saving are now the tokens
+  the indexer counts (`cl100k_base`, which OpenAI's `text-embedding-3` models
+  bill in), not chunks times an assumed 260 tokens per chunk.
+- **Expected after the upgrade.** Insights shows a larger embedding saving
+  and an embedding cost close to your provider's bill; the Indexing view
+  shows *Tokens embedded* and *Tokens reused*. Days recorded before the
+  upgrade are estimated from each repository's size at the time and
+  labelled: the window note names them, and their bars are dashed and
+  lighter ([insights.md](insights.md)).
+- **The analytics tables grow in place.** Both writers add their new columns
+  at startup and keep every collected row. The query server then rebuilds
+  the days within the raw-event horizon once, newest first, one day every
+  30 seconds; a day shows as partial until it is rebuilt (about 45 minutes
+  for the oldest of 90 days).
+- **Optional.** Set `usageAnalytics.rates.embedding_per_mtok` to your
+  embedding model's price per million tokens; the illustrative default is
+  0.13.
+
+### The first pass after the upgrade re-walks every repository once
+
+- **What changed.** The walk now records each folder's embedding tokens, so
+  a folder no pass needs to read again still reports its whole cost.
+- **Expected after the upgrade.** Recording them changes the walk's memo
+  identity once, so the first pass re-walks every repository. It reads every
+  file from the index's own copy (v0.1.74), not from the code host, re-embeds
+  nothing and re-resolves no symbol: it is bound by parsing, and queries keep
+  answering from the current index meanwhile. That pass adds no saving,
+  since it moves no branch.
+- **Verify.** The first pass's stats lines report `File.accept: … N
+  reprocessed` for every repository, while `_cached_blob`, `_cached_tree` and
+  `declare_chunk_embedding` report only `unchanged`. After it, `ccx usage
+  indexing` prints *Tokens embedded* and *Tokens reused*.
 
 ## v0.1.77 — semantic search answers in milliseconds of database time; search pages may change slightly; three new chart values
 
