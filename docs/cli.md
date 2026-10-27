@@ -1663,7 +1663,7 @@ means the backfill cannot settle absence. With no index, the line says
 `ask` reads one indexed commit per ref on each code read. It cannot read git
 history, blame, or commit diffs. It must not infer which PR introduces code
 from the current file. Its last line names relevant files it cannot read,
-then says `history questions: use git log / ccx --kind change`.
+then says `history questions: use git log / ccx search --kind change`.
 Check change coverage before you use its results as evidence.
 
 
