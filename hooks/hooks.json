@@ -227,6 +227,282 @@
             "if": "Bash(python3 script/gate.py *)",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git -C * push *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(dotnet test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(dotnet test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./build.sh *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(build.sh *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./Build.cmd *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(Build.cmd *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./build.cmd *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(cargo test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(cargo test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(cargo nextest run)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(cargo nextest run *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(pytest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(pytest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python -m pytest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python -m pytest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python3 -m pytest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python3 -m pytest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(uv run pytest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(uv run pytest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(go test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(go test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npm test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npm test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npm run test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npm run test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(pnpm test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(pnpm test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(yarn test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(yarn test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(bun test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(bun test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npx jest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npx jest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npx vitest)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(npx vitest *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(mvn *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./mvnw *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(gradle *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./gradlew *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(make test)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(make test *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
           }
         ]
       }

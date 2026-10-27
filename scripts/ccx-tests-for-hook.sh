@@ -6,9 +6,11 @@
 #   MultiEdit; Codex's apply_patch): the tests of the definitions the edit
 #   changed and one command that runs them, once per file content and once
 #   per set of tests, within about 1.5 s or nothing;
-# - before `git commit`, `script/ship.py` or `script/gate.py` (PreToolUse
-#   Bash): the command for the whole diff's tests when the session's
-#   transcript shows no test command that ran them.
+# - before `git commit`, `git push`, `gh pr create`, a test run (`cargo test`,
+#   `pytest`, `go test`, `dotnet test`, `npm test`, `./build.sh --test`, ...)
+#   or reduce's `script/ship.py` / `script/gate.py` (PreToolUse Bash): the
+#   command for the whole diff's tests when neither the session's transcript
+#   nor the command itself ran them.
 #
 # CCX_TESTS_FOR=0 turns it off. It always exits 0 and prints nothing on
 # failure: a tool hook must never hold up or fail the agent. With `codex`
@@ -39,7 +41,17 @@ case "$(field hook_event_name):$(field tool_name)" in
     case "$input" in *'.rs'* | *'.py'* | *'.go'*) kind=edit ;; *) exit 0 ;; esac
     ;;
   PreToolUse:Bash)
-    case "$input" in *'git commit'* | *'git -C '*commit* | *ship.py* | *gate.py*) kind=checkpoint ;; *) exit 0 ;; esac
+    # The CLI's CHECKPOINT decides; this only keeps other commands from
+    # starting it: committing, shipping, gating, a test run, in any repo.
+    case "$input" in
+      *'git commit'* | *'git -C '*commit* | *'git push'* | *'git -C '*push* | *'gh pr create'* | \
+        *ship.py* | *gate.py* | *'uild.sh'*test* | *'uild.cmd'*test* | *'uild.ps1'*test* | \
+        *'cargo test'* | *'cargo nextest'* | *'cargo +'*test* | *pytest* | *'go test'* | *'go -C '*test* | \
+        *'dotnet test'* | *'npm test'* | *'npm run test'* | *'pnpm '*test* | *'yarn '*test* | \
+        *'bun test'* | *'npx jest'* | *'npx vitest'* | *mvn*test* | *mvn*verify* | *gradle*test* | \
+        *'make test'*) kind=checkpoint ;;
+      *) exit 0 ;;
+    esac
     ;;
   *) exit 0 ;;
 esac
