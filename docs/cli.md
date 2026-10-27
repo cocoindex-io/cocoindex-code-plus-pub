@@ -307,6 +307,13 @@ checkout (and gave no `--path`), results are scoped to that subtree — the note
 on stderr names the glob; run from the repo root or pass `--path '*'` to cover
 the whole repo.
 
+A `search` `--path` glob with a literal prefix (`src/io/*`) or suffix
+(`*.tsx`) that selects at most 2 000 chunks ranks every matching chunk
+exactly, whatever the query. A broader filter is applied to the vector scan's
+candidates instead, and when that scan stops before `-k` rows pass the filter
+the page is short and a `warning:` line on stderr (MCP: `warnings`) says so
+and suggests a narrower `--path` or a `--lang`.
+
 `grep` metavariables use the `\` sigil (`\_`, `\*`, `\NAME`). A pattern written
 in ast-grep's `$NAME` / `$$$` dialect matches those tokens literally and
 usually finds nothing; the CLI then prints a `warning:` line on stderr showing
