@@ -27,9 +27,10 @@ tools reach only after a chain of greps:
 
 - **Fuzzy / conceptual search** — you don't know the exact term, so text grep
   has nothing to anchor on ("where is retry handled?", "how are embeddings
-  stored?") → `ccx search`. It is hybrid: when you do hold a name, a quoted
-  message or an error string, put it in the same query — a hit whose header
-  says `lexical` or `both` holds every word of it.
+  stored?") → `ccx search`. Put every name, message or string you hold in
+  the same query beside the words: a spelled name finds its definition, a
+  rare word its chunks. It lists every hit first (`path:start-end`, the
+  lists that found it); open the one you need with `ccx show path:line`.
 - **Structure-oriented grep** — the question is about code *shape*, not text
   lines: a def vs. a call, a `catch` that re-throws the same variable it caught,
   every `isinstance` on a type, a nested generic that `>>` breaks for regex
@@ -52,7 +53,7 @@ One command per question, from a checkout of the repo (no flags needed):
 ```bash
 ccx defs <Name>                       # where is it defined — then paste the row's `uses:` command
 ccx refs <Name> --role call           # who calls it
-ccx search "<what the code does> <any exact name or \"quoted message\" you hold>"  # by meaning and by the words
+ccx search "<what the code does> <names you hold>"  # meaning, rare words, definitions
 ccx grep '<pattern>' -l <language>    # a syntactic shape
 ccx grep --text '<regex>'             # an exact string or regex anywhere — comments, docs, config too
 ccx show <file>                       # the file's outline, every definition at its line — before reading it whole

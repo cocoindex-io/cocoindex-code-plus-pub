@@ -34,35 +34,44 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.81 — search is hybrid: the words of a query count beside its meaning; the indexer builds one index at its first start
+## v0.1.81 — search is hybrid: names and rare words count beside meaning; the indexer builds one index at its first start; search output lists every hit first
 
 Nothing is required. Read on if you compare search results across releases,
-run a large index, or roll the two workloads separately.
+script against `ccx search` output, or roll the two workloads separately.
 
 **What changed.** `ccx search` (and the `code_search` MCP tool, and the
-agent behind `ccx ask`) now fuses two pages: the chunks nearest the query's
-meaning, as before, and the chunks that hold every word of the query. An
-identifier, a quoted string or an error message in the query is found even
-when its meaning is not close to the code. Every hit says which side found it
-(`ranked_by`: `vector`, `lexical`, `both`; the CLI prints the side after the
-score). `ccx search --mode vector` returns the page of every release before
-this one — the same statement, the same order — for comparisons.
+agent behind `ccx ask`) fuses three lists: the chunks nearest the query's
+meaning, as before; the chunks holding the query's rarest words; and the
+definitions of the `snake_case` / `camelCase` / `PascalCase` names the query
+spells. One chunk of each file comes before any file's second. On 786
+searches coding agents made against our own index, the file the agent
+opened next was in the top ten for 32 % of searches, against 23 % before.
+Every hit says which lists found it (`found_by`: `vector`, `lexical`,
+`definition`). `ccx search --mode vector` returns the page of every release
+before this one — the same statement, the same order — for comparisons.
+
+**`ccx search` output lists every hit first.** One line a hit,
+`[score lists] repo path:start-end`, then each hit's code under the same
+line. A script that read the first header and the code after it reads the
+list first now; the code blocks follow the `---` after the list, unchanged.
 
 **The indexer builds one index at its first start after the upgrade.** The
-lexical side is served from a PostgreSQL full-text index on the chunk text
+word list is served from a PostgreSQL full-text index on the chunk text
 (`code_embeddings_lexical`, a GIN index; no extension needed). The indexer
 declares it like its other indexes, and PostgreSQL builds it on every
 repository's partition at that start: about 14 s and 32 MB per 150k chunks,
-during which that partition's writes wait. Nothing to run by hand.
+during which that partition's writes wait. Nothing to run by hand. The
+definitions list reads the symbol index the indexer already builds.
 
 **Rolling the query server before the indexer is fine.** Until the index
-exists, a search serves the page it served before and carries a warning
-beginning `lexical candidates skipped: index … does not exist yet`; the
-server checks again within a minute of the indexer building it.
+exists, a search serves the vector and definitions lists and carries a
+warning beginning `lexical candidates skipped: index … does not exist yet`;
+the server checks again within a minute of the indexer building it.
 
-**Verify.** `ccx search <identifier> --stats` (an identifier from your code) prints
-`lexical …ms, N word matches` with N ≥ 1 on the stderr line, and the hit's
-header carries `lexical` or `both`; no `lexical candidates skipped` warning.
+**Verify.** `ccx search <identifier> --stats` (an identifier from your code)
+prints `words …ms, N candidates; definitions …ms, M found` with N and M at
+least 1 on the stderr line, and a hit's header carries `lexical` or
+`definition`; no `lexical candidates skipped` warning.
 
 ## v0.1.77 — semantic search answers in milliseconds of database time; search pages may change slightly; three new chart values
 
