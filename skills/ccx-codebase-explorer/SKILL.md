@@ -209,16 +209,22 @@ only indexed refs, never a sha.
   Don't mistake subtree-narrowed emptiness for "not in the codebase".
 - **Areas: product code, tests and the rest.** Every row has an area —
   `code`, `test`, `test_support`, `bench`, `example`, `doc`, `mock`, `data`,
-  `vendored` — and `search`, `grep`, `defs`, `refs` and `find-files` take
-  `--only AREA` / `--exclude AREA` (comma-separated or repeated) and
-  `--no-tests`. By default test rows beside product rows fold into one
-  `+ N … in tests; --tests lists them` line, and other areas are tagged
-  (`[test]`, `[vendored]`, `[doc]`); when one area fills a page, stderr names
-  the `--exclude` that clears it. The tests of a symbol: `ccx refs NAME
-  --only test`. A `defs` that resolves to one definition ends with
-  `tested by: N uses in K test files` and `run:` commands — after changing
-  that code, run those. With `--only`/`--exclude`, stderr says what the
-  filter left off, so an empty answer is not proof of absence.
+  `config`, `vendored` — and `search`, `grep`, `defs`, `refs` and
+  `find-files` take `--only AREA` / `--exclude AREA` (comma-separated or
+  repeated) and `--no-tests`. By default test rows beside product rows fold
+  into one `+ N … in tests; --tests lists them` line, and other areas are
+  tagged (`[test]`, `[config]`, `[vendored]`); when one area fills a page,
+  stderr names the `--exclude` that clears it. With `--only`/`--exclude`,
+  stderr says what the filter left off, so an empty answer is not proof of
+  absence.
+- **Which tests to run, and what a test covers.** A `defs` that resolves to
+  one definition prints, right under its row, `tested by: N uses in K test
+  files` and `run:` commands (`cargo test -p …`, `pytest …::…`, `go test …
+  -run …`) — after changing that code, run those. `by name` there means the
+  calls do not resolve (Rust methods), counted only in test files tied to
+  the definition's file. `defs` of a test prints what it `exercises`: the
+  product code to read when it fails. The tests of a symbol: `ccx refs NAME
+  --only test`; `defs A B C` marks rows `(N test uses)`.
 
 ## Semantic search
 
