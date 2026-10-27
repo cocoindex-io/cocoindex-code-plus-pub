@@ -1815,3 +1815,33 @@ imports. Project references do not create external package edges.
 
 Answer citations use source windows of at most 120 lines. Broad source reads
 need a narrower read before the answer can cite them.
+
+## C# compiler context
+
+Run this command only for a project or solution you trust. It executes the
+repository's MSBuild code on your machine. Index and query services never run
+MSBuild. Install a .NET SDK 10 or later first.
+
+```sh
+ccx dotnet-context App.sln --configuration Release --framework net10.0 --build
+```
+
+The command restores packages, optionally builds the solution, and exports
+`.ccx/csharp-context.json.gz` at the Git root. Use `--property NAME=VALUE` for
+custom build properties. Repeat the option when needed. Use `--output` to
+write an inspection copy elsewhere.
+
+Commit the default artifact with its inputs. It supplies compiler bindings for
+matching native C# reference sites and evaluated package dependencies. It helps
+separate same-named types from different assemblies and resolve generic
+extension calls. It does not add syntax forms the native extractor misses.
+
+Export again after any tracked input changes, including added or removed
+files. Stale metadata stops the symbol pass until you replace or remove it.
+Without metadata, ccx continues its source-based C# analysis.
+
+Compiler errors stop export. Build the project first, or use `--build`, when
+generated source files are missing. Build failures retain the previous artifact.
+
+Search now groups matching sections from one document into one result.
+`ccx ask` also gets one repair attempt when its answer cites unread lines.
