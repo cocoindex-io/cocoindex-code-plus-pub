@@ -326,6 +326,7 @@ ccx repos --for "where ask answers are cached"   # which repos hold code for a n
 ccx search "retry policy" --repo 'acme/*'        # a glob: the matching repos, the nearest to the query past the per-query cap
 ccx deps                                         # the indexed repos this one depends on and that depend on it (from package manifests)
 ccx deps --all                                   # every edge among the indexed repos you can read
+ccx deps 'acme/*'                                # each matching repo's graph
 ccx defs Name --deps                             # an imported name's definition, in the repo that builds it
 ccx refs Name --dependents                       # a public name's callers in other repos (also on search, ask, grep)
 
