@@ -973,7 +973,7 @@ marks unavailable local comparisons. These notes include uncommitted edits.
 
 Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
-answer is Markdown on stdout.
+answer uses Markdown on stdout unless the question requests another format.
 
 Things to expect:
 
@@ -1305,10 +1305,18 @@ has been checked against the repositories in question.
      them — `cargo nextest run -p A -p B -E '…'` (or `cargo test -p A -- x
      y`), `pytest a.py::t b.py::u`, `go test ./a ./b -run
      '^(TestA|TestB)$'`. The tests your diff adds or edits come first, then
-     each definition's own tests, then its callers'; at most 40 (`--all`
-     for every one). A definition the index has not seen yet counts through
-     its uses in your working tree; for code no test reaches, it names the
-     test module to write one in (`--json` for scripts). The plugin hands
+     each definition's own tests, then the tests asserting text your diff
+     edits or the changed code emits (a `git grep` of your working tree:
+     a test counting a phrase a report prints breaks when the report
+     changes, though no call reaches it), then its callers'; at most 40
+     (`--all` for every one). Tests the index names that your working tree
+     lacks (renamed or deleted on your branch) are left out and said so. A
+     definition the index has not seen yet counts through its uses in your
+     working tree; for code no test reaches, it names the test module to
+     write one in (`--json` for scripts). Its last line says what it did
+     not search — callers past two steps, tests that run the app or a
+     binary, what the cap left out — and names text to grep the tests
+     for (`ccx grep --text '…' --only test`). The plugin hands
      the same answer over at two moments: after an edit of a `.rs`, `.py`
      or `.go` file, the tests of what that edit changed, or where a test
      for new code goes (once per file content and per answer, within about
@@ -1893,3 +1901,42 @@ generated source files are missing. Build failures retain the previous artifact.
 
 Search now groups matching sections from one document into one result.
 `ccx ask` also gets one repair attempt when its answer cites unread lines.
+
+### Godot and C++ recovery
+
+GDScript files (`.gd`) support structural views and symbol definitions.
+The symbol index records script functions, nested classes, variables, constants,
+signals, signatures, and lexical calls. Dynamic loads, engine built-ins,
+node paths, and the global `class_name` registry can remain unresolved.
+
+C++ parser recovery reports partial structure when closed declarations survive
+syntax errors. A parse failure reports its own reason. Unsupported languages
+retain the unsupported-language message. A focused function header stays within
+that function; it does not append unrelated functions.
+
+Pinned C++ method lookups restrict name-only candidates to C++ source with owner
+type evidence in the caller or its enclosing class. These candidates remain
+`name_only`; they do not prove a resolved caller. Broad name lookups remain
+available when the source has no owner type evidence.
+
+Indexing reports `writing symbols to the database` after module resolution.
+A completed module counter does not mean the database transaction has committed.
+Cloning a repository does not add it to the server index. Ask the ccx administrator
+to add the repository to the indexing configuration. Use `ccx indexed --refresh`
+to replace a cached checkout status with current indexing progress.
+
+Documentation XML and translation PO/POT files under documentation directories
+use the `doc` area. Other PO/POT files use `data`.
+
+### Answer formats and filters
+
+Ask for JSON, a sentence limit, or an exact bullet count in the question.
+Coverage notices stay separate from the answer, so JSON remains parseable.
+The CLI prints those notices on stderr; REST and MCP expose `coverage_limits`.
+The server gets one correction attempt for supported format constraints.
+If that attempt fails, it reports a limit error instead of storing a bad answer.
+
+`--lang c#` and `--lang csharp` both select C# source.
+A literal path selects the exact file or all files below that directory.
+For example, `--path src/Parser` includes `src/Parser/Reader.cs`.
+Globs continue to work.
