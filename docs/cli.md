@@ -322,6 +322,7 @@ ccx repos acme                                   # only repos whose <owner>/<rep
 ccx repos --owner acme --sort stale              # one owner's repos, the longest since indexed first (also: recent, name)
 ccx repos --here                                 # the repo of the checkout you are in
 ccx repos --json                                 # one JSON object per repo, every field
+ccx repos --for "where ask answers are cached"   # which repos hold code for a need, ranked, with their nearest files
 ccx deps                                         # the indexed repos this one depends on and that depend on it (from package manifests)
 ccx deps --all                                   # every edge among the indexed repos you can read
 ccx defs Name --deps                             # an imported name's definition, in the repo that builds it
@@ -1421,6 +1422,9 @@ and REST API closely (same capabilities, same scoping).
     each with the commit indexed for it and when its last pass finished), as
     a cursor walk — the discovery call before a search. `match` keeps only
     the repos whose `<owner>/<repo>` contains it, case-insensitively.
+  - `find_repos(query, limit?)` → the accessible repos ranked by how much of
+    their code is about `query`, each with its nearest files and lines; repos
+    with identical code are listed under `same_code_as`.
   - `repo_dependencies(repo?)` → the dependency graph among the accessible
     indexed repos, from their package manifests at each default branch: what
     a repo builds, `depends_on` (indexed repos whose packages it requires,
