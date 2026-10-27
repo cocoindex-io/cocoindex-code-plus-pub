@@ -13,6 +13,11 @@
 # all here: refresh the marketplace, add the plugin again, trust its hooks
 # (what `/hooks` in the interactive CLI does; only ccx@ccx's hooks, as they
 # now are). Run it again after every update of the plugin.
+#
+# A Codex process that is already running keeps the trust it read at its
+# start: once the plugin's files change under it, it skips every ccx hook
+# ("plugin contents changed; hook approval required") until it restarts.
+# Codex cannot reload that, so the script names those processes instead.
 set -eu
 
 source=${1:-cocoindex-io/cocoindex-code-plus-pub}
@@ -26,10 +31,29 @@ if codex plugin marketplace list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -q
 else
   codex plugin marketplace add "$source"
 fi
+cache="${CODEX_HOME:-$HOME/.codex}/plugins/cache/ccx"
+# The plugin copy's files and their contents, to see whether the add changed it.
+plugin_sum() {
+  [ -d "$cache" ] || return 0
+  find "$cache" -type f -exec cksum {} + 2>/dev/null | sort | cksum
+}
+before=$(plugin_sum)
+# Every Codex running now started before this update.
+running=$(pgrep -x codex 2>/dev/null || true)
 codex plugin add ccx@ccx
 if [ -n "$py" ] && [ -x "$py" ] && "$py" -c 'from cocoindex_code_plus.codex_hook import trust_hooks' 2>/dev/null; then
   "$py" -m cocoindex_code_plus.codex_hook trust "$PWD"
 else
   echo "ccx: this ccx CLI cannot trust Codex hooks; upgrade it, or run codex and type /hooks to trust them." >&2
   exit 1
+fi
+
+if [ -n "$before" ] && [ "$before" != "$(plugin_sum)" ] && [ -n "$running" ]; then
+  echo "ccx: the plugin changed; these Codex processes started before it and skip the ccx hooks" >&2
+  echo "     (\"plugin contents changed; hook approval required\") until restarted:" >&2
+  for pid in $running; do
+    kill -0 "$pid" 2>/dev/null || continue
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+    echo "     pid $pid${cwd:+ in $cwd}" >&2
+  done
 fi

@@ -1424,7 +1424,10 @@ has been checked against the repositories in question.
      ccx@ccx`, then trusts the ccx hooks as Codex's own `/hooks` screen does
      (only `ccx@ccx`'s; it prints each one). To trust by hand instead, start
      `codex`, type `/hooks` and trust each ccx hook. Sessions started after
-     that get the hooks. With a marketplace from a local folder (a clone,
+     that get the hooks. A Codex already running keeps the trust it read at
+     its start, so when the plugin's files change it skips every ccx hook
+     (`plugin contents changed; hook approval required`) until it restarts;
+     the script names those processes (pid and folder). With a marketplace from a local folder (a clone,
      or a deployment's copy), pass that folder instead of the GitHub name;
      the steps are the same. Under Codex the test hooks fire at
      `apply_patch` (the tests of the files the patch changed), before a
