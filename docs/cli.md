@@ -973,7 +973,7 @@ marks unavailable local comparisons. These notes include uncommitted edits.
 
 Scoping works exactly like `ccx search`: the current checkout by default,
 `--repo` (repeatable) to name repos, `--git-ref` for a single-repo scope. The
-answer is Markdown on stdout.
+answer uses Markdown on stdout unless the question requests another format.
 
 Things to expect:
 
@@ -1893,3 +1893,16 @@ generated source files are missing. Build failures retain the previous artifact.
 
 Search now groups matching sections from one document into one result.
 `ccx ask` also gets one repair attempt when its answer cites unread lines.
+
+### Answer formats and filters
+
+Ask for JSON, a sentence limit, or an exact bullet count in the question.
+Coverage notices stay separate from the answer, so JSON remains parseable.
+The CLI prints those notices on stderr; REST and MCP expose `coverage_limits`.
+The server gets one correction attempt for supported format constraints.
+If that attempt fails, it reports a limit error instead of storing a bad answer.
+
+`--lang c#` and `--lang csharp` both select C# source.
+A literal path selects the exact file or all files below that directory.
+For example, `--path src/Parser` includes `src/Parser/Reader.cs`.
+Globs continue to work.
