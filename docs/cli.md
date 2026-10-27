@@ -148,9 +148,7 @@ ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (singl
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
-ccx search config --stats                         # where the time went: one stderr line with the server's stages (the word and definition lists' shares among them) and the request's wall time
-ccx search 'archive preference wrap_archive TaskFact' # hybrid: meaning, rare words and the definitions of the names spelled, one chunk a file first
-ccx search config --mode vector                   # one list alone: vector (the page before hybrid search, v0.1.81) or lexical
+ccx search config --stats                         # where the time went: one stderr line with the server's stages and the request's wall time
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)
@@ -281,38 +279,6 @@ forces the dotted text to be looked up as one. When a lookup is forced onto
 a selector it cannot match (`-b Repo.find`, `-q Store::fetch`), the CLI
 prints a `warning:` line on stderr naming the lookup to run instead, and the
 MCP response carries it as `warnings`.
-
-`ccx search` is **hybrid** (from v0.1.81). One page fuses three lists:
-
-- the chunks nearest the query's **meaning**, as before;
-- the chunks holding the query's **rarest words**, scored by how rare each
-  word they hold is, so a chunk needs the distinctive words, not all of
-  them (`snake_case` and `camelCase` names are split into their words on
-  both sides);
-- the **definitions** of any `snake_case`, `camelCase` or `PascalCase` name
-  the query spells, from the symbol index.
-
-So write the query the way you would brief a colleague: the behaviour in
-words, plus every name, message or string you already hold
-(`ccx search 'archive preference wrap_archive TaskFact'`). The page puts one
-chunk of each file before any file's second.
-
-The output lists every hit first, one line each, then each hit's code under
-the same line:
-
-```
-[0.512 lexical+definition] acme/proj src/archive.rs:120-168
-[0.498] acme/proj src/sidebar.rs:2201-2240
----
-```
-
-The lists that found a hit follow the score; a plain `[0.498]` is the
-nearest embeddings alone. The score is the similarity of meaning, which can
-be low for a hit only the words or a definition found. `path:start-end` is
-what `ccx show` takes. `--mode vector` is the page before hybrid search,
-`--mode lexical` the word list alone. A server whose indexer has not built
-the word index yet serves the other lists and says so in a warning.
-`-k`, `--top-k`, `--limit` and `-n` all set the page size.
 
 `ccx search`, `grep`, `read-file`, and `find-files` scope to the current repo
 **only when the working directory is a git checkout with a GitHub/GitLab
