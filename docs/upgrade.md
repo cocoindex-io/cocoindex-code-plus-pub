@@ -53,9 +53,10 @@ as always. Three changes affect scripts and agents that read `ccx` output.
   (`--path '*.tsx'`, `--path 'src/*/*_test.go'`) is sized off a new
   `reverse(filename)` index, like a glob with a literal prefix is off the
   filename index. When the filter selects at most 2 000 chunks, every
-  matching chunk is ranked exactly, in milliseconds, whatever the query.
-  Only a glob with a wildcard at both ends (`*config*`) still depends on the
-  vector scan alone.
+  matching chunk is ranked exactly, in milliseconds, whatever the query;
+  a broader filter is applied to the vector scan's candidates as before. A
+  glob with a wildcard at both ends (`*config*`) cannot be sized and always
+  goes to the vector scan.
 - **A short page says so.** When a filtered search returns fewer rows than
   `-k` because the vector scan stopped at its candidate cap, the response
   carries a `warnings` entry starting `short page:` (the CLI prints it as a
@@ -63,8 +64,10 @@ as always. Three changes affect scripts and agents that read `ccx` output.
   fix: a narrower `--path` or a `--lang`. Before, the page was silently
   short.
 - **Expected after the upgrade.** The indexer's first start creates
-  `chunk_member_repo_filename_suffix` on every repository's partition — a
-  few seconds per million chunks; queries keep answering meanwhile. Until it
+  `chunk_member_repo_filename_suffix` on every repository's partition, a
+  btree about two thirds the size of the filename index, built in the time
+  one `CREATE INDEX` takes on that many rows; queries keep answering
+  meanwhile, indexing waits for it. Until it
   exists, a `*.ext` search is correct but sizes its filter by a sequential
   scan of that repository's `chunk_member` rows.
 - **Verify.** `ccx search "texture streaming" --path '*.tsx' --stats` on a
