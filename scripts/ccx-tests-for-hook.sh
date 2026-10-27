@@ -8,7 +8,12 @@
 #   per set of tests, within about 1.5 s or nothing;
 # - before `git commit`, `script/ship.py` or `script/gate.py` (PreToolUse
 #   Bash): the command for the whole diff's tests when the session's
-#   transcript shows no test command that ran them.
+#   transcript shows no test command that ran them, and, once, the tests an
+#   edit hook gave the session that have not run since. Advisory: it never
+#   holds the command up.
+#
+# Each answer leads with the one command to run, then at most two lines of
+# why.
 #
 # CCX_TESTS_FOR=0 turns it off. It always exits 0 and prints nothing on
 # failure: a tool hook must never hold up or fail the agent. With `codex`

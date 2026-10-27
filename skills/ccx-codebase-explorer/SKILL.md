@@ -255,16 +255,17 @@ only indexed refs, never a sha.
   guessing a filter or running the whole suite; the plugin prints the same
   after an edit and before `git commit` or a ship.
 - **A failing test.** After a red test run the plugin adds, per failing
-  test, `ccx red-test`'s lines: the test's `PATH:LINE` (`new on this
-  branch` when your branch added it), `failed in FN (PATH:LINE)` when it
-  stopped in a helper or in product code rather than in the test's own
-  body, `exercises A (PATH:LINE), B …` (for a new or changed test read
-  from your working tree; `new` / `changed on this branch` marks your own
-  code), then a fix already open or merged and the likely culprit PRs
-  ranked by whether they `changed` what the test exercises. Read the
-  `failed in` function and the exercised ones first (`ccx show
-  PATH:LINE`); "no merge … changed these" means the cause is on your
-  branch. `ccx red-test NAME…` (or test output on stdin) looks up the rest.
+  test, `ccx red-test`'s lines, the action first: `read PATH:LINE (fn)` —
+  where the test stopped (a helper, the product code, or its own
+  assertion), else the test — then the command that reruns just that
+  test; then why: what the test exercises (`new` / `changed on this
+  branch` marks your own code), a fix already open or merged, and the
+  likely culprit PRs ranked by whether they `changed` what it exercises.
+  Read that place, fix, and run the rerun command; "no merge … changed
+  these" means the cause is on your branch. Before `git commit` or a ship
+  the plugin names, once, the tests it gave you after an edit that have
+  not run since: advisory, nothing is held up. `ccx red-test NAME…` (or
+  test output on stdin) looks up the rest.
 
 ## Semantic search
 
