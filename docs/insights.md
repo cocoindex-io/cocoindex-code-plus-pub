@@ -158,9 +158,9 @@ Queries & agents splits requests per day by operation and by client, agent
 queries into answered live and served from cache, wait time into spent and
 saved, and errors per day by code, and counts the follow-ups — questions
 that continued a stored answer; Indexing splits the work into what was
-embedded and what reuse skipped. A day where *reused* jumps while *embedded*
-stays flat is a re-walk — an upgrade or a setting change made the indexer
-visit every file again and found every chunk already embedded — not new code.
+embedded and what re-indexing every change from scratch would have embedded
+on top of it. A re-walk — an upgrade or a setting change made the indexer
+visit every file again — moves no branch, so it adds no saving.
 
 **Repositories** gives each repository you can read its own row: queries,
 developers, agent queries, estimated model cost and what reuse saved (both
@@ -272,7 +272,8 @@ usageAnalytics:
     embedding_per_mtok: 0.13
     agent_input_per_mtok: 3.00
     agent_output_per_mtok: 15.00
-    tokens_per_chunk: 260     # drives embedding tokens from chunk counts
+    tokens_per_chunk: 260     # only for an estimated day with nothing measured
+                              # to derive it from (see below)
     chars_per_token: 3.5      # turns ccx show's character counts into tokens
     coding_agent_input_per_mtok: 3.00   # what the agent running ccx show pays;
                                         # prices the potential figure only
@@ -280,7 +281,9 @@ usageAnalytics:
 
 Every key is optional; unset ones keep the built-in illustrative value. The
 sheet is validated at startup, so a typo or a non-positive number fails there
-rather than rendering a nonsense figure.
+rather than rendering a nonsense figure. Set `embedding_per_mtok` to your
+embedding model's price per million tokens: the illustrative 0.13 is a large
+model's list price, and a small one costs several times less.
 
 Only consumption the product metered is priced — agent tokens and embedding
 work. **Compute and storage are your cloud bill** and have no keys here:
@@ -395,12 +398,23 @@ settled:
   text, and whether it asked for it later, is not measured. The figure is
   kept in tokens beside the dollar savings, never added to them, and its
   one dollar form is labelled with the rate it used.
-- **Reused chunks can jump without new code.** *Chunks reused* counts the
-  chunks a pass visited and did not have to embed again. A re-walk (an
-  upgrade that changes a language pack, a changed file-size limit, the symbol
-  index toggled) visits every file, so that day's *reused* figure is the whole
-  index while *embedded* stays flat. The Indexing view's cycle durations show
-  the pass; the [upgrade guide](upgrade.md) says which releases cause one.
+- **Embedding savings count whole trees.** For every change, *chunks
+  reused* is the whole tree of each branch or tag that changed, less what
+  the pass embedded — what re-indexing on every change would have cost. A
+  file shared by two paths counts twice, as a from-scratch index would embed
+  it. A pass that moved no branch (an upgrade's re-walk, a changed setting)
+  reuses nothing, whatever it read again.
+- **Embedding figures are measured tokens.** The indexer counts the tokens
+  of every chunk it embeds and of every whole tree with `cl100k_base`, the
+  tokenizer OpenAI's `text-embedding-3` models bill in: for those models it
+  is the billed count, for other providers an estimate. The Indexing view
+  shows the tokens beside the two cost tiles.
+- **Days before v0.1.81 are estimated, and say so.** Those days were
+  recorded before the indexer measured tokens. Each repository's figure is
+  sized from its first measured pass, scaled by the index size recorded that
+  day, and never below what the old counter saw. The window note names those
+  days; on the charts their bars are dashed and lighter, and their values
+  read "≈". An estimated day shows the same figure every time you look.
 - **Rates are labelled** as illustrative until you configure them.
 - **Cost means model cost.** Agent and embedding model calls at your rates;
   compute and storage are not priced, they are on your cloud bill.

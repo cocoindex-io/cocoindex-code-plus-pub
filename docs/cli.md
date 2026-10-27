@@ -341,6 +341,7 @@ ccx search parse --lang python --lang rust        # restrict by source language 
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 ccx search retry --tests                         # include tests in similarity order
 ccx search retry --no-tests                      # exclude test candidates
+ccx search config --stats                         # where the time went: one stderr line with the server's stages and the request's wall time
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
 ccx grep 'def \_(\*) \*:' -l python               # function defs (async, decorated, `-> T` too)
@@ -604,6 +605,13 @@ checkout (and gave no `--path`), results are scoped to that subtree — the note
 on stderr names the glob; run from the repo root or pass `--path '*'` to cover
 the whole repo.
 
+A `search` `--path` glob with a literal prefix (`src/io/*`) or suffix
+(`*.tsx`) that selects at most 2 000 chunks ranks every matching chunk
+exactly, whatever the query. A broader filter is applied to the vector scan's
+candidates instead, and when that scan stops before `-k` rows pass the filter
+the page is short and a `warning:` line on stderr (MCP: `warnings`) says so
+and suggests a narrower `--path` or a `--lang`.
+
 `grep` metavariables use the `\` sigil (`\_`, `\*`, `\NAME`). A pattern written
 in ast-grep's `$NAME` / `$$$` dialect matches those tokens literally and
 usually finds nothing; the CLI then prints a `warning:` line on stderr showing
@@ -772,8 +780,12 @@ terminal:
 It reads the file from your **working tree** (inside or outside a checkout;
 outside one no repo is needed), so it is right on the branch you are on;
 `--git-ref` or `--repo` reads the indexed copy instead. `ccx show
-PATH:LINE` renders one definition with the default budget; on an import line
-it prints the imports. `-e/--expand` renders everything verbatim.
+PATH:LINE` renders one definition with the default budget, its doc included; on an import line
+it prints the imports. A line on a member without a body of its own — a
+field, a constant, a property, a type alias, an expression-bodied method, a
+C# event, indexer, operator or delegate — renders that member under its
+type, not the whole type. A line past the end of the file is an error.
+`-e/--expand` renders everything verbatim.
 
 ```bash
 ccx show src/app.py                        # the outline
@@ -889,8 +901,9 @@ file with NUL bytes is refused as binary.
 
 Exit codes: 0 with output (the listing included); 1 when `-s` matches
 nothing, when a path is not on disk or over the bound (no flag) or not in the
-ref (with a flag), or on a usage error such as `-s` together with a
-`PATH:LINE`; 2 on a malformed command line.
+ref (with a flag), when a line or a `--lines` start is past the end of the
+file, or on a usage error such as `-s` together with a `PATH:LINE`; 2 on a
+malformed command line.
 
 #### Recent change annotations
 
@@ -1465,8 +1478,8 @@ has been checked against the repositories in question.
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
-  pass). Errors exit non-zero; informational notes and prompts go to stderr,
-  results to stdout. **Export them** — `ccx` does not read `.env` files, so a
+  pass). Errors exit non-zero and print on stderr, with the informational
+  notes and prompts; stdout carries results only. **Export them** — `ccx` does not read `.env` files, so a
   job that keeps its token in a repo `.env` gets `401`s.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
@@ -1506,6 +1519,9 @@ and REST API closely (same capabilities, same scoping).
   It is stateless and serves `POST` only. Any other method, including the
   `GET` that opens the optional server-to-client stream, gets `405` with
   `Allow: POST`; MCP clients read that as "no stream" and go on.
+- **Protocol versions:** MCP `2026-07-28`, where a client opens with one
+  `server/discover` request, and the `initialize` handshake versions
+  `2024-11-05` to `2025-11-25` for older clients.
 - **Auth:** the same API token, sent as `Authorization: Bearer <CCX_API_TOKEN>`.
 - **Tools** (`git_ref` is a branch/tag name or `heads/<b>` / `tags/<t>`;
   omitted → the repo's default branch, and responses report the resolved ref):

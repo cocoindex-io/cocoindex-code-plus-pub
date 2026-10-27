@@ -131,8 +131,7 @@ Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.
 - **`show PATH:LINE` on a gap.** A blank or comment-only line between
   definitions resolves at the nearest definition: the one below, or the
   one above when the line follows its end and nothing is defined next (the
-  blank line before an impl's `}`). A line past the end resolves at the
-  file's last line of code. Before, such a line opened the object around
+  blank line before an impl's `}`). A line past the end is an error. Before, such a line opened the object around
   the gap, which between two top-level items was the file's outline: 33 KB
   for one function on a 10,150-line file. In a long file, a line that no
   object holds (a top-level `const`) shows its run of lines, never the
@@ -1568,6 +1567,174 @@ of them piped into `tail`, which also hid the first answer until the end.
 Verify: `ccx ask "<question>" | cat` returns within seconds and ends with the
 `collect:` line on stderr; `ccx ask --wait "<question>" | cat` ends with the
 full answer.
+## v0.1.82 — a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
+
+Nothing is required on the deployment, and nothing is re-indexed; the
+indexer's first start builds one new index. Upgrade the CLI with the server,
+as always. Three changes affect scripts and agents that read `ccx` output; a
+fourth indexes large files the old rule skipped, as each one changes.
+
+### Semantic search with a path filter
+
+- **What changed.** The 10 s statement budget of v0.1.77 is gone: a search
+  is bounded by the request deadline (`queryServer.requestDeadlineSeconds`)
+  only, and `503 statement_budget_exceeded` no longer exists. The budget
+  failed correct searches on every retry when a `--path` filter matched few
+  chunks far from the query on a large repository: the vector scan then
+  visits its whole candidate cap (20 000), seconds of page reads on a
+  partition larger than the database's cache.
+- **`*.ext` filters are index-served.** A glob with a literal suffix
+  (`--path '*.tsx'`, `--path 'src/*/*_test.go'`) is sized off a new
+  `reverse(filename)` index, like a glob with a literal prefix is off the
+  filename index. When the filter selects at most 2 000 chunks, every
+  matching chunk is ranked exactly, in milliseconds, whatever the query;
+  a broader filter is applied to the vector scan's candidates as before. A
+  glob with a wildcard at both ends (`*config*`) cannot be sized and always
+  goes to the vector scan.
+- **A short page says so.** When a filtered search returns fewer rows than
+  `-k` because the vector scan stopped at its candidate cap, the response
+  carries a `warnings` entry starting `short page:` (the CLI prints it as a
+  `warning:` line on stderr; MCP returns it in `warnings`) that names the
+  fix: a narrower `--path` or a `--lang`. Before, the page was silently
+  short.
+- **Expected after the upgrade.** The indexer's first start creates
+  `chunk_member_repo_filename_suffix` on every repository's partition, a
+  btree about two thirds the size of the filename index, built in the time
+  one `CREATE INDEX` takes on that many rows; queries keep answering
+  meanwhile, indexing waits for it. Until it
+  exists, a `*.ext` search is correct but sizes its filter by a sequential
+  scan of that repository's `chunk_member` rows.
+- **Verify.** `ccx search "texture streaming" --path '*.tsx' --stats` on a
+  large repository prints a `sql` figure in the milliseconds, and `\d+
+  ccx.chunk_member` on the database (substitute your target schema) lists
+  `chunk_member_repo_filename_suffix`.
+
+### CLI failures print on stderr
+
+- **What changed.** A failing `ccx` command prints its error, and the hints
+  after it (the `ccx repos` pointer, the version-skew note), on stderr.
+  Before, they went to stdout. Exit codes do not change.
+- **Results stay on stdout.** Rows a command printed before a failure stay
+  there: `ccx repos` keeps the pages it read, then prints the failure and
+  its resume command on stderr.
+- **What to do.** A script that reads a `ccx` error message from stdout
+  reads stderr instead.
+
+### `ccx show` targets
+
+- **A line past the end of the file is an error.** `ccx show
+  src/app.py:500` on a 320-line file exits 1 with `src/app.py: line 500 is
+  past the end of the file (320 lines)`. A line window that starts past the
+  end is the same error. REST answers 400, and the MCP `show_code` tool
+  answers a tool error. Before, the command showed the file's outline, or
+  an empty window, with exit 0.
+- **A line on a member renders that member.** A line on a field, a
+  constant, a property, a type alias, an expression-bodied method, or a C#
+  event, indexer, operator or delegate renders that member under its type.
+  Before, it rendered the whole type.
+- **Kotlin outlines fold.** A Kotlin outline now collapses its classes and
+  functions, and a line in a Kotlin function renders that function.
+
+### Fewer large files are skipped as minified
+
+- **What changed.** A file over 1 MiB was skipped as minified when its
+  lines averaged over 110 bytes, or one of them passed 10 000 bytes,
+  whatever its type. That left out text listings (one API signature per
+  line, as in Roslyn's `PublicAPI.Shipped.txt`), test tables, and
+  hand-written code with long lines. Now a file over 1 MiB is minified only
+  when the indexer recognizes its type and it holds under one line per KiB,
+  a mean line over 1 KiB: the shape of a bundle such as `jquery.min.js`. A
+  file whose type the indexer does not recognize is never judged minified;
+  it keeps its text for `read-file`, `show` and `grep --text`, as every
+  large file of that kind does
+  ([deploy.md § File size limits](deploy.md#file-size-limits)).
+- **Expected after the upgrade.** Nothing is re-indexed, and no file the
+  old rule indexed is skipped now. A file the old rule skipped is indexed
+  when its content next changes; until then, `ccx read-file` on it still
+  answers that it looks minified.
+- **Verify.** After such a file changes, `ccx find-files --not-indexed` no
+  longer lists it, and `ccx read-file` prints it.
+
+## v0.1.81 — embedding savings count whole trees, priced in measured tokens; the first indexing pass re-walks every repository once from the index's own copy
+
+Nothing is required. Read on to know what the first indexing pass does and
+why the Insights embedding figures change.
+
+### Embedding savings count whole trees
+
+- **What changed.** *Saved by embedding reuse* now counts, for every
+  change, the whole tree of each branch or tag that changed, less what the
+  pass embedded — what re-indexing on every change would have cost. Before,
+  it counted only the unchanged parts of the files that changed, which
+  undercounted it many times over on a repository with many files.
+- **Priced in measured tokens.** Embedding cost and saving are now the tokens
+  the indexer counts (`cl100k_base`, which OpenAI's `text-embedding-3` models
+  bill in), not chunks times an assumed 260 tokens per chunk.
+- **Expected after the upgrade.** Insights shows a larger embedding saving
+  and an embedding cost close to your provider's bill; the Indexing view
+  shows *Tokens embedded* and *Tokens reused*. Days recorded before the
+  upgrade are estimated from each repository's size at the time and
+  labelled: the window note names them, and their bars are dashed and
+  lighter ([insights.md](insights.md)).
+- **The analytics tables grow in place.** Both writers add their new columns
+  at startup and keep every collected row. The query server then rebuilds
+  the days within the raw-event horizon once, newest first, one day every
+  30 seconds; a day shows as partial until it is rebuilt (about 45 minutes
+  for the oldest of 90 days).
+- **Optional.** Set `usageAnalytics.rates.embedding_per_mtok` to your
+  embedding model's price per million tokens; the illustrative default is
+  0.13.
+
+### The first pass after the upgrade re-walks every repository once
+
+- **What changed.** The walk now records each folder's embedding tokens, so
+  a folder no pass needs to read again still reports its whole cost.
+- **Expected after the upgrade.** Recording them changes the walk's memo
+  identity once, so the first pass re-walks every repository. It reads every
+  file from the index's own copy (v0.1.74), not from the code host, re-embeds
+  nothing and re-resolves no symbol: it is bound by parsing, and queries keep
+  answering from the current index meanwhile. That pass adds no saving,
+  since it moves no branch.
+- **Verify.** The first pass's stats lines report `File.accept: … N
+  reprocessed` for every repository, while `_cached_blob`, `_cached_tree` and
+  `declare_chunk_embedding` report only `unchanged`. After it, `ccx usage
+  indexing` prints *Tokens embedded* and *Tokens reused*.
+
+## v0.1.77 — semantic search answers in milliseconds of database time; search pages may change slightly; three new chart values
+
+Nothing is required. Read on if you tune the bundled Postgres, run an
+external database, or compare search results across releases.
+
+**What changed.** The semantic-search statement now fences its vector scan so
+PostgreSQL can only answer it from the HNSW index, runs with PostgreSQL's JIT
+off, and fails after 10 s (`503 statement_budget_exceeded`) instead of
+spending the whole request deadline on a wrong plan. The query vector of a
+repeated query is reused for 10 minutes, and the server no longer holds a
+database connection during the embedding call. `ccx search --stats` prints
+where a search's time went.
+
+**Search pages may change slightly.** The HNSW scan now considers 100
+candidates instead of pgvector's 40 (`hnsw.ef_search`). The page is closer
+to the exact nearest neighbours: on the reference index the first ten were
+90 % of the exact first ten before and all of it after. A deployment whose
+database had been taking the slow plan was returning the exact page already
+and sees no change in content, only in time.
+
+**Three new chart values**, all with defaults that need no action:
+
+- `database.bundled.jit` (default `false`): the bundled Postgres runs with
+  `jit=off`. On an external database set `jit=off` on the instance; the
+  server pins it per search statement regardless.
+- `database.bundled.maxConnections` (default `200`, PostgreSQL's own default
+  was 100): the indexer holds up to ~70 slots and each query-server replica up
+  to `queryServer.dbPoolMaxSize`. On an external database check
+  `max_connections` covers indexer + replicas × pool.
+- `queryServer.dbPoolMaxSize` (default `32`): the query server's pool size,
+  up from asyncpg's 10.
+
+**Verify.** `ccx search deadline --stats` prints a `sql` figure in the single
+milliseconds warm and `embed … (hit)` on an immediate repeat; the bundled
+Postgres pod's args show `jit=off` and `max_connections=200`.
 
 ## v0.1.76 — source files up to 4 MiB are indexed, every skipped file says why; `ccx show PATH` without a flag never reads the index
 
@@ -1635,7 +1802,6 @@ in the working tree.
 - **Verify.** `ccx show no/such/file.py` in an indexed checkout exits 1 and
   prints `pass --git-ref <ref> to read the indexed copy`; with `--git-ref`
   the same path reads the index, or says the ref lacks it.
-
 ## v0.1.74 — the Claude Code plugin installs as `ccx@ccx`; the internal state database works behind a connection pooler; one full indexing pass, then language-pack updates re-read one language
 
 Nothing is required for most deployments. Read on if your rollout doc or
