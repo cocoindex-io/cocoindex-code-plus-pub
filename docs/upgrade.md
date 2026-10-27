@@ -34,11 +34,43 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.82 — CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type
+## v0.1.82 — a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type
 
-Nothing is required on the deployment, and nothing is re-indexed. Upgrade
-the CLI with the server, as always. Two changes affect scripts and agents
-that read `ccx` output.
+Nothing is required on the deployment, and nothing is re-indexed; the
+indexer's first start builds one new index. Upgrade the CLI with the server,
+as always. Three changes affect scripts and agents that read `ccx` output.
+
+### Semantic search with a path filter
+
+- **What changed.** The 10 s statement budget of v0.1.77 is gone: a search
+  is bounded by the request deadline (`queryServer.requestDeadlineSeconds`)
+  only, and `503 statement_budget_exceeded` no longer exists. The budget
+  failed correct searches on every retry when a `--path` filter matched few
+  chunks far from the query on a large repository: the vector scan then
+  visits its whole candidate cap (20 000), seconds of page reads on a
+  partition larger than the database's cache.
+- **`*.ext` filters are index-served.** A glob with a literal suffix
+  (`--path '*.tsx'`, `--path 'src/*/*_test.go'`) is sized off a new
+  `reverse(filename)` index, like a glob with a literal prefix is off the
+  filename index. When the filter selects at most 2 000 chunks, every
+  matching chunk is ranked exactly, in milliseconds, whatever the query.
+  Only a glob with a wildcard at both ends (`*config*`) still depends on the
+  vector scan alone.
+- **A short page says so.** When a filtered search returns fewer rows than
+  `-k` because the vector scan stopped at its candidate cap, the response
+  carries a `warnings` entry starting `short page:` (the CLI prints it as a
+  `warning:` line on stderr; MCP returns it in `warnings`) that names the
+  fix: a narrower `--path` or a `--lang`. Before, the page was silently
+  short.
+- **Expected after the upgrade.** The indexer's first start creates
+  `chunk_member_repo_filename_suffix` on every repository's partition — a
+  few seconds per million chunks; queries keep answering meanwhile. Until it
+  exists, a `*.ext` search is correct but sizes its filter by a sequential
+  scan of that repository's `chunk_member` rows.
+- **Verify.** `ccx search "texture streaming" --path '*.tsx' --stats` on a
+  large repository prints a `sql` figure in the milliseconds, and `\d+
+  ccx.chunk_member` on the database (substitute your target schema) lists
+  `chunk_member_repo_filename_suffix`.
 
 ### CLI failures print on stderr
 
