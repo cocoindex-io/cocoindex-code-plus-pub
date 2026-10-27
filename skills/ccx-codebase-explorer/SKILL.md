@@ -207,15 +207,18 @@ only indexed refs, never a sha.
   `search`/`grep` default `--path` to that subtree (a stderr note names the
   glob). To cover the whole repo, run from the repo root or pass `--path '*'`.
   Don't mistake subtree-narrowed emptiness for "not in the codebase".
-- **Test code: `--no-tests` / `--only-tests`.** `search`, `grep` (both
-  modes), `defs`, `refs` and `find-files` take `--no-tests` to leave test
-  code out and `--only-tests` to keep nothing else (pass one, not both).
-  Test code is a test path (`tests/`, `test_*`, `*_test.*`, `*.spec.*`), a
-  Rust `#[cfg(test)]` module for grep hits, and for definitions a name under
-  a test module or class (`mod tests`, `TestFoo`) or a test function. Reach
-  for `--no-tests` when the implementation is what you want and tests crowd
-  the page; `--only-tests` finds the tests of a symbol (`ccx refs NAME
-  --only-tests`). JSON and MCP rows carry the mark as `in_test`.
+- **Areas: product code, tests and the rest.** Every row has an area —
+  `code`, `test`, `test_support`, `bench`, `example`, `doc`, `mock`, `data`,
+  `vendored` — and `search`, `grep`, `defs`, `refs` and `find-files` take
+  `--only AREA` / `--exclude AREA` (comma-separated or repeated) and
+  `--no-tests`. By default test rows beside product rows fold into one
+  `+ N … in tests; --tests lists them` line, and other areas are tagged
+  (`[test]`, `[vendored]`, `[doc]`); when one area fills a page, stderr names
+  the `--exclude` that clears it. The tests of a symbol: `ccx refs NAME
+  --only test`. A `defs` that resolves to one definition ends with
+  `tested by: N uses in K test files` and `run:` commands — after changing
+  that code, run those. With `--only`/`--exclude`, stderr says what the
+  filter left off, so an empty answer is not proof of absence.
 
 ## Semantic search
 
