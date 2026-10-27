@@ -401,7 +401,11 @@ It reads the file from your **working tree** (inside or outside a checkout;
 outside one no repo is needed), so it is right on the branch you are on;
 `--git-ref` or `--repo` reads the indexed copy instead. `ccx show
 PATH:LINE` renders one definition whole, its doc included; on an import line
-it prints the imports. `-e/--expand` renders everything verbatim.
+it prints the imports. A line on a member without a body of its own — a
+field, a constant, a property, a type alias, an expression-bodied method, a
+C# event, indexer, operator or delegate — renders that member under its
+type, not the whole type. A line past the end of the file is an error.
+`-e/--expand` renders everything verbatim.
 
 ```bash
 ccx show src/app.py                        # the outline
@@ -492,8 +496,9 @@ file with NUL bytes is refused as binary.
 
 Exit codes: 0 with output (the listing included); 1 when `-s` matches
 nothing, when a path is not on disk or over the bound (no flag) or not in the
-ref (with a flag), or on a usage error such as `-s` together with a
-`PATH:LINE`; 2 on a malformed command line.
+ref (with a flag), when a line or a `--lines` start is past the end of the
+file, or on a usage error such as `-s` together with a `PATH:LINE`; 2 on a
+malformed command line.
 
 ### `ccx ask` — ask a question, get an answer
 
@@ -882,8 +887,8 @@ has been checked against the repositories in question.
 - **Nothing requires a terminal** — export `CCX_SERVER_URL` + `CCX_API_TOKEN` and
   a coding agent or CI job runs `ccx` directly; prompts only ever appear on a
   TTY (without one, a missing setting is a non-zero exit with the flags to
-  pass). Errors exit non-zero; informational notes and prompts go to stderr,
-  results to stdout. **Export them** — `ccx` does not read `.env` files, so a
+  pass). Errors exit non-zero and print on stderr, with the informational
+  notes and prompts; stdout carries results only. **Export them** — `ccx` does not read `.env` files, so a
   job that keeps its token in a repo `.env` gets `401`s.
 - **Token** — use a dedicated API token for the automation; machines keep using
   tokens even when humans sign in via SSO.
