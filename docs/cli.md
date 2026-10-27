@@ -317,7 +317,7 @@ A committed ref whose repository is still blocked earns the same indexing hint, 
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch, up to 3 indexed refs as <ref>@<commit>, index age, what the repo is
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, up to 3 indexed refs as <ref>@<commit>, index age (or failed / indexing / not-indexed), what the repo is
 ccx repos acme                                   # only repos whose <owner>/<repo> contains "acme" (any case); 'acme/*-api' is a glob
 ccx repos --owner acme --sort stale              # one owner's repos, the longest since indexed first (also: recent, name)
 ccx repos --here                                 # the repo of the checkout you are in
@@ -1295,7 +1295,27 @@ has been checked against the repositories in question.
      `CCX_HOOK_BLOCK=0` in Claude Code's environment turns refusals off and
      keeps the lines. Each refusal and line is recorded, on your machine
      only, in `~/.cache/ccx/hook-decisions.jsonl` (two files of at most
-     2 MB). Install it from this repository, which is also a plugin
+     2 MB).
+
+     **The tests to run.** `ccx tests-for` reads your diff against its base
+     (the merge base with `origin`'s default branch; `--base REF`, or name
+     files or `PATH:LINE`), finds the definitions the changed lines sit in,
+     asks the index for each one's tests, and prints one command per runner
+     that runs them all — `cargo nextest run -p A -p B -E '…'` (or `cargo
+     test -p A -- x y`), `pytest a.py::t b.py::u`, `go test ./a ./b -run
+     '^(TestA|TestB)$'` — and the changed definitions no test uses (`--json`
+     for scripts). The plugin hands the same answer over at two moments:
+     after an edit of a `.rs`, `.py` or `.go` file, the tests of what that
+     edit changed (once per file content and per set of tests, within about
+     1.5 s or nothing); and before `git commit`, `script/ship.py` or
+     `script/gate.py`, the command for the whole diff when the session has
+     run no test command naming those tests. After a failing test run
+     (nextest, cargo test, pytest, go test), the red-test line also names
+     what each failing test exercises and marks a definition a recent merge
+     changed. `CCX_TESTS_FOR=0` turns the edit and commit lines off; they
+     are recorded in `~/.cache/ccx/test-hooks.jsonl`.
+
+     Install it from this repository, which is also a plugin
      marketplace:
 
      ```text
@@ -1663,7 +1683,7 @@ means the backfill cannot settle absence. With no index, the line says
 `ask` reads one indexed commit per ref on each code read. It cannot read git
 history, blame, or commit diffs. It must not infer which PR introduces code
 from the current file. Its last line names relevant files it cannot read,
-then says `history questions: use git log / ccx --kind change`.
+then says `history questions: use git log / ccx search --kind change`.
 Check change coverage before you use its results as evidence.
 
 

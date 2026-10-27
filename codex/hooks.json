@@ -40,6 +40,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh codex",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -69,6 +79,16 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-edit-notes-hook.sh codex",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh codex",
             "timeout": 5
           }
         ]

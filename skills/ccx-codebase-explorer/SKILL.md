@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.5"
+  ccx-skill-revision: "2026-10-27.9"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-27.5`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-27.9`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -211,20 +211,39 @@ only indexed refs, never a sha.
   `code`, `test`, `test_support`, `bench`, `example`, `doc`, `mock`, `data`,
   `config`, `vendored` — and `search`, `grep`, `defs`, `refs` and
   `find-files` take `--only AREA` / `--exclude AREA` (comma-separated or
-  repeated) and `--no-tests`. By default test rows beside product rows fold
-  into one `+ N … in tests; --tests lists them` line, and other areas are
-  tagged (`[test]`, `[config]`, `[vendored]`); when one area fills a page,
-  stderr names the `--exclude` that clears it. With `--only`/`--exclude`,
-  stderr says what the filter left off, so an empty answer is not proof of
-  absence.
-- **Which tests to run, and what a test covers.** A `defs` that resolves to
-  one definition prints, right under its row, `tested by: N uses in K test
-  files` and `run:` commands (`cargo test -p …`, `pytest …::…`, `go test …
-  -run …`) — after changing that code, run those. `by name` there means the
-  calls do not resolve (Rust methods), counted only in test files tied to
-  the definition's file. `defs` of a test prints what it `exercises`: the
-  product code to read when it fails. The tests of a symbol: `ccx refs NAME
-  --only test`; `defs A B C` marks rows `(N test uses)`.
+  repeated) and `--no-tests` (= `--exclude test,test_support`: one rule
+  decides test code everywhere). By default test rows beside product rows
+  fold into one `+ N … in tests; --tests lists them` line and take no page
+  slot, so `-k N` lists N product rows; other areas are tagged (`[config]`,
+  `[vendored]`; in `grep --text` once per file, at the end of its first
+  line); when one area fills a page, stderr names the `--exclude` that
+  clears it. With `--only`/`--exclude`, stderr says what the filter left
+  off, so an empty answer is not proof of absence.
+- **Which tests to run, and what a test covers.** `defs NAME` prints
+  `tested by: N uses in K test files` and `run:` commands naming real test
+  functions (`cargo nextest run -p …` where the repo has
+  `.config/nextest.toml`, else `cargo test -p …`; `pytest …::…`; `go test
+  … -run …`) — after changing that code, run those. With several
+  definitions each row gets its own one-line `tested by: …; run: CMD`, and
+  `ccx show PATH:LINE` / `show -s` print it right under the header, so no
+  extra lookup is needed. The commands skip tests the repo keeps out of a
+  plain run (`not run: 2 outside the default test filter (nightly only), 1
+  quarantined`); do not add those back unless the change is about them.
+  `N likely mentions by name` means the calls do not resolve (Rust
+  methods): counted in test files tied to the definition, `(+M other)` are
+  same-named calls elsewhere. `tested by: no tests; nearest: FILE (tests N
+  siblings); setup: a, b` is where a new test goes and the helpers to build
+  it with. `defs` of a test prints what it `exercises`, the code named like
+  the test first: the product code to read when it fails. The tests of a
+  symbol: `ccx refs NAME --only test,test_support`; `defs A B C` marks rows
+  `(N test uses)`.
+- **The tests for your whole change.** `ccx tests-for` maps your diff
+  against its base to the definitions it changed and prints one command
+  per runner that runs all their tests (a nextest `-E` filterset, pytest
+  node ids, `go test -run`), plus the changed definitions no test uses;
+  `ccx tests-for PATH:LINE` for one definition. Run it before you commit
+  instead of guessing a filter or running the whole suite; the plugin
+  prints the same command after an edit and before `git commit` or a ship.
 
 ## Semantic search
 
@@ -647,9 +666,11 @@ Line windows (`--offset`/`--limit`), paging, and case mode:
 ## Working across repos
 
 `ccx deps` names the indexed repos this one depends on and the ones that
-depend on it, read from package manifests (`pyproject.toml`, `package.json`,
-`Cargo.toml`, `go.mod`) at each repo's default branch: the package, the version
-requirement, and the manifest line's file. Two flags carry any query across
+depend on it, read from package manifests at each repo's default branch
+(Python, npm, Cargo, Go, NuGet, Maven, Gradle, RubyGems, Composer, SwiftPM):
+the package, the version requirement, and the manifest line's file. An edge
+marked `import not found` names a package another repo also builds, but no
+import of it was found: trust it less. Two flags carry any query across
 that edge, each repo at its default branch, under a `── <repo> (<role>) ──`
 header:
 
@@ -669,15 +690,19 @@ ccx ask "<question>" --deps --dependents  # an answer that may follow the code i
   `ccx defs <Name> --deps` reads the real definition at the dependency's
   indexed commit, not a guess or a stale copy under `site-packages` or
   `node_modules`. The requirement `ccx deps` prints says whether that commit
-  is the version you pin.
+  is the version you pin; when it is not, or the version is unknown, `--deps`
+  reads the newest indexed release tag that meets the pin, and the header says
+  which ref it read and why.
 - `--dependents` also covers repos that ship the same Python module under
   another package name (a fork or a vendored copy: the change reaches them when
   they sync) and the repos that use that copy. Headers say which is which; a
   repo "at the same commit as" another is a separate repo with the same code,
   and its uses count too.
 - In a dependent repo, `refs` lists uses as `name_only`: matched by name, since
-  the index does not resolve imports across repos. Read the import line before
-  trusting a common name.
+  the index does not resolve imports across repos. `--dependents` keeps only
+  the files that import the name from the module that defines or re-exports
+  it, and says on stderr how many it hid; read the import line of what is left
+  when the name is common.
 
 ## Repo & ref metadata
 
@@ -688,7 +713,9 @@ and recorded data count less), each with its nearest `file:line`s. A repo
 `search` or `ask` when the repo is not obvious, instead of guessing from names
 or searching repo after repo. The answer lists a few repos on purpose: siblings
 (a UI crate beside its engine) often both hold the code, and the nearest files
-tell them apart.
+tell them apart. It also takes a name (`ccx repos --for PatternFilePathMatcher`):
+the repos that define it come first, at the definition (`defines`); repos that
+only import or call it are marked `uses`.
 
 `--repo` on `search` and `ask` takes a glob too: `--repo 'acme/*'` (or `'*'`)
 searches the matching repos, and when more match than the per-query cap, the
@@ -697,7 +724,10 @@ ones `--for` ranks nearest to the query.
 `ccx repos` lists the indexed repos you can target (alias, stable uid, default
 branch, up to three refs it is indexed at as `<ref>@<commit>`, how long ago it
 was indexed, and what the repo is in one line, from its manifest or README).
-Read the last column before picking a repo by its name. With many repos, narrow it rather than scrolling: `ccx repos <text>`
+Read the last column before picking a repo by its name. An age column that
+reads `failed 3h`, `indexing` or `not-indexed` means its answers are stale or
+empty: stderr gives the reason; search another repo or read a checkout. With
+many repos, narrow it rather than scrolling: `ccx repos <text>`
 (a case-insensitive name fragment, or a glob such as `'acme/*-api'`),
 `--owner <owner>`, `--here` (this checkout's repo), `--sort recent|stale`,
 `--json`.

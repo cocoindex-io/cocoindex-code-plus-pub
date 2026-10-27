@@ -158,6 +158,77 @@
             "timeout": 20
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git -C * commit *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(script/ship.py)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(script/ship.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./script/ship.py)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./script/ship.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python3 script/ship.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(script/gate.py)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(script/gate.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(./script/gate.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(python3 script/gate.py *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -210,6 +281,16 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-edit-notes-hook.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-tests-for-hook.sh",
             "timeout": 5
           }
         ]
