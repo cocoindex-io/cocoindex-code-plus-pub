@@ -34,12 +34,56 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.82 — a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
+## v0.1.82 — each repository refreshes on its own clock, so a slow one holds back no other; a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
 
-Nothing is required on the deployment, and nothing is re-indexed; the
-indexer's first start builds one new index. Upgrade the CLI with the server,
-as always. Three changes affect scripts and agents that read `ccx` output; a
-fourth indexes large files the old rule skipped, as each one changes.
+One thing can be required: **if your values set `indexer.cycleSeconds`,
+remove it before you upgrade** — the chart now refuses it
+([below](#each-repository-refreshes-on-its-own-clock)). Nothing is
+re-indexed; the indexer's first start builds one new index. Upgrade the CLI
+with the server, as always. Three changes affect scripts and agents that read
+`ccx` output; a fourth indexes large files the old rule skipped, as each one
+changes.
+
+### Each repository refreshes on its own clock
+
+- **What changed.** The indexer refreshed every repository in one pass,
+  every `indexer.cycleSeconds` while the answer cache or Insights was on. A
+  pass ended only when its slowest repository did, so a large repository's
+  first index, or a refresh that kept failing, held back every other
+  repository's updates and its answer-cache confirmations for as long as it
+  ran. Now each repository refreshes `indexer.repoRefreshIntervalSeconds`
+  (default 300) after its own previous refresh ends, and confirms its own
+  branches and tags for the answer cache as it finishes.
+- **What to do.** Remove `indexer.cycleSeconds` from your values if it is
+  there, whatever its value: `helm upgrade` fails with `indexer.cycleSeconds
+  was removed` until you do, and an indexer started with
+  `CCX_INDEXER_CYCLE_SECONDS` exits naming the replacement. To change how
+  often each repository refreshes, set `indexer.repoRefreshIntervalSeconds`.
+- **The answer cache and Insights no longer change how the indexer runs.**
+  A failing repository no longer withholds the other repositories' answer
+  cache confirmations; only its own branches and tags that did not finish
+  stay unconfirmed.
+- **New log lines.** `Cycle finished; attested N ref(s)` is gone. Each
+  refresh logs `Repo refresh started: …` and `Repo refresh finished: …;
+  attested N ref(s); memory …`, and the indexer logs `Every repo finished its
+  first refresh` once after it starts — the moment the whole index is known
+  current. A log alert or script that matched `Cycle finished` should match
+  `Repo refresh finished` instead.
+- **Insights counts each repository's refreshes.** A cycle on the Indexing
+  view is now one repository's refresh that did work, so *Cycles* reads
+  higher and cycle durations shorter than on the days before the upgrade,
+  which counted passes over every repository. The analytics tables grow in
+  place at startup (one new table, one new column) and keep every collected
+  row.
+- **Metrics export.** The run-level series — `cocoindex_run_last_ready_time_seconds`,
+  `cocoindex_runs_total` and the dashboard's *Time since last ready* —
+  record the indexer's first readiness and then hold. An alert on
+  `cocoindex_run_last_ready_time_seconds` would fire on a healthy indexer;
+  alert per repository on `process_git_ref` runs instead
+  ([deploy.md § Alerting](deploy.md#alerting)).
+- **Verify.** After the upgrade the indexer log shows `Repo refresh
+  finished` lines for each repository and, once the slowest one is done,
+  `Every repo finished its first refresh`.
 
 ### Semantic search with a path filter
 

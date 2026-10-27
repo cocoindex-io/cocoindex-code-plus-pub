@@ -923,14 +923,15 @@ figure to the step's then.
   to 0.1.65 the memory a symbol step's tree read took stayed with the
   process after the step: the C library kept what the step freed in the
   arena of the thread that read the tree, where nothing reused it, so the
-  figure on `Cycle finished` climbed by roughly one tree per step on large
-  C, C++ and C# refs and reached the limit in hours — the sizing above
-  then held only for the first few passes. The indexer now returns that
-  memory after each step and at the end of each pass, and the images bound
-  the C library's arenas; the `Cycle finished` figure is the floor again.
-  If it still climbs pass after pass, report it with the lines below: a
-  `heap trimmed` line that gives back little while the figure keeps rising
-  is memory the indexer holds, not residue.
+  figure at the end of each pass climbed by roughly one tree per step on
+  large C, C++ and C# refs and reached the limit in hours — the sizing
+  above then held only for the first few passes. The indexer now returns
+  that memory after each step and whenever no repository refresh is
+  running, and the images bound the C library's arenas; the figure on
+  `Repo refresh finished` is the floor again. If it still climbs refresh
+  after refresh, report it with the lines below: a `heap trimmed` line
+  that gives back little while the figure keeps rising is memory the
+  indexer holds, not residue.
 
 Where the walk's memory goes:
 
@@ -969,25 +970,26 @@ indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 
   read ahead, each holding its contents; `files in progress` are the ones
   parsed and waiting on their embeddings; `symbol steps` and
   `symbol writes` are the symbol index's work.
-- **`code-host requests so far`.** What the running pass has cost at each
-  code host, in the same words as the pass's own line (described next). It
-  appears once the
-  pass has made a request and does not change how often the line is
-  logged. Read it when a pass is still running, or when a long pass outlived
-  the container's log rotation and its `Pass finished` lines are gone.
+- **`code-host requests so far`.** What the indexer has cost at each code
+  host since it started (a `--once` run: since its pass started), in the
+  same words as the `--once` line described next. It appears once the first
+  request is made and does not change how often the line is logged. Two
+  lines a known time apart give the request rate between them; read them
+  when a long refresh outlived the container's log rotation.
 - **Other lines end with the same figure.** Each ref's walk, the first time
   the indexer walks the ref after it starts and again whenever the ref's
   content changes; the symbol step's lines
-  ([Symbol index](#symbol-index)); the line after each symbol step and
-  each pass that says how much freed memory the indexer gave back to the
-  kernel; and each pass's last line, which shows the memory a finished
-  pass leaves behind for the next one:
+  ([Symbol index](#symbol-index)); the line, after each symbol step and
+  whenever no repository refresh is running, that says how much freed
+  memory the indexer gave back to the kernel; and each repository
+  refresh's last line, which shows the memory a finished refresh leaves
+  behind:
 
   ```
   walk: github:github.com:4242 heads/main at 3f2a9c1d7e4b finished in 312.4s; memory 0.9 GiB used (cgroup; peak 1.4 GiB)
   symbol graph: github:github.com:4242 heads/main: step over; heap trimmed from 2.1 GiB to 1.2 GiB used (cgroup; peak 2.1 GiB)
-  Pass finished; heap trimmed from 1.3 GiB to 1.1 GiB used (cgroup; peak 2.1 GiB).
-  Cycle finished; attested 3 ref(s); memory 1.1 GiB used (cgroup; peak 2.1 GiB). Next cycle in 240.0s.
+  Repo refresh finished: github:github.com:acme/api (github:github.com:4242); attested 3 ref(s); memory 1.2 GiB used (cgroup; peak 2.1 GiB).
+  No repo refresh in flight; heap trimmed from 1.3 GiB to 1.1 GiB used (cgroup; peak 2.1 GiB).
   ```
 
 - **When you report an OOM kill**, send every line carrying the figure from
@@ -1000,8 +1002,9 @@ indexer memory: 4.4 GiB used (cgroup; peak 5.1 GiB); 256 files in progress, 730 
   Read in order, they tell the walk's backlog apart from the symbol step,
   and both from memory an earlier ref's step left behind.
 
-**Read the code-host requests from the log.** After `Pass finished`, the
-indexer prints what the pass cost at each code host, one line per instance:
+**Read the code-host requests from the log.** At the end of a `--once` run,
+the indexer prints what the run cost at each code host, one line per
+instance:
 
 ```
 Code-host requests this pass: github.com: 268 requests, 131 for one object, 884 objects (mean batch 3.3)
@@ -1014,10 +1017,10 @@ one token per request, 1 request/s by default) is what a first pass over many
 repositories is bound by, so a mean batch near 100 means the budget is spent
 well. `1 file in progress` in the memory line beside a small mean batch means
 the indexer is waiting on the code host, not on itself; raise the budget if
-the host's quota allows it. While a pass runs, the memory line carries the
-same figures so far (`code-host requests so far: …`), so a pass that is still
-running, or one whose end the log rotation has dropped, is read from those
-minute lines.
+the host's quota allows it. The running indexer prints no such line, since
+each repository refreshes on its own clock; its memory line carries the same
+figures since it started (`code-host requests so far: …`), so two lines a
+known time apart give the cost between them.
 
 If the indexer is OOM-killed during a first pass, raise the limit to the
 budget above: the embeddings the killed pass finished are kept, so the next
@@ -1422,14 +1425,10 @@ Four consequences to know before you turn it on.
   Startup fails loudly if the role can do neither, printing the statements —
   an enabled cache never quietly turns itself off.
 
-- **The indexer moves to cycle mode.** A cached answer may only be built from
-  an index read the indexer has confirmed complete, and only a *finished* pass
-  can confirm that. Enabling the cache therefore defaults
-  `indexer.cycleSeconds` to 300: the indexer runs a catch-up pass every five
-  minutes instead of watching continuously. Index freshness becomes bounded by
-  that interval plus the pass duration. Set `indexer.cycleSeconds` to change
-  the interval, or to `0` to keep live indexing — in which case the cache will
-  serve normally and store nothing.
+- **The indexer runs as it is.** A cached answer may only be built from an
+  index read the indexer has confirmed complete. Each repository's refresh
+  confirms its own branches and tags as it finishes, so enabling the cache
+  changes nothing about how the indexer runs.
 
 - **Nothing is evicted automatically.** There is no TTL or capacity limit in
   this release. The two ways to remove cached content are a repository purge
@@ -1489,7 +1488,7 @@ audit event carries the same two fields.
 
 | Reason | Meaning |
 |---|---|
-| `unattested_read` | a read ran while the indexer had not confirmed its ref complete: during an indexer pass, before the ref's first pass finished, or with live indexing (`indexer.cycleSeconds: 0`) |
+| `unattested_read` | a read ran while the indexer had not confirmed its ref complete: during a refresh of that repository, before the ref's first refresh finished, or after the ref failed in its repository's latest refresh |
 | `symbols_not_current` | a symbol lookup used a symbol graph that was partial or built for another commit; `ccx defs` prints a coverage note on stderr when it is |
 | `scope_moved` | the ref moved while the agent was reading it: a later read saw a newer commit than the one the investigation started from. The answer is served and names every commit it saw (`ccx ask` prints `moved during the investigation: <sha>` on the scope line); common on a busy branch |
 | `feature_unavailable` | a tool's index was unavailable |
@@ -1500,14 +1499,15 @@ audit event carries the same two fields.
 | `cache_disabled` | the answer cache is off |
 
 The usual one is `unattested_read`. The indexer withdraws its confirmation
-for the whole of each pass, so an investigation that overlaps a pass is
-answered but not stored. The chance of overlap is roughly (investigation
-time + pass time) ÷ `indexer.cycleSeconds`: 150-second investigations against
-30-second passes every 300 s are stored only about four times in ten. The
-indexer's `Cycle finished; attested N ref(s). Next cycle in X s.` log line
-gives the pass time, about `cycleSeconds` − X. A longer
-`indexer.cycleSeconds` stores more long answers, at the cost of index
-freshness.
+of a repository for the whole of each refresh of it, so an investigation of
+that repository that overlaps a refresh is answered but not stored; other
+repositories are unaffected. The chance of overlap is roughly
+(investigation time + refresh time) ÷ (`indexer.repoRefreshIntervalSeconds`
++ refresh time): 150-second investigations against 30-second refreshes 300 s
+apart are stored a little under half the time. The refresh time is the gap
+between a repository's `Repo refresh started` and `Repo refresh finished`
+log lines. A longer `indexer.repoRefreshIntervalSeconds` stores more long
+answers, at the cost of index freshness.
 
 When the reason is what the investigation read or asked for
 (`unattested_read`, `symbols_not_current`, `scope_moved`,
@@ -1554,9 +1554,8 @@ usageAnalytics:
 Nothing leaves your deployment: there is no telemetry endpoint and no vendor
 callback.
 
-**Enabling it also defaults `indexer.cycleSeconds` to 300**, because the
-indexing metrics count cycles and live mode has no pass boundary to count. An
-explicit `indexer.cycleSeconds` (including `0` for live mode) still wins.
+**It changes nothing about how the indexer runs**: each repository's refresh
+records its own cycle.
 
 **Provisioning: nothing per feature.** One schema, two writers, per-table
 ownership: the query server owns the schema and creates it at startup, along
@@ -2456,8 +2455,10 @@ Releases that need anything beyond that command have an entry in
 
 `/code/v0/semantic_search` returns **503** ("index not built yet") until the indexer has populated
 the table, and **401** without a valid API token — both expected. The indexer runs
-**continuously** (live mode): there's no "done" log line — it's ready once the
-`503` clears (or `ccx search` returns hits). `helm upgrade` briefly restarts the
+**continuously**: each repository refreshes on its own every
+`indexer.repoRefreshIntervalSeconds`, and `Every repo finished its first
+refresh` in its log says the whole index is current. Search answers as soon
+as the `503` clears (or `ccx search` returns hits). `helm upgrade` briefly restarts the
 **singleton** indexer (`Recreate` — indexing pauses for the restart while the
 query server keeps serving), so pin `<X.Y.Z>` deliberately.
 
@@ -2582,11 +2583,13 @@ kubectl -n ccx get configmap ccx-cocoindex-code-plus-grafana-dashboard \
 ```
 
 The dashboard has one section per repository (the stats-group row repeats),
-a freshness row, a targets row and a concurrency row. The indexer runs in
-cycle mode once the answer cache or Insights is on, so the process stays up
-and the freshness series stays current; a one-shot `--once` run flushes its
-final counters at exit and its series then go stale after Prometheus's
-staleness window.
+a freshness row, a targets row and a concurrency row. The indexer is one
+long-running run in which each repository refreshes on its own clock, so the
+freshness row's run-level series — *Time since last ready*, updates by
+status, time to ready — record its first readiness (every repository's first
+refresh) and then hold; read a repository's freshness from its section's
+`process_git_ref` runs. A one-shot `--once` run flushes its final counters at
+exit and its series then go stale after Prometheus's staleness window.
 
 ### Alerting
 
@@ -2599,9 +2602,9 @@ already run:
 |---|---|---|
 | The query server answers | `GET <publicUrl>/health` fails over TLS, checked from outside the cluster | an outage, an expired certificate, a broken ingress |
 | The workloads stay up | a container restarts, or a Deployment stays below its desired available replicas for 15 minutes | crash loops, OOM kills, pods that never become Ready |
-| The indexer applies what it reads | any indexer line contains `component build failed` | a pass that fails part of the index while the pod stays Ready; such a pass publishes no completeness stamps |
+| The indexer applies what it reads | any indexer line contains `component build failed` | a refresh that fails part of the index while the pod stays Ready; its failing branches and tags stay unconfirmed for the answer cache |
 | The query server reports no errors | a query-server line logged at `ERROR` or `CRITICAL` | failures behind requests, such as the IdP's signing keys becoming unreachable |
-| The index converges (with [metrics export](#metrics-export-opentelemetry) on) | `time() - max by (app) (cocoindex_run_last_ready_time_seconds)` exceeds a few cycles | passes that run but never reach ready — a stuck resolve, a provider outage the retries hide |
+| Every repository keeps refreshing (with [metrics export](#metrics-export-opentelemetry) on) | `sum by (stats_group) (increase(cocoindex_component_runs_total{processor="process_git_ref"}[30m])) == 0` for a repository's stats group | refreshes that run but never finish — a stuck resolve, a provider outage the retries hide |
 
 - **Match the level word, not the severity.** Warnings share standard error
   with errors ([Logs and severity](#logs-and-severity)), so a collector that
@@ -2678,8 +2681,9 @@ not the setting. Check whether the passes before it completed:
   its last state as `OOMKilled`;
 - a rollout or `helm upgrade` replaces the pod, which cuts short whatever pass
   was running;
-- in cycle mode each completed pass logs `Cycle finished; attested N ref(s)`,
-  so restarts with no such line between them mean no pass completed.
+- each completed repository refresh logs `Repo refresh finished: …;
+  attested N ref(s)`, so restarts with no such line for a repository between
+  them mean none of its refreshes completed.
 
 The settings that do delete content are listed in
 [What a settings change redoes](#what-a-settings-change-redoes).
