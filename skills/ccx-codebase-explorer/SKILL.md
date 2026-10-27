@@ -207,6 +207,15 @@ only indexed refs, never a sha.
   `search`/`grep` default `--path` to that subtree (a stderr note names the
   glob). To cover the whole repo, run from the repo root or pass `--path '*'`.
   Don't mistake subtree-narrowed emptiness for "not in the codebase".
+- **Test code: `--no-tests` / `--only-tests`.** `search`, `grep` (both
+  modes), `defs`, `refs` and `find-files` take `--no-tests` to leave test
+  code out and `--only-tests` to keep nothing else (pass one, not both).
+  Test code is a test path (`tests/`, `test_*`, `*_test.*`, `*.spec.*`), a
+  Rust `#[cfg(test)]` module for grep hits, and for definitions a name under
+  a test module or class (`mod tests`, `TestFoo`) or a test function. Reach
+  for `--no-tests` when the implementation is what you want and tests crowd
+  the page; `--only-tests` finds the tests of a symbol (`ccx refs NAME
+  --only-tests`). JSON and MCP rows carry the mark as `in_test`.
 
 ## Semantic search
 
