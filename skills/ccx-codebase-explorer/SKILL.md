@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.9"
+  ccx-skill-revision: "2026-10-27.10"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-27.9`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-27.10`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -249,6 +249,17 @@ only indexed refs, never a sha.
   PATH:LINE` for one definition. Run it before you commit instead of
   guessing a filter or running the whole suite; the plugin prints the same
   after an edit and before `git commit` or a ship.
+- **A failing test.** After a red test run the plugin adds, per failing
+  test, `ccx red-test`'s lines: the test's `PATH:LINE` (`new on this
+  branch` when your branch added it), `failed in FN (PATH:LINE)` when it
+  stopped in a helper or in product code rather than in the test's own
+  body, `exercises A (PATH:LINE), B …` (for a new or changed test read
+  from your working tree; `new` / `changed on this branch` marks your own
+  code), then a fix already open or merged and the likely culprit PRs
+  ranked by whether they `changed` what the test exercises. Read the
+  `failed in` function and the exercised ones first (`ccx show
+  PATH:LINE`); "no merge … changed these" means the cause is on your
+  branch. `ccx red-test NAME…` (or test output on stdin) looks up the rest.
 
 ## Semantic search
 

@@ -1315,10 +1315,15 @@ has been checked against the repositories in question.
      1.5 s or nothing); and before `git commit`, `script/ship.py` or
      `script/gate.py`, the command for the whole diff when the session has
      run no test command naming those tests. After a failing test run
-     (nextest, cargo test, pytest, go test), the red-test line also names
-     what each failing test exercises and marks a definition a recent merge
-     changed. `CCX_TESTS_FOR=0` turns the edit and commit lines off; they
-     are recorded in `~/.cache/ccx/test-hooks.jsonl`.
+     (nextest, cargo test, pytest, go test), the red-test lines name, per
+     failing test, where it stopped (the function holding the panic's or
+     assertion's line, when not the test itself), what it exercises — for a
+     test your branch added or changed, read from its body in your working
+     tree, your own new or changed code marked so — and the merges of the
+     day before your base that changed those. `CCX_TESTS_FOR=0` turns the
+     edit and commit lines off, `CCX_RED_TEST=0` the red-test lines; every
+     run's decision, and why it stayed silent, is recorded in
+     `~/.cache/ccx/test-hooks.jsonl`.
 
      Install it from this repository, which is also a plugin
      marketplace:
