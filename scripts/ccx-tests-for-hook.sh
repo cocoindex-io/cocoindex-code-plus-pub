@@ -2,7 +2,8 @@
 # The ccx plugin's tests-for hook (specs: cocoindex-code-plus
 # specs/product/cli/tests_for.md). `ccx tests-for --claude-hook`:
 #
-# - after an edit of a .rs, .py or .go file (PostToolUse Edit, Write,
+# - after an edit of a source file tests-for reads (Rust, Python, Go, .NET,
+#   JVM, JS/TS) (PostToolUse Edit, Write,
 #   MultiEdit; Codex's apply_patch): the tests of the definitions the edit
 #   changed and one command that runs them, once per file content and once
 #   per set of tests, within about 1.5 s or nothing;
@@ -40,10 +41,10 @@ log_skip() {
 }
 case "$(field hook_event_name):$(field tool_name)" in
   PostToolUse:Edit | PostToolUse:Write | PostToolUse:MultiEdit)
-    case "$(field file_path)" in *.rs | *.py | *.go) kind=edit ;; *) exit 0 ;; esac
+    case "$(field file_path)" in *.rs | *.py | *.go | *.cs | *.vb | *.fs | *.java | *.kt | *.kts | *.scala | *.ts | *.tsx | *.mts | *.cts | *.js | *.jsx | *.mjs | *.cjs) kind=edit ;; *) exit 0 ;; esac
     ;;
   PostToolUse:apply_patch)
-    case "$input" in *'.rs'* | *'.py'* | *'.go'*) kind=edit ;; *) exit 0 ;; esac
+    case "$input" in *'.rs'* | *'.py'* | *'.go'* | *'.cs'* | *'.vb'* | *'.fs'* | *'.java'* | *'.kt'* | *'.scala'* | *'.ts'* | *'.js'*) kind=edit ;; *) exit 0 ;; esac
     ;;
   PreToolUse:Bash)
     # The CLI's CHECKPOINT decides; this only keeps other commands from
