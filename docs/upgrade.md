@@ -45,7 +45,7 @@ subsections say which ones re-read files or records on the first pass.
 
 Upgrade the indexer. Off until an entry names the checkout.
 
-- **`worktrees` on a localgit entry** (`worktrees: <checkout path>`, or
+- **`worktrees` on a localgit entry** (`worktrees: <checkout-path>`, or
   `{checkout, recentHours: 24, cap: 8}`): each pass indexes, beside the
   configured refs, the branches the checkout's worktrees have checked out
   and touched within `recentHours`, newest first, at most `cap`, as
@@ -58,7 +58,7 @@ Upgrade the indexer. Off until an entry names the checkout.
   branch moves.
 - **Verify.** `ccx git-refs <owner>/<repo>` lists the worktree branches
   beside `main`; from a worktree on one of them `ccx indexed` names the
-  branch, and `ccx defs <a symbol new on the branch>` finds it.
+  branch, and `ccx defs <new-symbol>` finds it.
 
 ### `gh pr view` and every `gh` search run as ccx; `ccx show '#N' --full` prints a record whole
 
@@ -133,7 +133,7 @@ Upgrade the server for `show`, the CLI for `ccx log`. Nothing to configure.
   above a symbol after a fix no longer push the fix out of `next to it`
   and off a short list (`ccx log dialog_in … -n 3` lists #3284 and #3268
   again). A hunk within the symbol's lines ranks first.
-- **Verify.** `ccx show <file>:<a blank line between two functions>`
+- **Verify.** `ccx show <file>:<line-between-functions>`
   prints the function below, not `file L1-…`.
 
 ### A brief lists no patch or data file, and follows a prompt into another checkout
@@ -160,7 +160,7 @@ before).
 - **The log** (`~/.cache/ccx/brief.jsonl`) adds `repo` to a decision on a
   prompt about another checkout.
 - **Verify.** From a checkout of one indexed repository, start a subagent
-  whose prompt says "Work in <a worktree of another indexed repository>"
+  whose prompt says "Work in <other-repo-worktree>"
   and names a function there: its brief's first line names the other
   repository.
 
@@ -252,7 +252,7 @@ to `2026-10-26.1`, so the CLI asks for the plugin update.
   line per definition (`path:start-end [kind] Type.name  signature`), the
   names with none on one `no definition: a, b` line, bodies only with
   `--body`. Exit 1 only when no name was found. One name is as before.
-- **Verify**: `ccx defs <a name> <another>` prints a line for each.
+- **Verify**: `ccx defs <name> <another>` prints a line for each.
 
 ### A subagent's brief places the names its task spells
 
@@ -556,7 +556,7 @@ A server and CLI change: no database change, no re-index, no new setting.
 - **What to do.** Upgrade the server and the CLI together: a CLI of this
   release against an older server gets a 404 from the route, and its hook
   says nothing (it never fails a prompt).
-- **Verify.** `ccx brief --json "<a task>"` prints `stages_ms` (the
+- **Verify.** `ccx brief --json "<task>"` prints `stages_ms` (the
   route's milliseconds per part) and `read_ms`; `~/.cache/ccx/brief.jsonl`
   logs `delivery: "prompt"` for briefs beside the prompt.
 - **Turning it off.** `CCX_BRIEF=0`, as before.
@@ -829,7 +829,7 @@ update ccx`); no server or database change, no re-index.
   `~/.cache/ccx/hook-decisions.jsonl` (rotated at 2 MB, one old file kept);
   nothing is sent anywhere.
 - **Verify.** In an indexed checkout, ask Claude Code to run
-  `sed -n 10,40p <a source file>`: the call is refused with a reason that
+  `sed -n 10,40p <source-file>`: the call is refused with a reason that
   starts "Run this instead:" and names `ccx show FILE:25`; asked again, it
   runs.
 
@@ -864,7 +864,7 @@ once too.
   dedupes older logs, prints the tool calls it kept, and adds a "worked
   around" column for refusals followed by the same lookup in another shape.
 - **Verify.** In an indexed checkout, ask Claude Code to run `cd <a
-  subfolder> && git log --oneline -S <a word> | cat`: the call is refused
+  subfolder> && git log --oneline -S <word> | cat`: the call is refused
   with "Run this instead: `cd … && ccx log -S …`"; asked again, it runs.
   `~/.cache/ccx/hook-decisions.jsonl` has one line for it.
 
