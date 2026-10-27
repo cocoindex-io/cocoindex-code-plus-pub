@@ -1831,7 +1831,8 @@ The command restores packages, optionally builds the solution, and exports
 custom build properties. Repeat the option when needed. Use `--output` to
 write an inspection copy elsewhere.
 
-Commit the default artifact with its inputs. It supplies compiler bindings for
+Stage current source inputs before export. Commit the default artifact with
+those inputs. It supplies compiler bindings for
 matching native C# reference sites and evaluated package dependencies. It helps
 separate same-named types from different assemblies and resolve generic
 extension calls. It does not add syntax forms the native extractor misses.
