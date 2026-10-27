@@ -18,12 +18,19 @@
 # start-up (about 0.1 s for an edit). CCX_EDIT_NOTES=0 turns everything off;
 # CCX_EDIT_NOTES_GH=0 keeps it from refreshing its cached list of open pull
 # requests (one `gh pr list` at most every 10 minutes).
+#
+# Codex runs it with `codex` (codex/hooks.json): cocoindex_code_plus.codex_hook
+# reads Codex's events (an apply_patch call becomes one edit per file) and
+# runs the same notes and ship check.
 set -u
 
 case "${CCX_EDIT_NOTES:-}" in 0 | off | false | no | OFF | False | NO) exit 0 ;; esac
 ccx_bin=$(command -v ccx 2>/dev/null) || exit 0
 py=$(sed -n '1s/^#!//p' "$ccx_bin" 2>/dev/null)
-if [ -n "$py" ] && [ -x "$py" ]; then
+if [ "${1:-}" = codex ]; then
+  # A CLI without codex_hook prints nothing.
+  [ -n "$py" ] && [ -x "$py" ] && "$py" -m cocoindex_code_plus.codex_hook edit-notes 2>/dev/null
+elif [ -n "$py" ] && [ -x "$py" ]; then
   "$py" -m cocoindex_code_plus.edit_notes 2>/dev/null
 else
   # An older CLI has no `edit-notes` command: its usage error goes to /dev/null.
