@@ -34,6 +34,38 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.82 — CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type
+
+Nothing is required on the deployment, and nothing is re-indexed. Upgrade
+the CLI with the server, as always. Two changes affect scripts and agents
+that read `ccx` output.
+
+### CLI failures print on stderr
+
+- **What changed.** A failing `ccx` command prints its error, and the hints
+  after it (the `ccx repos` pointer, the version-skew note), on stderr.
+  Before, they went to stdout. Exit codes do not change.
+- **Results stay on stdout.** Rows a command printed before a failure stay
+  there: `ccx repos` keeps the pages it read, then prints the failure and
+  its resume command on stderr.
+- **What to do.** A script that reads a `ccx` error message from stdout
+  reads stderr instead.
+
+### `ccx show` targets
+
+- **A line past the end of the file is an error.** `ccx show
+  src/app.py:500` on a 320-line file exits 1 with `src/app.py: line 500 is
+  past the end of the file (320 lines)`. A line window that starts past the
+  end is the same error. REST answers 400, and the MCP `show_code` tool
+  answers a tool error. Before, the command showed the file's outline, or
+  an empty window, with exit 0.
+- **A line on a member renders that member.** A line on a field, a
+  constant, a property, a type alias, an expression-bodied method, or a C#
+  event, indexer, operator or delegate renders that member under its type.
+  Before, it rendered the whole type.
+- **Kotlin outlines fold.** A Kotlin outline now collapses its classes and
+  functions, and a line in a Kotlin function renders that function.
+
 ## v0.1.81 — embedding savings count whole trees, priced in measured tokens; the first indexing pass re-walks every repository once from the index's own copy
 
 Nothing is required. Read on to know what the first indexing pass does and
