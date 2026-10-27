@@ -12,7 +12,9 @@
 # definition, no marker; CCX_HOOK_DEFINITION=0 turns it off). Range reads
 # and history lookups (kinds read, history, change) keep no marker: the CLI
 # runs a Bash one as the ccx command that prints the same or more (an
-# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), widens
+# `allow` with `updatedInput`; CCX_HOOK_REWRITE=0 turns that off), as it
+# runs a grep as `ccx grep --exact-as` where that prints the same lines,
+# widens
 # a windowed Read to the definitions it cuts (CCX_HOOK_WIDEN=0 turns that
 # off), else
 # blocks the first one of each kind per agent with the ccx command to run
@@ -111,7 +113,8 @@ if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = cle
 fi
 
 marker="$prefix-$kind"
-# Kinds the CLI answers at every call: no marker spends them.
+# Kinds the CLI answers at every call: no marker spends them. A grep it
+# runs as ccx (grep_rewrite) is one; the grep hint stays once per agent.
 every_call() {
   case "$1" in read | history | change | grep_rewrite | definition) return 0 ;; esac
   return 1

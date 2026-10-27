@@ -164,6 +164,13 @@ before).
   and names a function there: its brief's first line names the other
   repository.
 
+### The plugin runs greps as `ccx grep --exact-as`, with the same lines
+
+Upgrade the CLI and the plugin together (the plugin's hook script now
+passes a `grep`/`rg` command to the CLI at every call). Nothing to
+configure; the kill switch is the same (`CCX_HOOK_REWRITE=0`), and so is
+the opt-out (`CCX_HOOK=off` in the command).
+
 - **What changed.** A `grep` or `rg` step of an agent's Bash command now
   runs as `ccx grep --text --exact-as grep|rg …` when ccx prints the same
   lines: every hit, as the tool prints it, and no other. The flags it maps
