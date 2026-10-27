@@ -980,7 +980,10 @@ Things to expect:
   question spells, the files it names, and the best search hits, each with a
   citation and a few lines of the code. It is found by search and symbol
   lookup with no model call, and it says so: nothing in it is verified. On a
-  terminal, `--- full answer ---` and the investigation's answer follow.
+  terminal, `--- full answer ---` and the investigation's answer follow; the
+  answer prints as the agent writes it, and the checked answer replaces that
+  draft in place when it is done. Off a terminal and with `--json`, only the
+  checked answer prints.
 - **Run by an agent or a script, it ends at the first answer.** When stdout
   is not a terminal (an agent's tool call, a pipe, a file), `ccx ask` prints
   the first answer and the `collect:` line and exits; the investigation goes
