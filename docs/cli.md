@@ -1919,7 +1919,9 @@ type evidence in the caller or its enclosing class. These candidates remain
 `name_only`; they do not prove a resolved caller. Broad name lookups remain
 available when the source has no owner type evidence.
 
-Indexing reports `writing symbols to the database` after module resolution.
+After all modules resolve, ccx reports `finishing symbol output` without a completed percentage bar.
+The `preparing and comparing symbol rows` phase covers conversion and comparison.
+The separate `writing symbols to the database` phase starts at the database sink.
 A completed module counter does not mean the database transaction has committed.
 Cloning a repository does not add it to the server index. Ask the ccx administrator
 to add the repository to the indexing configuration. Use `ccx indexed --refresh`
