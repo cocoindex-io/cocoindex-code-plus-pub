@@ -317,7 +317,7 @@ A committed ref whose repository is still blocked earns the same indexing hint, 
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch, indexed refs as <ref>@<commit>, index age
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, up to 3 indexed refs as <ref>@<commit>, index age, what the repo is
 ccx repos acme                                   # only repos whose <owner>/<repo> contains "acme" (any case); 'acme/*-api' is a glob
 ccx repos --owner acme --sort stale              # one owner's repos, the longest since indexed first (also: recent, name)
 ccx repos --here                                 # the repo of the checkout you are in

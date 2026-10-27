@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.4"
+  ccx-skill-revision: "2026-10-27.5"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-27.4`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-27.5`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -677,8 +677,9 @@ searches the matching repos, and when more match than the per-query cap, the
 ones `--for` ranks nearest to the query.
 
 `ccx repos` lists the indexed repos you can target (alias, stable uid, default
-branch, the refs each is indexed at as `<ref>@<commit>`, and how long ago it was
-indexed). With many repos, narrow it rather than scrolling: `ccx repos <text>`
+branch, up to three refs it is indexed at as `<ref>@<commit>`, how long ago it
+was indexed, and what the repo is in one line, from its manifest or README).
+Read the last column before picking a repo by its name. With many repos, narrow it rather than scrolling: `ccx repos <text>`
 (a case-insensitive name fragment, or a glob such as `'acme/*-api'`),
 `--owner <owner>`, `--here` (this checkout's repo), `--sort recent|stale`,
 `--json`.
