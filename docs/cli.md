@@ -1893,3 +1893,29 @@ generated source files are missing. Build failures retain the previous artifact.
 
 Search now groups matching sections from one document into one result.
 `ccx ask` also gets one repair attempt when its answer cites unread lines.
+
+### Godot and C++ recovery
+
+GDScript files (`.gd`) support structural views and symbol definitions.
+The symbol index records script functions, nested classes, variables, constants,
+signals, signatures, and lexical calls. Dynamic loads, engine built-ins,
+node paths, and the global `class_name` registry can remain unresolved.
+
+C++ parser recovery reports partial structure when closed declarations survive
+syntax errors. A parse failure reports its own reason. Unsupported languages
+retain the unsupported-language message. A focused function header stays within
+that function; it does not append unrelated functions.
+
+Pinned C++ method lookups restrict name-only candidates to C++ source with owner
+type evidence in the caller or its enclosing class. These candidates remain
+`name_only`; they do not prove a resolved caller. Broad name lookups remain
+available when the source has no owner type evidence.
+
+Indexing reports `writing symbols to the database` after module resolution.
+A completed module counter does not mean the database transaction has committed.
+Cloning a repository does not add it to the server index. Ask the ccx administrator
+to add the repository to the indexing configuration. Use `ccx indexed --refresh`
+to replace a cached checkout status with current indexing progress.
+
+Documentation XML and translation PO/POT files under documentation directories
+use the `doc` area. Other PO/POT files use `data`.
