@@ -21,14 +21,30 @@
 # instead, allows it run again, and hints at every later one
 # (CCX_HOOK_BLOCK=0 turns blocking off). It always exits 0: a hook that fails
 # must never interrupt the agent.
+#
+# Codex runs it too (codex/hooks.json passes `codex`). Codex sends the same
+# event shapes for its shell tool (`Bash`), but its hooks have no `if`: for
+# Codex this script keeps the commands Claude Code's `if` entries match, and
+# every compound command (the CLI parses its parts), and leaves the rest
+# before the CLI starts.
 set -u
 
+host=${1:-claude}
 input=$(cat)
 field() {
   # Keep escaped JSON characters inside the value. A quoted directory in a
   # Bash command must not hide the shell expression that follows it.
   printf '%s' "$input" | sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"\\]*\(\\.[^"\\]*\)*\)".*/\1/p' | head -n 1
 }
+if [ "$host" = codex ] && [ "$(field tool_name)" = Bash ]; then
+  case "$(field hook_event_name):$(field command)" in
+    *:*'&'* | *:*'|'* | *:*';'* | *:*'$('* | *:*'`'* | *:*'\n'*) ;;
+    *:grep\ * | *:rg\ * | *:git\ grep\ *) ;;
+    PreToolUse:gh\ * | PreToolUse:git\ log\ * | PreToolUse:git\ -C\ *) ;;
+    PreToolUse:sed\ * | PreToolUse:head\ * | PreToolUse:cat\ * | PreToolUse:awk\ * | PreToolUse:tail\ *) ;;
+    *) exit 0 ;;
+  esac
+fi
 event=$(field hook_event_name)
 session=$(field session_id)
 agent=$(field agent_id)
@@ -166,7 +182,13 @@ case "$status" in
       if ! every_call "${reported_kind:-$kind}"; then
         (set -C; : >"$marker") 2>/dev/null || exit 0
       fi
-      printf '%s\n' "$output"
+      if [ "$host" = codex ]; then
+        # Codex refuses an output with a field it does not know: the kind
+        # is for this script only.
+        printf '%s\n' "$output" | sed 's/, "kind": "[^"]*"//'
+      else
+        printf '%s\n' "$output"
+      fi
     fi
     ;;
   1)
