@@ -29,7 +29,27 @@ case "$event" in
     case "$session" in "" | *[!a-zA-Z0-9_-]*) exit 0 ;; esac
     case "$agent" in *[!a-zA-Z0-9_-]*) exit 0 ;; esac
     pending="${XDG_CACHE_HOME:-$HOME/.cache}/ccx/brief-state/$session-${agent:-main}.pending"
-    case "$(field tool_name)" in
+    # Where the agent works: the next prompt's brief reads the checkout most
+    # of its recent paths are in, not only the session's folder.
+    tool=$(field tool_name)
+    case "$tool" in
+      Read | Edit | MultiEdit | Write | NotebookEdit) touched=$(field file_path) ;;
+      Bash)
+        touched=$(printf '%s' "$input" | grep -o 'cd[[:space:]][[:space:]]*/[^ ;&|"\\]*' | head -n 1 | sed 's/^cd[[:space:]]*//')
+        ;;
+      *) touched= ;;
+    esac
+    case "$touched" in
+      /*)
+        worked="${pending%.pending}.paths"
+        mkdir -p "${worked%/*}" 2>/dev/null
+        printf '%s\n' "$touched" >>"$worked" 2>/dev/null
+        if [ "$(wc -c <"$worked" 2>/dev/null || echo 0)" -gt 65536 ]; then
+          tail -n 32 "$worked" >"$worked.tmp" 2>/dev/null && mv "$worked.tmp" "$worked"
+        fi
+        ;;
+    esac
+    case "$tool" in
       Agent | Task)
         case "${CCX_SUBAGENT_BRIEF:-}" in
           0 | off | false | no | OFF | False | NO) [ -e "$pending" ] || exit 0 ;;
