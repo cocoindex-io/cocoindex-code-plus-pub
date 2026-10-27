@@ -69,9 +69,21 @@ case "$event" in
     tool_name=$(field tool_name)
     if [ "$tool_name" = Read ]; then
       kind=read
-      # Only a windowed Read earns anything; reads keep no marker, so skip
-      # the CLI for every whole-file Read here.
-      case "$input" in *'"offset"'* | *'"limit"'*) ;; *) exit 0 ;; esac
+      # A windowed Read goes to the CLI at every call. A whole-file Read
+      # earns one line only when the file is longer than the 2,000 lines
+      # Read returns, once per file per session (kind read_whole, its
+      # marker per file): counted here, so a short file never starts the CLI.
+      case "$input" in
+        *'"offset"'* | *'"limit"'*) ;;
+        *)
+          read_path=$(field file_path)
+          [ -n "$read_path" ] && [ -f "$read_path" ] || exit 0
+          read_lines=$(wc -l <"$read_path" 2>/dev/null) || exit 0
+          [ "${read_lines:-0}" -gt 2000 ] 2>/dev/null || exit 0
+          kind=read_whole
+          whole_key=$(printf '%s' "$read_path" | cksum | cut -d' ' -f1)
+          ;;
+      esac
     fi
     # Keep the event marker separate for host-history commands. The CLI
     # classifies their exact command shape and reports the final kind.
@@ -128,7 +140,7 @@ if [ "$event" = SessionStart ] && { [ "$source" = compact ] || [ "$source" = cle
   rm -f "$state/${session:-nosession}-"* 2>/dev/null
 fi
 
-marker="$prefix-$kind"
+marker="$prefix-$kind${whole_key:+-$whole_key}"
 # Kinds the CLI answers at every call: no marker spends them. A grep it
 # runs as ccx (grep_rewrite) is one; the grep hint stays once per agent.
 every_call() {
