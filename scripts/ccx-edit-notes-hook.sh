@@ -28,8 +28,18 @@ case "${CCX_EDIT_NOTES:-}" in 0 | off | false | no | OFF | False | NO) exit 0 ;;
 ccx_bin=$(command -v ccx 2>/dev/null) || exit 0
 py=$(sed -n '1s/^#!//p' "$ccx_bin" 2>/dev/null)
 if [ "${1:-}" = codex ]; then
+  # Codex's matcher cannot look at the command: a shell call before it runs
+  # starts Python only when it may ship (the ship check's commands).
+  input=$(cat)
+  field() {
+    printf '%s' "$input" | sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"\\]*\)".*/\1/p' | head -n 1
+  }
+  if [ "$(field hook_event_name):$(field tool_name)" = PreToolUse:Bash ]; then
+    case "$input" in *ship.py* | *'gh pr create'* | *'git push'*) ;; *) exit 0 ;; esac
+  fi
   # A CLI without codex_hook prints nothing.
-  [ -n "$py" ] && [ -x "$py" ] && "$py" -m cocoindex_code_plus.codex_hook edit-notes 2>/dev/null
+  [ -n "$py" ] && [ -x "$py" ] && printf '%s' "$input" |
+    "$py" -m cocoindex_code_plus.codex_hook edit-notes 2>/dev/null
 elif [ -n "$py" ] && [ -x "$py" ]; then
   "$py" -m cocoindex_code_plus.edit_notes 2>/dev/null
 else
