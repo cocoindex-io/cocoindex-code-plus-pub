@@ -41,6 +41,16 @@ subsections say which ones re-read files or records on the first pass.
 
 
 
+### Roslyn source selection and diagnostics
+
+Upgrade the CLI, server, indexer, and local engine together. CLI failures now
+use stderr. Adjust scripts that previously read errors from stdout.
+
+`ccx show` returns an error when a target line or line-window start exceeds EOF.
+Use a valid source line instead of relying on the previous last-object fallback.
+The indexer regenerates derived C# symbol payloads and structural chunks with
+bounded source-map inputs. Stored answers and usage history remain intact.
+
 ### A localgit entry indexes the branches its checkout's worktrees are on
 
 Upgrade the indexer. Off until an entry names the checkout.

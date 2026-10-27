@@ -317,7 +317,7 @@ A committed ref whose repository is still blocked earns the same indexing hint, 
 
 ```bash
 # Discover what you can search
-ccx repos                                        # list indexed repos: alias, stable uid, default branch, up to 3 indexed refs as <ref>@<commit>, index age, what the repo is
+ccx repos                                        # list indexed repos: alias, stable uid, default branch, up to 3 indexed refs as <ref>@<commit>, index age (or failed / indexing / not-indexed), what the repo is
 ccx repos acme                                   # only repos whose <owner>/<repo> contains "acme" (any case); 'acme/*-api' is a glob
 ccx repos --owner acme --sort stale              # one owner's repos, the longest since indexed first (also: recent, name)
 ccx repos --here                                 # the repo of the checkout you are in
@@ -1693,7 +1693,7 @@ means the backfill cannot settle absence. With no index, the line says
 `ask` reads one indexed commit per ref on each code read. It cannot read git
 history, blame, or commit diffs. It must not infer which PR introduces code
 from the current file. Its last line names relevant files it cannot read,
-then says `history questions: use git log / ccx --kind change`.
+then says `history questions: use git log / ccx search --kind change`.
 Check change coverage before you use its results as evidence.
 
 
@@ -1792,3 +1792,26 @@ library paths. Public re-exports, explicit standard pointer fields, and standard
 Callbacks without those bounds produce candidate uses with `--include-unresolved`.
 Use `--tests` when the call appears only in test code. SQL column names inside
 strings require `grep --text` rather than symbol references.
+
+## Source and diagnostic safeguards
+
+CLI failures use stderr. Successful records stay on stdout. This includes
+partial results printed before a later page fails.
+
+`ccx show PATH:LINE` rejects a line past the file's end. `--lines` also rejects
+an invalid start line. C# member targets include properties, indexers, events,
+operators, delegates, records, and expression-bodied methods. File-scoped
+namespaces retain their qualified path. During initial indexing, an unscoped
+local symbol lookup can use checkout source when the server returns HTTP 503.
+
+`ccx red-test` accepts standard `dotnet test` failure lines. `ccx grep DIR`
+includes new local files within that directory. History marks shallow-clone
+boundaries rather than attributing all boundary content to that commit.
+
+The dependency graph reads declared NuGet dependencies from project files,
+`packages.config`, and imported `.props` files. It reads central package versions
+and literal relative imports. It does not evaluate MSBuild conditions or SDK
+imports. Project references do not create external package edges.
+
+Answer citations use source windows of at most 120 lines. Broad source reads
+need a narrower read before the answer can cite them.
