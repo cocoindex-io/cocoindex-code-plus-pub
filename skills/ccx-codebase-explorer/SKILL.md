@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain code with ccx. Use it before grep, rg, or file reads to find implementations, definitions, callers, references, code shapes, or how code works across files, branches, and repos. Use ccx show before reading a long file whole, and ccx show FILE:LINE instead of sed -n range reads to see a function. Use the change index before redoing listed work, for a test red on main, a line that looks wrong, or a symptom discussed before. Also use when ccx or cocoindex-code-plus is mentioned. Skip only a literal string in a file already at hand."
 when_to_use: "Before repo searches or reading several files; where is X defined; who calls X; how does X work; architecture tours; other branches or repos; before redoing a brief; a test red on main; a suspicious line; a repeated symptom."
 metadata:
-  ccx-skill-revision: "2026-10-27.10"
+  ccx-skill-revision: "2026-10-27.11"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-27.10`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-27.11`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -241,11 +241,16 @@ only indexed refs, never a sha.
   against its base to the definitions it changed and prints one command
   per runner (a nextest `-E` filterset, pytest node ids, `go test -run`)
   for, in order: the tests your diff adds or edits, each definition's own
-  tests, then the tests of its callers (two steps up) — a change breaks
-  tests through its callers too. New code the index has not seen counts
-  through its uses in your working tree. At most 40 tests, the most direct
-  first (`--all` for every one); for code no test reaches it names the
-  test module to write one in and its setup helpers. `ccx tests-for
+  tests, the tests of its callers (two steps up), then the tests the
+  repository's history ties to the same definitions and files (edited in
+  the same commits, or repaired by a "Main is red" fix after them) and a
+  few integration or UI tests of the crates that depend on yours — a
+  change breaks tests through callers and other processes too. Each group
+  is labelled with where it came from. New code the index has not seen
+  counts through its uses in your working tree. At most 40 tests, the most
+  direct first (`--all` for every one); for code no test reaches it names
+  the test module to write one in (or where to start one, by the folder's
+  convention) and its setup helpers. `ccx tests-for
   PATH:LINE` for one definition. Run it before you commit instead of
   guessing a filter or running the whole suite; the plugin prints the same
   after an edit and before `git commit` or a ship.
