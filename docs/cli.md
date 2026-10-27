@@ -323,6 +323,7 @@ ccx repos --owner acme --sort stale              # one owner's repos, the longes
 ccx repos --here                                 # the repo of the checkout you are in
 ccx repos --json                                 # one JSON object per repo, every field
 ccx repos --for "where ask answers are cached"   # which repos hold code for a need, ranked, with their nearest files
+ccx search "retry policy" --repo 'acme/*'        # a glob: the matching repos, the nearest to the query past the per-query cap
 ccx deps                                         # the indexed repos this one depends on and that depend on it (from package manifests)
 ccx deps --all                                   # every edge among the indexed repos you can read
 ccx defs Name --deps                             # an imported name's definition, in the repo that builds it
