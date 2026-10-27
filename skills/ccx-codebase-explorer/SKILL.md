@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
 metadata:
-  ccx-skill-revision: "2026-10-26"
+  ccx-skill-revision: "2026-10-23"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,7 +15,7 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-26`. It prints nothing when this copy of the skill is
+`ccx skill-check 2026-10-23`. It prints nothing when this copy of the skill is
 current; if it prints an update line, tell the user once and carry on.
 
 ## When to reach for ccx
@@ -27,10 +27,7 @@ tools reach only after a chain of greps:
 
 - **Fuzzy / conceptual search** — you don't know the exact term, so text grep
   has nothing to anchor on ("where is retry handled?", "how are embeddings
-  stored?") → `ccx search`. Put every name, message or string you hold in
-  the same query beside the words: a spelled name finds its definition, a
-  rare word its chunks. It lists every hit first (`path:start-end`, the
-  lists that found it); open the one you need with `ccx show path:line`.
+  stored?") → `ccx search`.
 - **Structure-oriented grep** — the question is about code *shape*, not text
   lines: a def vs. a call, a `catch` that re-throws the same variable it caught,
   every `isinstance` on a type, a nested generic that `>>` breaks for regex
@@ -53,7 +50,7 @@ One command per question, from a checkout of the repo (no flags needed):
 ```bash
 ccx defs <Name>                       # where is it defined — then paste the row's `uses:` command
 ccx refs <Name> --role call           # who calls it
-ccx search "<what the code does> <names you hold>"  # meaning, rare words, definitions
+ccx search "<what the code does>"     # no exact term to grep
 ccx grep '<pattern>' -l <language>    # a syntactic shape
 ccx grep --text '<regex>'             # an exact string or regex anywhere — comments, docs, config too
 ccx show <file>                       # the file's outline, every definition at its line — before reading it whole
