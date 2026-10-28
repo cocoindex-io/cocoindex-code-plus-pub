@@ -58,7 +58,13 @@ every stored answer stays.
   a `low` reasoning effort of its own (`agentQuery.selectorReasoningEffort`
   to change it) and adds about half a second to a new question that has
   similar stored ones.
-- **What to do.** Nothing. At the first start the query server drops the
+- **What to do.** Nothing, unless your model rejects function tools at any
+  reasoning effort but `none` (the reason `reasoningEffort: none` is set):
+  then set `agentQuery.selectorReasoningEffort: none` too, or every
+  paraphrase check fails and each new question is stored as its own,
+  with a `agentic alignment selector call failed` warning per question.
+  `gpt-5.6-terra` accepted the check at `low` on 2026-10-28, so it needs
+  nothing. At the first start the query server drops the
   paraphrase links the old check made (the cache's schema marker moves from
   5 to 6) and keeps every stored answer: a question that was linked to
   another is simply judged again the next time it is asked.
