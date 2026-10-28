@@ -556,9 +556,13 @@ Things to expect:
 - **A repeated question may come back instantly.** If your deployment enables
   the answer cache, asking something already answered — by you or by a
   colleague — returns the stored answer without re-running the investigation,
-  and a rephrasing of the same question counts as the same question. A stored
-  answer is reused only while the repository's files are unchanged; after a
-  change the next ask investigates again, reusing the steps that still apply.
+  and a rephrasing of the same question counts as the same question. A
+  question that adds or changes anything — "in one sentence", "as JSON",
+  "only the public API", a different component — is a different question
+  and gets its own investigation, with the near answer as a starting point.
+  A stored answer is reused only while the repository's files are unchanged;
+  after a change the next ask investigates again, reusing the steps that
+  still apply.
   `--json` reports which happened, under `usage.result_cache_hit`.
 
 #### How much investigation: `--effort`

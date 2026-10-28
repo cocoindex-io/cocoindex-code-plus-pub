@@ -614,7 +614,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **Files in flight** | `indexer.maxFilesInFlight`, `indexer.maxBytesInFlight` | default (256 files, 64 MiB) | how many files, and how many bytes of source, the indexer works on at once, from parsing until their last chunk is embedded. Lower them if a first pass runs out of memory — see [Indexer memory sizing](#indexer-memory-sizing) |
 | **Symbol index** | `indexer.symbolIndex.{enabled,maxFilesPerGitRef,maxIrBytesPerGitRef,resolveTimeoutSeconds,reuseMaxAgeSeconds,maxConcurrentResolves}` | default (on; 50 000 files / 1 GiB per ref; 30 min per resolve; files re-checked daily; one symbol step at a time) | the graph behind `ccx defs`/`refs`. Unset keys use the indexer's own defaults. **`enabled: false` reclaims the storage rather than pausing** — re-enabling re-extracts everything; see [Symbol index](#symbol-index) |
 | **Timeouts & load** | `queryServer.{requestDeadlineSeconds,maxConcurrentRequests}`, `queryServer.ingress.timeoutSeconds` | default (60 / 64 / 75) | the server's per-request deadline and admission cap, and the ingress budget — see [Timeout chain](#timeout-chain) |
-| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentRequestsPerPrincipal,busyRetryAfterSeconds,maxConcurrentModelCalls,modelCallTimeoutSeconds,grepCallBudgetSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
+| **Agentic query** | `agentQuery.{enabled,model,reasoningEffort,selectorReasoningEffort,effort.*,contextWindowTokens,maxOutputTokens,maxConcurrentRequests,maxConcurrentRequestsPerPrincipal,busyRetryAfterSeconds,maxConcurrentModelCalls,modelCallTimeoutSeconds,grepCallBudgetSeconds,secretEnv,existingSecret,cache.*}` | default (**off**) | `ccx ask` / MCP `ask_codebase`. **Enabling sends questions and read source snippets to your model provider** — `model` is then required, and some models need `reasoningEffort` set to use tools at all. Requires a larger `queryServer.ingress.timeoutSeconds` (the chart enforces it). See [Agentic query](#agentic-query) |
 
 ### Secrets: inline or existingSecret
 
@@ -1271,12 +1271,19 @@ agentQuery:
   set `agentQuery.secretEnv` (or `existingSecret`); those credentials are
   injected into the **query server only**, never the indexer.
 - **`reasoningEffort` is not cosmetic.** Some models refuse function tools
-  entirely unless it is set — `gpt-5.6-terra` rejects the request outright at
-  any other value, so the feature cannot work without `reasoningEffort: none`.
-  Check your model before rolling out. If the LiteLLM bundled with the images
-  does not list reasoning support for your model, it drops the value on every
-  call; the query server then logs a warning at startup naming the model, and
-  the provider's default reasoning applies.
+  at some effort values — `gpt-5.6-terra` rejected the request at every
+  value but `none` when this feature shipped, and `none` remains the
+  known-good value for it. Check your model before rolling out. If the
+  LiteLLM bundled with the images does not list reasoning support for your
+  model, it drops the value on every call; the query server then logs a
+  warning at startup naming the model, and the provider's default reasoning
+  applies.
+- **`selectorReasoningEffort` is the answer cache's own.** With the
+  [answer cache](#answer-cache-optional) on, one small model call per new
+  question decides whether it is the same question as a stored one, clause
+  by clause. That comparison needs reasoning, so it runs at `low` by default
+  whatever `reasoningEffort` says; set `selectorReasoningEffort` to change
+  it. It is checked at startup like `reasoningEffort`.
 - **Raise your ingress timeout.** An agentic query runs far longer than a
   low-level one (up to **1200 s** at the `high` effort level, below), and a
   single backend timeout covers every route. The chart **refuses to render** if
@@ -1398,7 +1405,10 @@ rateLimit:
 `agentQuery.cache.enabled` lets the server reuse work across requests: a
 repeated question is answered from its stored answer, a paraphrase is
 recognised as the same question, and a partially-changed investigation reuses
-the parts that still hold. Repeated questions then cost almost nothing.
+the parts that still hold. Repeated questions then cost almost nothing. A
+question that adds or changes anything — a scope, a limit, an output format,
+a citation rule — is a different question: it gets its own investigation,
+with the near answer as a starting point rather than as the answer.
 
 ```yaml
 agentQuery:
