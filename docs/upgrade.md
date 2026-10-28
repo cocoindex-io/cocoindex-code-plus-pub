@@ -42,7 +42,28 @@ remove it before you upgrade** — the chart now refuses it
 re-indexed; the indexer's first start builds one new index. Upgrade the CLI
 with the server, as always. Three changes affect scripts and agents that read
 `ccx` output; a fourth indexes large files the old rule skipped, as each one
-changes.
+changes. With the answer cache on, the paraphrase links made before this
+release are dropped at the first start ([below](#answer-cache-a-stricter-paraphrase-check));
+every stored answer stays.
+
+### Answer cache: a stricter paraphrase check
+
+- **What changed.** The check that decides whether a new question is the
+  same as a stored one was too loose: it served the stored answer to
+  questions that added a length limit, an output format, a citation rule, a
+  narrower scope or a different component — about half of such near misses
+  in a replay of 45. It now lists every difference it finds and reuses the
+  stored answer only when there is none; a near miss gets its own
+  investigation with the near answer as a starting point. The check runs at
+  a `low` reasoning effort of its own (`agentQuery.selectorReasoningEffort`
+  to change it) and adds about half a second to a new question that has
+  similar stored ones.
+- **What to do.** Nothing. At the first start the query server drops the
+  paraphrase links the old check made (the cache's schema marker moves from
+  5 to 6) and keeps every stored answer: a question that was linked to
+  another is simply judged again the next time it is asked.
+- **Verify.** The query server log shows `answer cache schema "ccx_agentic"
+  brought forward in place from contract 5 to 6` once.
 
 ### Each repository refreshes on its own clock
 
