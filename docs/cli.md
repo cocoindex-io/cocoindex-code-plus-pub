@@ -160,6 +160,7 @@ ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (singl
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
+ccx search config --path src/io                   # a directory: everything below it, never src/iox.py
 ccx search config --stats                         # where the time went: one stderr line with the server's stages and the request's wall time
 
 # AST structural grep (matches the syntax tree, not text; needs -l/--language)
@@ -196,6 +197,7 @@ ccx show src/app.py                              # the file's outline: every def
 ccx show src/app.py:142                          # the definition at line 142, framed by its enclosing scopes
 ccx show -s QueryService                         # the definitions of a name, rendered; -e expands, --git-ref reads the index
 ccx find-files "*.py"                            # list files by glob
+ccx find-files src/io                            # a directory lists everything below it
 ccx find-files --git-ref main                    # list files on a specific ref (100 per page; --offset/--limit)
 ccx find-files --not-indexed                     # the files the index holds no text for, each with why (read those from the checkout)
 
@@ -319,8 +321,8 @@ checkout (and gave no `--path`), results are scoped to that subtree — the note
 on stderr names the glob; run from the repo root or pass `--path '*'` to cover
 the whole repo.
 
-A `search` `--path` glob with a literal prefix (`src/io/*`) or suffix
-(`*.tsx`) that selects at most 2 000 chunks ranks every matching chunk
+A `search` `--path` with a literal prefix (a directory such as `src/io`, or
+`src/io/*`) or suffix (`*.tsx`) that selects at most 2 000 chunks ranks every matching chunk
 exactly, whatever the query. A broader filter is applied to the vector scan's
 candidates instead, and when that scan stops before `-k` rows pass the filter
 the page is short and a `warning:` line on stderr (MCP: `warnings`) says so
