@@ -71,6 +71,7 @@ ccx find-files --git-ref v1.2                           # every indexed path at 
 
 Several repo-relative globs can be given. `*` spans `/`, so `src/*.py` reaches
 every depth under `src/`; a `**/` segment demands one more directory level and
-misses top-level files. `--limit` (default 100) and `--offset` page, and a stderr
+misses top-level files. A path with no `*`, `?` or `[` lists that file, or
+everything below that directory: `ccx find-files src/io`. `--limit` (default 100) and `--offset` page, and a stderr
 note (`… N total (showing 100)`) means there are more. Useful before a
 `--git-ref`-scoped `read-file`, or to compare paths across refs.

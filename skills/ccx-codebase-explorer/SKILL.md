@@ -140,8 +140,9 @@ ccx search "error handling retry logic"
 - **Scope.** `--repo <owner>/<repo>` targets another repo — repeat it to search
   several at once (one cross-repo-ranked list); `--git-ref <ref>` targets a
   non-default ref (single-repo scope only).
-- **Filters.** `--lang <language>` restricts by source language and `--path
-  '<glob>'` by path — both repeatable.
+- **Filters.** `--lang <language>` restricts by source language and `--path`
+  by path: a glob (`'src/*.py'`) or a directory (`src/io`, everything below
+  it) — both repeatable.
 - **Results.** Ranked by relevance — the most relevant come **first**, so if the
   top hit already answers the question, stop there; don't fetch more just to be
   safe. `-k` / `--top-k <N>` returns more (default 5) and `--offset` paginates —
