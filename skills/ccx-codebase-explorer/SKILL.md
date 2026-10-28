@@ -3,7 +3,7 @@ name: ccx-codebase-explorer
 description: "Explore, navigate, and explain a codebase with the ccx CLI and its code index: semantic search, AST structural grep, resolved symbol definitions and references, and `ccx ask`, a written answer with citations. Use it before your own grep, rg, or file reads, including the searches you start yourself mid-task, whenever you or the user need to find or understand code: where a symbol is defined and every place it is called or used; where something is implemented, even with no exact term to grep; code with a particular syntactic shape; how a feature or subsystem works end to end, or a tour of the repo; or anything in a repo that is large, not checked out locally, at another branch or tag, or spread across several repos. Before reading a long file whole, `ccx show <file>` prints its outline, every definition at its line, from your working tree. Also use it whenever ccx or cocoindex-code-plus is mentioned. Skip it only for a literal string in a file already at hand."
 when_to_use: "Moments and phrases: you are about to run grep -r or rg across the repo for a symbol's definition, callers, or uses, to read several files to see how something works, or to read a long file whole; 'where is X defined', 'who calls / uses X', 'find all references / call sites', 'find code that handles', 'how does X work', 'what does this file do', 'walk me through', 'explain the architecture', 'I'm new to this repo', 'on branch/tag Y', 'in repo Z'."
 metadata:
-  ccx-skill-revision: "2026-10-23"
+  ccx-skill-revision: "2026-10-27"
 ---
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
@@ -15,8 +15,11 @@ cited written answer to a question — over HTTP. The CLI holds no index: result
 describe the server's indexed snapshot, not your disk.
 
 **Once per session, before your first `ccx` command**, run
-`ccx skill-check 2026-10-23`. It prints nothing when this copy of the skill is
-current; if it prints an update line, tell the user once and carry on.
+`ccx skill-check 2026-10-27`. It prints nothing when this skill and the CLI are
+current. Whenever `ccx` prints a line telling you to upgrade or update, run the
+command it names — your host asks the user to approve it — then carry on; in a
+subagent, put the line in your report to the agent that started you instead of
+running it.
 
 ## When to reach for ccx
 

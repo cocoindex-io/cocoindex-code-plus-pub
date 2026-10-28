@@ -135,7 +135,11 @@ default), or point it at a tool-calling model you host.
   from the same paths and request models that ship in the public `ccx`
   package), and — under `oidc` —
   `/.well-known/oauth-protected-resource/mcp`, which a client reads
-  precisely because it has no credential yet. Swagger/ReDoc are not
+  precisely because it has no credential yet. `/health` names the release,
+  the oldest `ccx` the server accepts and, when you set one, the install
+  command developers' upgrade lines name — keep credentials out of that
+  command (the server refuses to start on a URL with one;
+  [rollout.md](rollout.md#the-server-side-values)). Swagger/ReDoc are not
   served. Never run `auth.mode: none` (env `CCX_AUTH_MODE=none`) outside
   local development (it
   warns loudly). Modes and key records:

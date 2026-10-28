@@ -608,6 +608,7 @@ provide it; **default** = sensible default, leave alone unless noted;
 | **DB JIT and slots** | `database.bundled.{jit,maxConnections}` | default (`false` / `200`) | the bundled Postgres runs with `jit=off` (PostgreSQL's JIT cost every semantic search 20–700 ms of compilation for a six-row plan) and 200 connection slots: the indexer holds up to ~70, each query-server replica up to `queryServer.dbPoolMaxSize`. On an external database set `jit=off` and `max_connections` on the instance |
 | **Query-server pool** | `queryServer.dbPoolMaxSize` | default (`32`) | Postgres connections one query-server pod may hold; a search holds one only for its statements, never during the embedding call. Keep it at or above a quarter of `maxConcurrentRequests` (the server warns below that) |
 | **Query server** | `queryServer.{replicaCount,service,ingress,publicUrl,mcpExtraAllowedOrigins,shutdownDelaySeconds,autoscaling,resources}` | default | scaling + exposure (ingress off by default); `publicUrl` = the deployment's public origin — see [Exposing the query server](#exposing-the-query-server) for the `/mcp` Origin rules; `shutdownDelaySeconds` (default 10) = how long a pod keeps serving after it is marked for deletion — see [Rollouts and pod shutdown](#rollouts-and-pod-shutdown) |
+| **CLI policy** | `queryServer.cli.{minVersion,installCommand}` | optional | what the server tells developers' `ccx` about upgrading: `minVersion` raises the oldest CLI it accepts (older ones get `HTTP 426` naming the upgrade; it can only raise the release's own floor), `installCommand` is the command every upgrade line names, `{version}` filled in — set it when developers install from a private package index. See [rollout.md](rollout.md) |
 | **Refresh** | `indexer.refreshIntervalSeconds`, `indexer.repoRefreshIntervalSeconds` | default (300s) | poll cadences |
 | **File size** | `indexer.maxFileSizeBytes` | default (4 MiB) | largest file to index, in bytes, for repos that don't set their own `max_file_size`. The ceiling is 8 MiB — a larger value is rejected at startup. See [File size limits](#file-size-limits) |
 | **Large files** | `indexer.largeFiles` | default (`source`) | files over 1 MiB: `source` indexes the ones that look hand-written, `all` every file up to the size limit, `none` skips them all, for repos that don't set their own `large_files`. See [File size limits](#file-size-limits) |
@@ -2451,6 +2452,12 @@ and needs no network. With the images mirrored and that key in place, the
 deployment needs **no egress to us**. The only remaining outbound dependency is
 your **embedding provider** (the `OPENAI_API_KEY` / LiteLLM call); point it at a
 self-hosted / in-VPC model to run fully air-gapped.
+
+**Developers' CLI from your own index.** Mirror the `cocoindex-code-plus`
+package of each version you adopt into your package index too, and set
+`queryServer.cli.installCommand` to the command that installs it from there
+(`{version}` becomes the release), so every upgrade line `ccx` prints names a
+command that works on your network — [rollout.md](rollout.md#the-server-side-values).
 
 ## Operate
 
