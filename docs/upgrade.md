@@ -37,6 +37,36 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.83 — `ccx refs` finds names used inside Python f-strings and JavaScript/TypeScript template literals, and C/C++ classes and functions symbol extraction missed; the first pass re-reads Python, TypeScript/JavaScript and C/C++ files once
+
+Nothing is required. Read on to know what the first indexing pass after the
+upgrade does.
+
+### Symbol fixes for Python, TypeScript/JavaScript and C/C++
+
+- **What changed.** Three language extractors find symbols they missed:
+  - **Python and TypeScript/JavaScript.** A name used inside an f-string's
+    `{…}` or an untagged template literal's `${…}` is a reference. Before,
+    `ccx refs` answered `No references.` for a name whose only uses sat
+    there, which reads as dead code.
+  - **C, C++ and Objective-C.** A class whose head puts an attribute before
+    a macro (`class [[nodiscard]] EXPORT_MACRO Name { … }`) is indexed with
+    its members. A function whose `#if` branches each open their own
+    `if (…) {` header for one shared block keeps its definition, and the
+    definitions after it no longer get an invented owner.
+- **Expected after the upgrade.** The first pass re-reads and re-extracts
+  the Python, TypeScript/JavaScript and C/C++/Objective-C files of every
+  repository, from the index's own copy of each file (v0.1.74), not from the
+  code host, and re-runs the directories holding them. Other files are not
+  re-read, and nothing is re-embedded. Each branch or tag holding those
+  languages then resolves their symbols once more; `ccx defs` and `ccx refs`
+  answer from the current index until its pass completes.
+- **Verify.** The first pass's stats lines report `File.accept: … N
+  reprocessed` for each repository's files in those languages, while
+  `_cached_blob` and `declare_chunk_embedding` report only `unchanged`.
+  After it, `ccx refs NAME` lists the f-string uses of a name used inside
+  one.
+
 ## v0.1.82 — the server refuses CLIs older than 0.1.70 and names the upgrade; each repository refreshes on its own clock, so a slow one holds back no other; a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
 
 One thing can be required: **if your values set `indexer.cycleSeconds`,
