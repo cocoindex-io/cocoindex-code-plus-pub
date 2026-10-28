@@ -161,6 +161,14 @@ embedded and what re-indexing every change from scratch would have embedded
 on top of it. A re-walk — an upgrade or a setting change made the indexer
 visit every file again — moves no branch, so it adds no saving.
 
+**CLI versions in use** (Queries & agents, beside the client-error rate)
+is the platform team's view of who still has to upgrade: requests per `ccx`
+version, each marked current, **behind** the server's release, or
+**refused** — older than the oldest release the server still accepts, so
+every request it sent failed with `client_too_old`
+([rollout.md](rollout.md)). The subtitle names the server's release, the
+floor, and the share of CLI requests from versions behind it.
+
 **Repositories** gives each repository you can read its own row: queries,
 developers, agent queries, estimated model cost and what reuse saved (both
 ccx ask + indexing, as on the Overview),

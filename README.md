@@ -14,6 +14,10 @@ endpoint.
 - **[docs/upgrade.md](docs/upgrade.md)** — upgrade a running deployment
   between releases: the normal one-command upgrade, and an entry for every
   release that needs anything more. For platform / IT teams.
+- **[docs/rollout.md](docs/rollout.md)** — keep developers' `ccx` CLI, agent
+  skill and Claude Code plugin current: what reports itself, the chart values
+  that set the CLI floor and install command, and managed settings that
+  install the plugin for everyone. For platform / IT teams.
 - **[docs/sso.md](docs/sso.md)** — SSO sign-in (OIDC) provider setup: which
   role your provider can play (authorization server vs login-only), and the
   per-provider recipes — Entra ID, Okta, Keycloak (direct or fronting
@@ -46,8 +50,8 @@ Keep the `-y`: without it the CLI asks which agents to install to, and on a
 first run Claude Code starts unticked.
 
 Update later with `npx skills update ccx-codebase-explorer -g` — the skill's
-own first step asks `ccx` whether the copy in use is current, and the agent
-relays the update line when it is not.
+own first step asks `ccx` whether the copy in use and the CLI are current, and
+the agent runs the command it names, with your approval, when they are not.
 Without the CLI, copy the self-contained `skills/ccx-codebase-explorer/`
 folder to `~/.claude/skills/ccx-codebase-explorer` (Claude Code) or your
 agent's skills directory.
@@ -86,7 +90,9 @@ plugin *or* the skill copy above on Claude Code, not both. Updates reach you
 when you run `/plugin marketplace update ccx`, or on their own once you
 enable auto-update for the `ccx` marketplace under `/plugin` →
 Marketplaces; the hook warns in the session when the plugin is older than
-your `ccx` expects. Installed it as `ccx@cocoindex` before 2026-10-23? The
+your `ccx` expects, and tells the agent the command that updates it. Rolling
+the plugin, the skill and the CLI out to a whole team:
+[docs/rollout.md](docs/rollout.md). Installed it as `ccx@cocoindex` before 2026-10-23? The
 marketplace was renamed; the same section says how to move it. Details,
 including what the hook sends to your server:
 [docs/cli.md → For agents & automation](docs/cli.md#for-agents--automation).

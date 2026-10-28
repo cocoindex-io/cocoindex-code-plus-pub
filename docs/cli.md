@@ -30,19 +30,30 @@ upgrade — then carries on, since login often still works without it. An older
 CLI stays silent, which is why the 0.1.34 floor is still worth checking by
 hand when a login fails.
 
-From **0.1.60 on** you no longer need to watch for releases: the CLI and the
-server release in lockstep, every reply from the server names its release,
-and a CLI that is older prints one line after its output, naming both
-versions and the upgrade command — once a day per server, and again as soon
-as the server moves to a new release:
+You don't need to watch for releases. The CLI and the server release in
+lockstep, every reply from the server names its release, and a CLI that is
+older prints one line after its output — once a day per server, and again as
+soon as the server moves to a new release. From **0.1.82 on** the line names
+the exact command that installs your server's release, so a coding agent that
+ran `ccx` can run the upgrade for you; its host asks you to approve the
+command first:
 
 ```text
-ccx 0.1.55 is older than the server (0.1.59); they release in lockstep. Upgrade: uv tool install -U cocoindex-code-plus
+ccx 0.1.75 is older than the server (0.1.82); they release in lockstep. Upgrade it now, then carry on: uv tool install cocoindex-code-plus==0.1.82
 ```
 
-`ccx status` always shows the comparison on its `cli:` line. A CLI newer
-than the server is never nagged, and the check never consults PyPI: the
-right version is your deployment's, not the newest published one.
+- **The command matches how this `ccx` was installed** — `uv tool`, `pipx` or
+  `pip` — and keeps the `keyring` extra and a uv tool's package index. A
+  deployment whose developers install from a private index can name its own
+  command instead; then every line names that one.
+- **It pins your server's release**, never the newest on PyPI: the right
+  version is your deployment's.
+- **A CLI too old for the server is refused.** From 0.1.82 on the server
+  refuses a CLI older than the oldest it still speaks to — 0.1.70 for 0.1.82,
+  or a later floor your platform team sets — with `HTTP 426` and the same
+  command. Upgrade, then run your command again.
+- `ccx status` always shows the comparison on its `cli:` line. A CLI newer
+  than the server is never nagged.
 
 Driving `ccx` from a coding agent? Install the **agent skill** too — see
 [For agents & automation](#for-agents--automation).
@@ -74,7 +85,8 @@ ccx status        # server reachable + healthy (and which one), then the credent
 healthy, the URL it resolved and where that came from, version, uptime — is
 probed with no credential (`/health` is auth-exempt), then a `cli:` line
 says how this CLI's version stands to the server's (`matches the server`,
-`newer than the server`, or the warning `older than the server` with the
+`newer than the server`, the warning `older than the server`, or `refused by
+the server` naming the oldest release it accepts — the last two with the
 upgrade command). The last line is the
 **credential** your next request would use: a cached login (`valid`, or
 `expired and could not be refreshed` with the fix named), `CCX_API_TOKEN`, or
@@ -752,7 +764,8 @@ has been checked against the repositories in question.
 | IdP shows a redirect-URI error at login | The callback port doesn't match an IdP registration — usually a stale `CCX_OIDC_REDIRECT_PORT` or `--redirect-port` overriding the server-advertised ports. Unset it and log in again; ports the server advertises are registered by your admin ([sso.md → Verifying before rollout](sso.md#verifying-before-rollout) ends with the per-IdP error table). |
 | login prompts for a client id on an SSO server, or Entra fails with `AADSTS901002` despite `resourceIndicator: false` | Your `ccx` predates server-advertised login settings — upgrade to 0.1.34+: `uv tool install -U cocoindex-code-plus`. |
 | `ccx login` warns about login settings it doesn't recognise | The server advertises a setting this CLI is too old to use. Upgrade: `uv tool install -U cocoindex-code-plus`. Login may still succeed meanwhile. |
-| a command ends with `ccx <version> is older than the server (<version>)`, or `ccx status` shows `cli: … older than the server` | Your deployment moved to a new release; the CLI and the server release in lockstep. Upgrade: `uv tool install -U cocoindex-code-plus` (and refresh the agent skill, [below](#for-agents--automation)). The line repeats once a day until you do. |
+| a command ends with `ccx <version> is older than the server (<version>)`, or `ccx status` shows `cli: … older than the server` | Your deployment moved to a new release; the CLI and the server release in lockstep. Run the command the line names (and refresh the agent skill, [below](#for-agents--automation)). The line repeats once a day until you do. |
+| `Request refused (HTTP 426): This ccx (<version>) is older than the oldest the server accepts`, or `ccx status` shows `cli: … refused by the server` | Your CLI predates the oldest release the server still speaks to, so every request is refused until you upgrade. Run the command the line names, then your command again. |
 
 ## For agents & automation
 
@@ -772,10 +785,14 @@ has been checked against the repositories in question.
   (`npx skills update ccx-codebase-explorer -g` later; or copy the folder to
   `~/.claude/skills/ccx-codebase-explorer`.) The skill checks itself: its
   first step has the agent run `ccx skill-check <revision>` with the revision
-  the copy carries, and from **0.1.61 on** the CLI prints one update line, once
-  a day, when that copy is older than the one it shipped with — on every host
-  that runs the skill, Codex included. The agent relays the line; nothing is
-  updated behind your back, and nothing scans your skill directories.
+  the copy carries, once per session, on every host that runs the skill,
+  Codex included. From **0.1.82 on** the check covers the CLI too — older than
+  your server, or below the oldest it accepts — and prints, once per agent
+  session, the command that fixes each: `npx -y skills update
+  ccx-codebase-explorer -g` for this copy, `claude plugin update ccx@ccx` for
+  the plugin's, the install command for the CLI. The agent runs it through
+  its host's approval, so you confirm each update; nothing scans your skill
+  directories.
   Installed before 2026-09-05? The
   skill was named `ccx` then and counts as a separate entry — remove it first,
   which also cleans its links in every agent's skills directory:
@@ -843,7 +860,11 @@ has been checked against the repositories in question.
      plugin shortly after a session's first message and offers
      `/reload-plugins`. Either way, from `ccx` 0.1.60 on the hook tells you,
      as a warning in the session once a day, when the installed plugin is
-     older than your CLI expects. If you moved to the plugin from a skills
+     older than your CLI expects, and from 0.1.82 on it also tells the agent,
+     once per session, to run `claude plugin update ccx@ccx` — and the CLI's
+     own upgrade when the CLI is behind your server — through your approval.
+     Rolling the plugin out to a whole team, with auto-update on for
+     everyone: [rollout.md](rollout.md). If you moved to the plugin from a skills
      CLI install, remove that copy (`npx skills remove
      ccx-codebase-explorer -g`) so Claude Code lists the skill once.
 

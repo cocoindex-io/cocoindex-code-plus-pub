@@ -21,10 +21,13 @@ the restart; the query server keeps serving), so pin `<X.Y.Z>` deliberately.
 
 Versioning is lockstep: the chart, the images, and the `ccx` CLI share one
 version number. Upgrade the CLI alongside the server
-(`uv tool install -U cocoindex-code-plus`; [cli.md](cli.md) has the details
-and the symptoms of a CLI that is too old). From 0.1.60 on the CLI tells its
-users itself: after the server upgrade, the next command of an older CLI
-prints the upgrade command, so no announcement is needed for the CLI.
+([cli.md](cli.md) has the details and the symptoms of a CLI that is too
+old). From 0.1.60 on the CLI tells its users itself: after the server
+upgrade, the next command of an older CLI prints the upgrade command, so no
+announcement is needed for the CLI. From 0.1.82 on that line names the exact
+command for your server's release, coding agents run it with the developer's
+approval, and the server refuses a CLI older than the oldest it still speaks
+to. [rollout.md](rollout.md) covers keeping a whole team current.
 
 ## Reading the entries
 
@@ -34,7 +37,7 @@ prints the upgrade command, so no announcement is needed for the CLI.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.82 — each repository refreshes on its own clock, so a slow one holds back no other; a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
+## v0.1.82 — the server refuses CLIs older than 0.1.70 and names the upgrade; each repository refreshes on its own clock, so a slow one holds back no other; a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
 
 One thing can be required: **if your values set `indexer.cycleSeconds`,
 remove it before you upgrade** — the chart now refuses it
@@ -44,7 +47,40 @@ with the server, as always. Three changes affect scripts and agents that read
 `ccx` output; a fourth indexes large files the old rule skipped, as each one
 changes. With the answer cache on, the paraphrase links made before this
 release are dropped at the first start ([below](#answer-cache-a-stricter-paraphrase-check));
-every stored answer stays.
+every stored answer stays. The server now refuses `ccx` CLIs older than 0.1.70
+([below](#the-server-refuses-a-cli-it-no-longer-speaks-to)).
+
+### The server refuses a CLI it no longer speaks to
+
+- **What changed.** Each release now names the oldest `ccx` it still speaks
+  to — 0.1.70 for this one, the release where grep's paging changed shape —
+  and refuses anything older with `HTTP 426`, naming the command that
+  installs this release. `/health`, the OAuth metadata and `/openapi.json`
+  stay open to it. MCP clients are not affected. A CLI older than the server
+  but above the floor keeps working and is told to upgrade, as before; the
+  line now names the exact command, pinned to this release, and the agent
+  skill tells coding agents to run it with the developer's approval.
+- **What to do.** Nothing, unless your developers install `ccx` from a
+  private package index: then set `queryServer.cli.installCommand` to the
+  command that installs a release there, so every upgrade line names it —
+  `{version}` becomes the release:
+
+  ```yaml
+  queryServer:
+    cli:
+      installCommand: "uv tool install --index-url https://pypi.corp.example/simple 'cocoindex-code-plus=={version}'"
+  ```
+
+  Keep credentials out of it: `/health` serves it to anyone, and the server
+  refuses to start on a URL with one. To move your team faster than the
+  release does, set `queryServer.cli.minVersion` to a release no newer than
+  this one; it can only raise the floor. Both are optional.
+- **Pinned CLIs.** A CI job or script pinned below 0.1.70 fails with
+  `HTTP 426` after this upgrade; move the pin to this release.
+- **Verify.** `curl <publicUrl>/health` names `min_cli_version` (and your
+  `cli_install_command`, when set). Insights' *Queries & agents* view shows
+  which CLI versions are behind or refused
+  ([insights.md](insights.md#the-web-ui-ccx-ui)).
 
 ### Answer cache: a stricter paraphrase check
 
