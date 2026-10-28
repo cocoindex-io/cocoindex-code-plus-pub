@@ -159,6 +159,7 @@ ccx search foo --repo acme/a --repo acme/b       # several repos, one cross-repo
 ccx search foo --repo my/repo --git-ref main     # a specific indexed ref (single repo scope)
 ccx search foo -k 10                             # more results; --offset paginates
 ccx search parse --lang python --lang rust        # restrict by source language (repeatable)
+ccx search parse --lang c++ --lang C#             # an alias names its language too (c++, c#, ts, js, py); an unknown name is an error
 ccx search config --path 'src/*.py'               # restrict by path glob (repeatable)
 ccx search config --path src/io                   # a directory: everything below it, never src/iox.py
 ccx search config --stats                         # where the time went: one stderr line with the server's stages and the request's wall time
