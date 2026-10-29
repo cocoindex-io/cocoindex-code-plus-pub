@@ -37,10 +37,17 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
-## v0.1.83 — `ccx refs` finds names used inside Python f-strings and JavaScript/TypeScript template literals, and C/C++ classes and functions symbol extraction missed; the first pass re-reads Python, TypeScript/JavaScript and C/C++ files once
+## v0.1.83 — `ccx refs` finds names used inside Python f-strings and JavaScript/TypeScript template literals, and C/C++ classes and functions symbol extraction missed; the first pass re-reads Python, TypeScript/JavaScript and C/C++ files once; a language filter takes a language's aliases, and an unknown language name is an error; a `--path` or `ccx find-files` pattern with no wildcard selects that directory's subtree; a repository's first pass no longer delays the other repositories' refreshes
 
-Nothing is required. Read on to know what the first indexing pass after the
-upgrade does.
+Nothing is required. The first indexing pass after the upgrade re-reads
+the Python, TypeScript/JavaScript and C/C++ files of every repository once
+([below](#symbol-fixes-for-python-typescriptjavascript-and-cc)). Two changes
+affect scripts and agents that read `ccx` output: a language filter takes a
+language's aliases and refuses a name no language has
+([below](#a-language-filter-takes-aliases-an-unknown-name-is-refused)), and a
+path with no wildcard selects a directory
+([below](#a-path-with-no-wildcard-selects-a-directory)). Upgrade the CLI with
+the server, as always.
 
 ### Symbol fixes for Python, TypeScript/JavaScript and C/C++
 
@@ -66,6 +73,49 @@ upgrade does.
   `_cached_blob` and `declare_chunk_embedding` report only `unchanged`.
   After it, `ccx refs NAME` lists the f-string uses of a name used inside
   one.
+
+### A language filter takes aliases; an unknown name is refused
+
+- **What changed.** `--lang c++`, `--lang C#`, `-l ts` and `--lang Python`
+  select the files of the language they name. Every value resolves through
+  the language registry the indexer names files with: a name, an alias or
+  an extension, in any letter case. Before, only the stored name (`cpp`,
+  `csharp`, `typescript`) matched, and any other spelling matched nothing.
+  The rule is the same for `ccx search`, `ccx defs` and both `ccx grep`
+  modes, over REST and MCP, and for the tools `ccx ask` uses.
+- **Scripts.** A name no language has is now an error that names it
+  (`HTTP 400`, a non-zero exit from `ccx`), where before it returned an
+  empty page. A query server running without `COCOINDEX_PLUS_LICENSE_KEY`
+  only lowercases the names, as before.
+- **Verify.** `ccx search parse --lang c++` returns the same files as
+  `--lang cpp`, and `ccx search parse --lang nosuchlang` fails naming
+  `nosuchlang`.
+
+### A path with no wildcard selects a directory
+
+- **What changed.** `--path src/io` on `ccx search`, `ccx grep` (both
+  modes) and `ccx defs`, and `ccx find-files src/io`, select everything
+  below `src/io`. The match stops at a `/`, so `src/iox.py` stays out. A
+  trailing `/` is dropped, and a file's path still selects that file. Before,
+  a pattern with no `*`, `?` or `[` had to equal a whole file path, so a
+  directory selected nothing. The same rule applies over MCP and to the
+  tools `ccx ask` uses. Patterns with a wildcard match as before.
+- **What to do.** Nothing. A script that wrote `'src/io*'` to reach a
+  directory also matched sibling directories such as `src/iox/`; `src/io`
+  now selects the directory alone.
+- **Verify.** `ccx find-files src/io` lists the files below `src/io`.
+
+### A first pass no longer holds back other repositories
+
+- **What changed.** While one repository runs a long first pass (a newly
+  added repository, or a pass that re-reads a language), the other
+  repositories keep refreshing on their own clocks. The indexer's work
+  slots and its files-in-flight places go to the waiting repository that
+  holds the fewest. Before, a refresh waited behind the files the first pass
+  had already queued: one deployment measured 297 s for a refresh behind a
+  large first pass. With the default sizing the wait is now about a second,
+  and the first pass takes no longer.
+- **What to do.** Nothing; no setting changed.
 
 ## v0.1.82 — the server refuses CLIs older than 0.1.70 and names the upgrade; each repository refreshes on its own clock, so a slow one holds back no other; a path-filtered search no longer fails after 10 s, `*.ext` filters are index-served, a short page says so; CLI failures print on stderr; `ccx show` rejects a line past the end and renders a member, not its whole type; fewer large files are skipped as minified
 

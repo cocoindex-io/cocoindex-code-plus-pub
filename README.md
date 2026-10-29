@@ -102,5 +102,7 @@ including what the hook sends to your server:
 CocoIndex Code Plus is built on [CocoIndex](https://cocoindex.io), the real-time
 data transformation framework for AI.
 
-This repository is consumed as a Git submodule (mounted at `pub/`) of the product
-repository; edits made here flow back upstream.
+This repository is published from the product repository at each release: its
+`main` carries the guides, the agent skill and the plugin of the latest release,
+one commit per release, tagged `vX.Y.Z`. Changes are made in the product
+repository, so a pull request here is ported there rather than merged.

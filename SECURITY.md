@@ -1,7 +1,7 @@
 # Security Policy
 
-This is the canonical security policy for **CocoIndex Code Plus** (it is also
-vendored into the product repositories via the `pub` submodule).
+This is the canonical security policy for **CocoIndex Code Plus**; it is
+published here from the product repository with each release.
 
 ## Reporting a vulnerability
 
