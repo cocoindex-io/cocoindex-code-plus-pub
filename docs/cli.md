@@ -1962,3 +1962,20 @@ If that attempt fails, it reports a limit error instead of storing a bad answer.
 A literal path selects the exact file or all files below that directory.
 For example, `--path src/Parser` includes `src/Parser/Reader.cs`.
 Globs continue to work.
+
+## Local Claude session feedback
+
+After ccx use, the Claude plugin asks Claude for a short feedback report when it
+finishes responding. New queries can produce a later report for the same session.
+This uses one extra Claude turn. It does not start another model process.
+
+Reports stay on the machine at `~/.ccx/feedback/sessions.jsonl`. Each JSONL row
+contains a rating, explanation, example, query references, session ID, timestamp,
+working directory, and transcript path. The collector stores command names but
+not command arguments or transcript text. Claude supplies the written assessment.
+No central upload occurs. New files use owner-only permissions.
+
+Run `ccx feedback list` to read the reports. The last row for a session is its
+latest assessment. Interrupted sessions or declined reports can have no report.
+Set `CCX_SESSION_FEEDBACK=0` in Claude's environment to disable collection.
+Recording currently requires macOS or Linux. The hook ignores collection errors.
