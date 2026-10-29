@@ -605,6 +605,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/ccx-feedback-hook.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
