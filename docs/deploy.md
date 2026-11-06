@@ -1907,11 +1907,17 @@ required. What every check needs is that the repository is **covered by an
 approved installation**: the check first asks GitHub which installation covers
 the repo, then mints that installation's token, then reads the repo through it.
 
-- A repo **outside the App's selection**, or inside an org missing from
-  `approvedOrgs`, cannot be located → the check is *indeterminate* and the repo
-  answers **`503`** on every request — including public repos, since deciding
-  "public" is itself that read. Not a `404`, not a startup rejection: startup
-  verifies the App's own identity, not which repos its installations cover.
+- A repo **outside the App's selection** — removed from it, or deleted — is
+  **denied**: `ccx repos` leaves it out and counts it in the terminal audit
+  event's `denied_by_reason` under `repo_gone`; a command naming it answers
+  `404`; the query server logs a warning naming it. A public repo outside
+  the selection still serves (it is readable under any installation).
+  Remove the repo from the config repo, or add it back to the installation.
+- A repo inside an org **missing from `approvedOrgs`** cannot be located →
+  the check is *indeterminate* and the repo answers **`503`** on every
+  request, naming the repo — including public repos, since deciding "public"
+  is itself that read. Not a `404`, not a startup rejection: startup verifies
+  the App's own identity, not which repos its installations cover.
 - **Reusing the indexer App** (the default) makes the selection self-consistent:
   a repo the App cannot see cannot be indexed, so *indexed ⊆ selected* holds by
   construction. Then the one list to keep in step is `approvedOrgs` — every org
@@ -2056,8 +2062,11 @@ Two consequences worth planning for:
   Checks are anchored to the immutable repo id, and when the stored
   owner/name no longer resolves the fallback needs a `node_id` the indexer
   does not persist yet — so the check reports "cannot determine" rather than
-  guessing. It fails closed and logs a line naming the repo. On instances
-  where teams rename repositories often, expect this until the reindex.
+  guessing. It fails closed; the error and the log line both name the repo.
+  On instances where teams rename repositories often, expect this until the
+  reindex. A repository the App no longer covers is different: that is a
+  definite denial (`repo_gone`), so `ccx repos` keeps working for everyone
+  ([Installation scope](#installation-scope)).
 
 **A mapping PAT's expiry is announced ahead of time and checked at startup.**
 The PAT routes — the enterprise lookup (github.com or GHES) and the GHES
@@ -2198,14 +2207,14 @@ and `indeterminate` also carries a **`reason`**, from a closed vocabulary:
 |---|---|---|
 | `deny` | `unmapped` | the engineer's identity maps to no code-host account on this instance (on github.com: in the repo's org) — the public-only under-grant, named |
 | `deny` | `no_access` | mapped, but the account holds no read grant on the repo (or is suspended / blocked) |
-| `deny` | `repo_gone` | GitLab: the project no longer exists upstream — the index is stale |
+| `deny` | `repo_gone` | the code host no longer serves the repo to this deployment: a GitLab project that no longer exists, or a GitHub repo the App's installation no longer covers (removed from its selection, or deleted) — the index is stale; remove the repo from the config repo, or add it back to the installation |
 | `deny` | `not_allowlisted` | an API-key record's `repoAllowlist` scope excludes the repo |
 | `indeterminate` | `provider_throttled` | the code host rate-limited the check; `Retry-After` when it stated one |
 | `indeterminate` | `provider_unavailable` | code-host outage or malformed answers past the retry budget |
 | `indeterminate` | `credential_failure` | the App key, PAT, or token was refused — rotate or re-permission it |
 | `indeterminate` | `mapping_config_error` | the linkage lookup itself failed: several directory matches, no SAML provider, a GraphQL error (often a missing App permission) |
 | `indeterminate` | `outside_governance_boundary` | a non-public repo is now owned by an org outside `approvedOrgs`, or by a user account |
-| `indeterminate` | `repo_unverified` | the stored owner/name no longer resolves to the indexed repo under an approved installation (renamed, transferred, outside the installation's selection) — reindex |
+| `indeterminate` | `repo_unverified` | the stored owner/name no longer resolves to the indexed repo under an approved installation: renamed or transferred, or its org has no installation in `approvedOrgs` that the App can read — the message names the repo; fix `approvedOrgs`, or remove the repo from the config repo and re-add it under its current name |
 | `indeterminate` | `instance_unavailable` | the instance is latched nonconformant, or no `authz.codeHosts` block covers it |
 
 Aggregating `allow` events by principal reconstructs precisely what each

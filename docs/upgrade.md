@@ -37,6 +37,41 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.85 — a repository the GitHub App no longer covers is left out of `ccx repos` and answers 404 to commands naming it, instead of failing every `ccx repos` with a 503; the 503s that remain name the repository and the reason
+
+Nothing is required. One change affects scripts that read `ccx repos`:
+a repository the GitHub App no longer covers no longer fails the listing
+with a `503`; the page omits it, and a command naming it answers `404`
+([below](#a-repository-the-app-no-longer-covers-is-denied-not-an-outage)).
+Upgrade the CLI with the server, as always.
+
+### A repository the App no longer covers is denied, not an outage
+
+- **What changed.**
+  - **`ccx repos` lists the rest.** A repository removed from the GitHub
+    App's installation, or deleted, used to make every `ccx repos` fail with
+    `HTTP 503 … (no installation) …`, for every user, until an operator
+    removed it from the config repo. It is now a definite denial: `ccx repos`
+    leaves it out, a command naming it answers `404`, and the audit stream
+    records the denial as `repo_gone` (the walk's terminal event counts it
+    under `denied_by_reason`). A public repository outside the installation
+    still serves.
+  - **The 503 that remains names its cause.** `authorization check failed
+    (<reason>): <instance>: <owner>/<name> …` — the reason is the audit
+    vocabulary entry (`repo_unverified`, `mapping_config_error`, …) and the
+    repository is named. Over MCP the error carries `reason` in its fields,
+    and its text says a retry does not help unless the reason is a provider
+    throttle or outage.
+- **What to do.** Nothing. For a repository that is now denied: drop it from
+  the config repo, or add it back to the App's installation. The query
+  server logs a warning naming it either way.
+- **Scripts.** A script that treated a 503 from `ccx repos` as "retry" sees
+  a `200` page without that repository instead; one that named the
+  repository sees `404` instead of `503`.
+- **Verify.** `ccx repos` succeeds with such a repository in the index; the
+  query server log holds `… is not covered by the App's installation …
+  denied as repo_gone`.
+
 ## v0.1.84 — `ccx defs` and `ccx refs` resolve much more Rust, across a workspace's crates, and TypeScript/JavaScript generics; the first pass re-reads Rust, TypeScript/JavaScript, Go and C# files and the files no language claims once; `ccx defs` and `ccx refs` resolve more C#: generics by arity, `partial` types, extension methods; the first pass re-reads C# files once and re-embeds the chunks of files with a file-scoped namespace
 
 Nothing is required. The first indexing pass after the upgrade re-reads

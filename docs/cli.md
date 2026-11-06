@@ -765,7 +765,8 @@ has been checked against the repositories in question.
 |---|---|
 | `HTTP 401` | Missing or wrong `CCX_API_TOKEN` — it must match a token the server accepts. `ccx status` names the credential in use but does not validate it against the server. |
 | `login: expired and could not be refreshed` (in `ccx status`), or `Your login for … has expired and could not be refreshed` (from any other command) | Your cached SSO login aged out — the IdP's session lifetime, so an overnight gap can do it. The server itself is fine (`status` still reports it healthy). Run `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN`. |
-| `HTTP 503` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
+| `HTTP 503` `index tables … do not exist yet` | Index not built yet — the indexer hasn't populated the table; retry once it has (ask your platform team if it persists). |
+| `HTTP 503` `authorization check failed (<reason>): …` | The server cannot verify one repository's access setup; the message names the repository and the reason. That is a deployment-side condition for your platform team (the reason is a row in the deploy guide's decision table); retrying does not help. Other repositories still work: pass `--repo`. |
 | connection refused / unreachable | Wrong `CCX_SERVER_URL`, or a `kubectl port-forward` that dropped. Run `ccx config` to see the server it resolved and where that came from. |
 | talking to the wrong server | Something outranks your saved default — `--server`, or an exported `CCX_SERVER_URL`. `ccx config` names the source. (A project `.env` is *not* read by `ccx`.) |
 | `is writable by other users` | `~/.config/ccx/config.json` decides where your credentials are sent, so a group/world-writable one is refused: `chmod go-w` it. World-*readable* is fine. |
