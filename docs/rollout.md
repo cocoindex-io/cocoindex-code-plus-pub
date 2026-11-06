@@ -1,9 +1,8 @@
 # Rolling `ccx` out to your developers
 
-For platform teams: how developers' `ccx` CLI, agent skill and Claude Code
-plugin stay current with your deployment, and what you can set so they do
-without an announcement. The server side is in [deploy.md](deploy.md); a
-developer's own view is in [cli.md](cli.md).
+Keep developers' `ccx` CLI, agent skill, and Claude Code plugin current with
+your deployment through update prompts and managed settings. Server setup is
+in [deploy.md](deploy.md); installation and use are in [cli.md](cli.md).
 
 ## What keeps each piece current
 

@@ -1,8 +1,8 @@
 # SSO sign-in (OIDC): provider setup
 
 This guide is for the people who make your identity provider mint tokens for
-CocoIndex Code Plus: the **IdP admin** (app registrations, roles, policies) and
-the **platform engineer** pairing with them. Each provider section ends in the
+CocoIndex Code Plus: the IdP admin (app registrations, roles, policies) and
+the platform engineer pairing with them. Each provider section ends in the
 Helm values block its registrations produce (paired with the operator-side
 values that live in deploy.md). The server-side
 switch, the meaning of each `auth.oidc.*` key, and the config-lane rules live
@@ -20,7 +20,7 @@ Every SSO deployment needs two jobs done:
   server checks.
 
 Some products do both jobs; some only log people in. **Entra ID, Keycloak,
-Auth0, Ping — and Okta *with* its API Access Management add-on — are full
+Auth0, Ping (and Okta *with* its API Access Management add-on) are full
 authorization servers**: configure them directly. **Google Workspace, Okta
 *without* that add-on, and SAML-only IdPs are login-only.** Why: Google's
 OAuth server issues opaque access tokens and cannot mint tokens for a
@@ -64,8 +64,10 @@ per-provider sections below are this list in each vendor's vocabulary:
    `auth.oidc.cli.clientId`, and the server advertises it so engineers never
    type it. Its registered redirect URIs must cover the server's advertised
    callback ports (default `http://127.0.0.1:3276/callback` and
-   `http://127.0.0.1:3277/callback`); enable the device grant if some
-   engineers work on browserless hosts (`ccx login --device`).
+   `http://127.0.0.1:3277/callback`). The device grant is optional: on a
+   browserless host (a server over SSH) the default flow already works by
+   signing in elsewhere and pasting the final address back; enable the grant
+   only if you also want `ccx login --device` there.
 3. **The entitlement `ccx.read`, carried in a claim the provider gates per
    user.** This is provider-determined, not a style choice: on Okta the
    access policy grants the *scope* per user/group at mint time (`scp`
@@ -79,8 +81,8 @@ per-provider sections below are this list in each vendor's vocabulary:
    the *same claim*, gated per user the same way, and is purely **additive**:
    a token without it keeps everything `ccx.read` allows, including each
    caller's own repositories' usage figures. Grant it to the few people who
-   should see organization-wide cost and identity drill-down — typically
-   engineering leadership and whoever owns the budget — and to any reporting
+   should see organization-wide cost and identity drill-down (typically
+   engineering leadership and whoever owns the budget) and to any reporting
    service account.
 
    Do **not** add `ccx.usage.read` to `auth.oidc.advertisedScopes` on a
@@ -172,9 +174,8 @@ registrations):
    federated from another IdP with no Exchange Online mailboxes, exactly the
    estates the federated shape below serves. For those, add the **`upn`
    optional claim** instead and set the `authz` `mappingClaim` to `upn`; the
-   byte-identical requirement is unchanged, so the stored linkage value —
-   the SSO NameID or, on SCIM-provisioned enterprise estates, the SCIM
-   `userName` — must then be the UPN.
+   byte-identical requirement is unchanged, so the stored linkage value (the SSO NameID or, on SCIM-provisioned enterprise estates, the SCIM
+   `userName`) must then be the UPN.
 
 **Reply to the platform team with:** the tenant ID, the API registration's
 **client ID (a GUID)**, the App ID URI (`api://ccx`), and the CLI

@@ -1,10 +1,9 @@
 # ccx Insights — usage, cost and savings
 
-Insights answers three questions about a CocoIndex Code Plus deployment: who
-is using it, what its model calls cost, and what the caching saved. It is **off by
-default** and, when on, adds no new deployable component — the numbers are
-collected by the two services you already run and stored in one Postgres
-schema.
+Insights reports who uses a CocoIndex Code Plus deployment, what its model calls
+cost, and what caching saved. It's **off by default**. When enabled, the two
+existing services collect the numbers and store them in one Postgres schema;
+you don't deploy another component.
 
 Nothing leaves your deployment. There is no telemetry endpoint, no vendor
 callback, and no aggregate we receive.
@@ -33,12 +32,11 @@ usageAnalytics:
 It changes nothing about how the indexer runs: each repository's refresh
 records its own *cycle* — one repository's refresh that did work.
 
-There is no analytics-specific provisioning. The query server creates the
-schema at startup and the indexer writes its own tables into it; what that
-rests on is the one-time role setup every deployment already has — two
-statements, run once as the database admin, shown with the chart's default
-role names — `cocoindex_server` for the query server, `cocoindex` for the
-indexer; substitute yours
+The query server creates the analytics schema at startup, and the indexer
+writes its own tables into it. Both use the role setup required for every
+deployment. Run these two statements once as the database admin, substituting
+your role names for the chart's defaults: `cocoindex_server` for the query
+server and `cocoindex` for the indexer
 ([deploy.md § Production Postgres](deploy.md#production-postgres-cloud-sql--external)):
 
 ```sql
@@ -60,7 +58,7 @@ dropping and re-indexing your repositories does not reset your usage history.
 
 ## Who can see what
 
-Two levels, and the split is deliberate:
+Access has two levels:
 
 | Surface | Who |
 |---|---|
@@ -135,8 +133,8 @@ those parts:
 
 **Agent cost served from cache** is the share of the agent model cost with
 no cache that reuse saved: saved ÷ (spent + saved), at your rate sheet. It
-counts every kind of reuse — whole answers, subquery answers and replayed
-turns — weighted by what that work would have cost. Its caption gives the
+counts every kind of reuse (whole answers, subquery answers and replayed
+turns) weighted by what that work would have cost. Its caption gives the
 whole-answer hit rate: the agent queries answered entirely from the cache. A
 query that ran live but replayed most of its turns is a miss there and still
 counts toward the share.
@@ -150,7 +148,7 @@ per view (an expanded view or a line range folds nothing, so their share says
 how often agents needed the full text), and the folded tokens priced once at
 the coding agent's input rate, labelled as potential.
 
-**Each detail view is a superset of the Overview for its subject**: the same
+Each detail view is a superset of the Overview for its subject: the same
 headline figures, plus the day-by-day series and the breakdowns behind them.
 A number on the Overview can always be followed to the day it happened on —
 Queries & agents splits requests per day by operation and by client, agent
@@ -172,8 +170,8 @@ floor, and the share of CLI requests from versions behind it.
 **Repositories** gives each repository you can read its own row: queries,
 developers, agent queries, estimated model cost and what reuse saved (both
 ccx ask + indexing, as on the Overview),
-**agent time saved** — the waiting the answer cache removed for queries
-naming that repository — and **potential tokens saved**, the text `ccx show`
+**agent time saved** (the waiting the answer cache removed for queries
+naming that repository) and **potential tokens saved**, the text `ccx show`
 folded on that repository's files. A small time figure reads in minutes, so
 a few minutes saved shows as minutes rather than `0.0 h`. A `ccx show` on a
 file outside any indexed repository counts only in the organization's total,
@@ -190,8 +188,8 @@ names the commit the index is at:
   its next poll, and the table's caption says when that last poll was.
 
 Clicking a row opens that repository on its own: its figures, the
-operations it served, its days — queries, agent queries live vs cached,
-agent time saved, chunks embedded, `ccx show` tokens sent vs folded — and its
+operations it served, its days (queries, agent queries live vs cached,
+agent time saved, chunks embedded, `ccx show` tokens sent vs folded) and its
 refs right now. Each ref the
 index holds is listed at the commit indexed for it, plus any the indexer is
 still working on or failed to index. Each has its own freshness and a
@@ -205,8 +203,8 @@ read that the indexer has reported on, named `<owner>/<repo>`, with the
 branch or tag whose unfinished work sets the lag, the folded state, the lag
 and the error streak. Clicking a row opens that repository's drill-down,
 where every ref has its own freshness. Repositories the indexer reports on
-that are not listed — ones you cannot read, or ones the index does not hold
-yet because their first pass is pending or failed — appear as a count under
+that are not listed (ones you cannot read, or ones the index does not hold
+yet because their first pass is pending or failed) appear as a count under
 the table, never by name.
 
 ## The terminal (`ccx usage`)
@@ -269,8 +267,7 @@ requests and milliseconds; a rate sheet turns them into currency when a page
 is rendered. Prices change and contracts differ, so a stored dollar figure
 would be wrong the day after it was written — while the units stay true.
 
-Without a rate sheet every surface labels its figures **illustrative** and
-means it. Being explicitly approximate beats implying a real number.
+Without a rate sheet, every surface labels its figures **illustrative**.
 
 ```yaml
 usageAnalytics:
@@ -303,9 +300,8 @@ work. **Compute and storage are your cloud bill** and have no keys here:
 
 ## SQL views for BI and Grafana
 
-The schema exposes a set of views as its **stable surface**. Read the views,
-not the tables underneath them — the tables are free to change shape between
-releases, the views are not.
+The schema exposes a set of views as its **stable surface**. Read those views;
+the underlying tables can change shape between releases.
 
 | View | Grain |
 |---|---|
@@ -323,7 +319,7 @@ Three rules the views follow:
 
 1. **Columns are only ever added**, never repurposed. A dashboard built today
    keeps working.
-2. **Units are in the names** — `_ms`, `_bytes`, `_tokens` — so a chart legend
+2. **Units are in the names** (`_ms`, `_bytes`, `_tokens`) so a chart legend
    cannot misdescribe what it plots.
 3. **Organization rows are marked, not implied.** They carry
    `is_org_total = true` and a `NULL` repo_key. This matters: per-repository
@@ -380,8 +376,8 @@ settled:
 - **Partial days** are named. Today is always partial.
 - **Comparisons are suppressed** until there is a comparable prior period, so
   a new deployment shows no misleading "+900%".
-- **A share changes in points.** A percentage — agent cost served from cache,
-  the error rate — compares in percentage points from where it was, such as
+- **A share changes in points.** A percentage (agent cost served from cache,
+  the error rate) compares in percentage points from where it was, such as
   "▼ 9 pts from 19%", not as a relative change of a percentage.
 - **Unknown is not zero.** Token totals exclude queries whose provider
   returned no count, and say how many. Time-saved excludes cache hits with no
@@ -393,7 +389,7 @@ settled:
 - **Per-repository savings add up; per-repository counts overlap.** A query
   that names several repositories splits its cost and its agent time saved
   evenly among them, so those columns sum to the organization's totals.
-  Counts — queries, agent queries, hits without a stored duration — count
+  Counts (queries, agent queries, hits without a stored duration) count
   in full on every repository the query named.
 - **Savings are measured, not modelled.** "Cost saved" values reuse at what
   producing the same result again would have cost. "Agent time saved" is wall

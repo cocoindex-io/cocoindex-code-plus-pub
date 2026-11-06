@@ -37,6 +37,104 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.84 — `ccx defs` and `ccx refs` resolve much more Rust, across a workspace's crates, and TypeScript/JavaScript generics; the first pass re-reads Rust, TypeScript/JavaScript, Go and C# files and the files no language claims once; `ccx defs` and `ccx refs` resolve more C#: generics by arity, `partial` types, extension methods; the first pass re-reads C# files once and re-embeds the chunks of files with a file-scoped namespace
+
+Nothing is required. The first indexing pass after the upgrade re-reads
+the Rust, TypeScript/JavaScript, Go and C# files of every repository once,
+with the files no language claims
+([below](#more-symbols-resolve-in-rust-typescriptjavascript-and-c)), and
+re-embeds only the chunks of C# files that declare a file-scoped namespace
+([below](#c-resolves-generics-partial-types-and-extension-methods)). A Rust
+repository whose `included_patterns` lists only source files can add
+`**/Cargo.toml` so its crates resolve into one another
+([below](#more-symbols-resolve-in-rust-typescriptjavascript-and-c)). Upgrade
+the CLI with the server, as always.
+
+### More symbols resolve in Rust, TypeScript/JavaScript and C#
+
+- **What changed.**
+  - **Rust follows a workspace's crates.** A `Cargo.toml` is read for its
+    workspace members, library root and dependencies, so
+    `use other_crate::Item` resolves to the item in that crate. Paths
+    through the standard library's types (`Option`, `Vec`, `Arc` and the
+    like), `crate::`, `self::` and `super::` paths, and qualified-path calls
+    such as `<Type>::f()`, the trait-qualified form included, resolve.
+    Values get their type from struct literals, derives, `Self` results,
+    tuple `let`s, closure parameters and `impl` blocks in other files. A
+    file that makes a qualified-path call no longer drops out of the symbol
+    graph.
+  - **TypeScript/JavaScript.** A type parameter's name no longer resolves to
+    an unrelated definition of the same name, and members reached through a
+    generic type resolve.
+  - **C#.** A list pattern that starts with a bare slice
+    (`xs is [.., Token { … } last]`) no longer hides the enclosing namespace and
+    class.
+  - **Go** resolves as before; its files are re-read once.
+  - **`--lang c-sharp`** selects C#, like `--lang c#` and `--lang cs`.
+  - **A `Cargo.toml` stays TOML for search.** Its chunks, grep terms and
+    `--lang toml` results are unchanged.
+- **Expected after the upgrade.** The first pass re-reads and re-extracts
+  the Rust, TypeScript/JavaScript, Go and C# files of every repository,
+  reads every indexed `Cargo.toml` into the symbol graph, and re-reads the
+  files no language claims (documentation, configuration, data). It reads
+  them from the index's own copy of each file, not from the code host, and
+  re-runs the directories holding them. Python, C/C++/Objective-C, Java and Kotlin files
+  are not re-read, and only the C# change re-embeds anything
+  ([below](#c-resolves-generics-partial-types-and-extension-methods)).
+  Every branch or tag then resolves its symbols once more; `ccx defs` and
+  `ccx refs` answer from the current index until its pass completes.
+- **Optional: index the manifests of a Rust repository with file patterns.**
+  A repository whose `included_patterns` lists only source files (such as
+  `["**/*.rs"]`) leaves its `Cargo.toml` files out of the index, so its
+  crates do not resolve into one another. Add `"**/Cargo.toml"` to its
+  `included_patterns` to bring them in; they are then searchable as TOML
+  too. A repository without `included_patterns` indexes them already.
+- **Verify.** The first pass's stats lines report `File.accept: … N
+  reprocessed` for those files, while `_cached_blob` reports only
+  `unchanged` and `declare_chunk_embedding` re-embeds only the C# chunks
+  named below. After it, `ccx refs` on an item one crate of a Rust
+  workspace exports lists its uses in the crates that depend on it.
+
+### C# resolves generics, `partial` types and extension methods
+
+- **What changed.**
+  - **`Foo` and `Foo<T>` are two types.** A name written with type
+    arguments (`Foo<int>`) resolves to the generic type, a bare `Foo` to the
+    non-generic one; before, both answered `ambiguous`. Both still share one
+    qualified name, `csharp:App.Foo`, so `ccx refs csharp:App.Foo` lists the
+    uses of both.
+  - **Same-name types merge only when they are `partial`.** Two
+    non-`partial` types of one name and namespace (two projects'
+    `Shared.Util`, the `#if` and `#else` variants of one declaration) are two
+    definitions, so a use of the name answers `ambiguous` instead of picking
+    one.
+  - **More uses resolve.** Extension methods (`w.Twice(4)`) resolve through
+    the namespaces and `using` directives the call site sees; a simple name
+    inside a type reaches its static members; type arguments in a call
+    (`Get<Repo>()`) and a `params T[]` parameter's type are references.
+  - **An explicit interface implementation** (`void IWorker.Work()`) is
+    listed under the interface's name, `IWorker.Work`, no longer as an
+    overload of the type's own `Work`.
+  - **A file-scoped namespace (`namespace App;`) frames the file.** Search
+    results from such a file show the `namespace App;` line above the
+    match. `ccx show` frames a definition there with the namespace line and
+    names it with the namespace in its header (`class App.Repo`, `method
+    App.Repo.Find`), as under `namespace App { … }`, and `ccx show -s Repo`
+    renders it from the working tree by structure; before, it printed a "no
+    match by structure" note and showed the indexed definition.
+- **Expected after the upgrade.** The first pass re-reads and re-extracts
+  the C# files of every repository, from the index's own copy of each file,
+  not from the code host, and re-runs the directories holding them; this
+  change re-reads no other file. The chunks of C# files that declare a file-scoped
+  namespace are embedded again, since their text now carries the namespace
+  line; nothing else is re-embedded. Every branch or tag holding C#
+  resolves its C# symbols once more; `ccx defs` and `ccx refs` answer from
+  the current index until its pass completes. `ccx show` changes as soon as
+  the server is upgraded.
+- **Verify.** The first pass's stats lines report `File.accept: … N
+  reprocessed` for the C# files. After it, `ccx refs` on a generic C# type
+  lists the uses written with its type arguments.
+
 ## v0.1.83 — `ccx refs` finds names used inside Python f-strings and JavaScript/TypeScript template literals, and C/C++ classes and functions symbol extraction missed; the first pass re-reads Python, TypeScript/JavaScript and C/C++ files once; a language filter takes a language's aliases, and an unknown language name is an error; a `--path` or `ccx find-files` pattern with no wildcard selects that directory's subtree; a repository's first pass no longer delays the other repositories' refreshes
 
 Nothing is required. The first indexing pass after the upgrade re-reads
@@ -218,8 +316,8 @@ every stored answer stays. The server now refuses `ccx` CLIs older than 0.1.70
   which counted passes over every repository. The analytics tables grow in
   place at startup (one new table, one new column) and keep every collected
   row.
-- **Metrics export.** The run-level series — `cocoindex_run_last_ready_time_seconds`,
-  `cocoindex_runs_total` and the dashboard's *Time since last ready* —
+- **Metrics export.** The run-level series (`cocoindex_run_last_ready_time_seconds`,
+  `cocoindex_runs_total` and the dashboard's *Time since last ready*)
   record the indexer's first readiness and then hold. An alert on
   `cocoindex_run_last_ready_time_seconds` would fire on a healthy indexer;
   alert per repository on `process_git_ref` runs instead
@@ -503,8 +601,8 @@ first pass as long as the initial index.
   read from the code host as before, and nothing is re-embedded in either
   case.
 - **Expected after the upgrade.** The copies are made as files are read, so
-  the first pass after this upgrade — which re-reads every repository for the
-  reason above — still reads every file from the code host, as before, and
+  the first pass after this upgrade (which re-reads every repository for the
+  reason above) still reads every file from the code host, as before, and
   stores the copies. Every re-walk after it, whatever its cause, reads from
   the database.
 - **Storage.** About the size of the index's file contents again (the
@@ -630,8 +728,8 @@ Nothing is required: upgrade normally, and upgrade the `ccx` CLI with it.
 Read on if a script or an MCP client of yours reads `text_grep` matches.
 
 - **What changed.** `ccx grep --text -U` / `--multiline` is ripgrep's `-U`:
-  the pattern may match across lines — `^` / `$` still mean line bounds and
-  `.` still stops at a newline, while `\s`, `[^;]` and `\n` cross one — so
+  the pattern may match across lines (`^` / `$` still mean line bounds and
+  `.` still stops at a newline, while `\s`, `[^;]` and `\n` cross one) so
   `\)\s*\{` finds a brace on the next line. The REST body and the MCP tool
   `text_grep` take `multiline` (default `false`, the behaviour so far), and
   every match now carries `end_line` beside `line`: equal to `line` without
@@ -642,8 +740,8 @@ Read on if a script or an MCP client of yours reads `text_grep` matches.
   the brace-on-its-own-line style prints two-line matches; the same command
   without `-U` prints only same-line braces.
 - **Expected after the upgrade.** Two one-time costs on the first pass.
-  Every repository is walked again — every file re-read from the code host,
-  nothing re-embedded — because Rust symbol extraction changed (`#[path =
+  Every repository is walked again (every file re-read from the code host,
+  nothing re-embedded) because Rust symbol extraction changed (`#[path =
   "x.rs"] mod foo;` now names the file the attribute gives); on a large
   installation that walk is hours. And every ref's symbol step resolves every
   module again, because the resolver's behavior changed for Rust: an
@@ -690,8 +788,8 @@ ending in `after 0 files` whose cursor made no progress.
   that a retry with its cursor repeats the same work, and names the levers
   (`--path`, a rarer literal, `-s`) instead of advising a retry.
 - **The scan itself is several times faster.** Each file is searched once as
-  a whole before its lines are visited, so files without a match — nearly all
-  of them, for most patterns — cost one search instead of one per line. A
+  a whole before its lines are visited, so files without a match (nearly all
+  of them, for most patterns) cost one search instead of one per line. A
   full scan of a large repository that took a minute takes seconds; the
   deadline stop and the cursor still cover what does not fit.
 - **The pattern is read in ripgrep's dialect.** `ccx grep --text` now matches
@@ -747,8 +845,8 @@ Insights views are slow under `authz.mode: codeHostMirrored` on GitHub.
   it.
 - **`authz.listReposCheckConcurrency` now bounds per-repo calls, not
   checks.** A walk dispatches a whole page of checks at once; the value
-  (default 10) is how many per-repo provider calls — refusals, and private
-  repositories under an installation without the grant — run at a time.
+  (default 10) is how many per-repo provider calls (refusals, and private
+  repositories under an installation without the grant) run at a time.
   Batched lookups are outside it. A value you raised to speed up the walk
   can go back to the default.
 - **Every audit line carries `provider_calls`, `provider_ms` and
@@ -864,11 +962,11 @@ extension and `ccx grep --text` gets an index.
 
 - **`ccx grep --text` searches the text of every file.** A regular
   expression, or a plain word, matched line by line against every file in
-  the ref — comments, docs, config and languages the structural grep cannot
-  parse included — with no `-l` to pass; smart case by default, `-w` for
+  the ref (comments, docs, config and languages the structural grep cannot
+  parse included) with no `-l` to pass; smart case by default, `-w` for
   whole words, one `path:line:text` line per match. The MCP server offers it
   as `text_grep`, and `ccx ask` uses the same tool
-  ([cli.md → the quick reference](cli.md#quick-reference)).
+  ([cli.md → usage examples](cli.md#use)).
 - **A trigram index speeds up `ccx grep --text`** when the database has the
   `pg_trgm` extension: the indexer builds it over every indexed file's text
   at the end of its next pass, and a pattern with a distinctive literal then
@@ -888,8 +986,8 @@ extension and `ccx grep --text` gets an index.
   level, and `this.member` resolves to the enclosing type's member.
 
 - **An unknown field in a config entry is an error.** A config file with a
-  field the indexer does not know — a typo such as `excluded_pattern`, or a
-  field of your own — now fails the config refresh for that config repo,
+  field the indexer does not know (a typo such as `excluded_pattern`, or a
+  field of your own) now fails the config refresh for that config repo,
   naming the file and the entry, where it used to be ignored. Indexing of
   already configured repos continues; adding, removing and changing repos
   pauses until the field is removed. Before upgrading, check each config
@@ -1056,9 +1154,9 @@ only `.nix` files are re-embedded. Read on if a script parses
   listed every repository by a key such as `github:github.com:1146989733`,
   which nobody can read, to every holder of the usage entitlement. It now
   follows the same per-repository authorization as the Repositories table;
-  repositories the indexer reports on that are not listed — ones you cannot
+  repositories the indexer reports on that are not listed (ones you cannot
   read, or ones the index does not hold yet because their first pass is
-  pending or failed — are a count under the table. `ccx usage indexing`
+  pending or failed) are a count under the table. `ccx usage indexing`
   prints the same names, the same *REF* column and the same count.
 - **`ccx usage indexing --json` carries `freshness` as a list**, plus
   `freshness_withheld`. `freshness` was an object keyed by repository key;
@@ -1112,9 +1210,9 @@ walking a new repository or branch, or if you size the indexer's memory.
 
 - **The walk no longer reads a whole ref ahead.** The indexer reads files
   from the code host far faster than it embeds them. Earlier releases kept
-  every file read ahead in memory until its turn came, so a first pass — a
+  every file read ahead in memory until its turn came, so a first pass (a
   new repository, a branch newly added to a large one, or the re-walk an
-  upgrade triggers — could hold the ref's whole new content, and an
+  upgrade triggers) could hold the ref's whole new content, and an
   embedding provider that rate-limited the indexer made it do so. A file is
   now read only once the indexing engine has room for it, so at most about
   1,000 files wait their turn at once.
@@ -1196,8 +1294,8 @@ indexer, or if you size the indexer's memory.
   looked identical to one indexed at its default branch alone, and no
   listing said which commit the index was at.
 - **Insights reads ref counts from the index as you look.** The *Refs*
-  column of the Repositories table — in the web UI and, new, in
-  `ccx usage repos` — is a live read. It was sampled once a day, so a ref
+  column of the Repositories table (in the web UI and, new, in
+  `ccx usage repos`) is a live read. It was sampled once a day, so a ref
   added in the morning showed up the next day, and a repository indexed
   after the day's sample showed `0`. A repository's drill-down (the web UI
   and `ccx usage repo`) now lists each indexed ref with the commit indexed
@@ -1256,7 +1354,7 @@ indexer, or if you size the indexer's memory.
 
 - **If `agentQuery.enabled` is true**, before upgrading:
   - raise `queryServer.ingress.timeoutSeconds` to clear the largest effort
-    deadline plus 5 s — **1230** for the defaults, up from 630 — or lower
+    deadline plus 5 s (**1230** for the defaults, up from 630) or lower
     `agentQuery.effort.high.deadlineSeconds`;
   - move a tuned `agentQuery.maxTurns` to `agentQuery.effort.medium.turns`,
     and a tuned `agentQuery.requestDeadlineSeconds` to
@@ -1584,8 +1682,8 @@ repository once (nothing is re-embedded); see *What changed*.
   waiting for the fetch; the same race could answer `401` during a key
   rotation. Requests now wait for the fetch in flight.
 - **The answer cache serves answers made under turn pressure.** An answer
-  whose investigation ran into its last few turns — or used a helper
-  sub-investigation that did — was stored but could never be served, so
+  whose investigation ran into its last few turns (or used a helper
+  sub-investigation that did) was stored but could never be served, so
   repeating a deep question reran it in full every time. Answers stored
   before the upgrade stay unused; the next ask of each question stores a
   servable one.
@@ -1675,8 +1773,7 @@ The enterprise lookup's `externalIdentities` query no longer sends
 `membersOnly: true`. At the enterprise scope that flag does not mean "has
 org membership": on GHES it filters to enterprise **administrators**
 (observed on a 3.21 instance: 7 of 3,448 identities survived it), so with
-0.1.49 every ordinary engineer on such an instance resolved as unmapped —
-public repos only — while the startup probe, which never sent the flag,
+0.1.49 every ordinary engineer on such an instance resolved as unmapped (public repos only) while the startup probe, which never sent the flag,
 passed. Matching is as strict as before: the byte-exact join on
 `samlIdentity.nameId` **or** `scimIdentity.username`, plus the linked-user
 requirement — and per-repo permission checks still gate all access, so
@@ -1758,7 +1855,7 @@ directory with the same name as the one holding the fixture's `src/`.
 
 - **Names are corrected** where the triggering import names a module inside
   the directory: `from src.app import …`, `import src.app`. An import of the
-  directory itself — `from src import app`, `import src` — still adds the
+  directory itself (`from src import app`, `import src`) still adds the
   prefix in this release.
 - **Pieces of one package without an `__init__.py`, under differently named
   directories** (`tools/mypkg/` beside `src/mypkg/`), are joined only when some
@@ -1819,8 +1916,7 @@ question command, the second if anything of yours reads the pod logs.
   spellings are gone.
 - **Why**: coding agents choose between the subcommands on what the verbs
   mean, and "query" reads as a synonym of "search" — so question-shaped
-  requests were being routed to `ccx search`. `ask` is the verb the
-  surrounding ecosystem already uses for question → answer.
+  requests were being routed to `ccx search`. `ask` is the verb other coding tools already use for question → answer.
 - **What to do**: update any script, alias, or agent instruction that types
   `ccx query`, and reinstall the CLI (`uv tool install -U
   cocoindex-code-plus`) so `ccx ask` exists. MCP clients rediscover the tool
@@ -1832,8 +1928,8 @@ question command, the second if anything of yours reads the pod logs.
 
 - **Routine lines now go to standard output**, warnings and errors to standard
   error. Everything but the HTTP access log used to go to standard error, and a
-  log collector that reads severity from the stream — Cloud Logging, most
-  Kubernetes log agents — stamped the lot `ERROR`: a successful request's audit
+  log collector that reads severity from the stream (Cloud Logging, most
+  Kubernetes log agents) stamped the lot `ERROR`: a successful request's audit
   event arrived at the same severity as a crash, so `severity>=ERROR` matched
   the whole log.
 - **The audit stream moved with it**, to standard output. Its content, logger
@@ -1922,14 +2018,14 @@ every supported language:
 - **Python source roots are now inferred from the repo.** Previously a
   relative import only resolved inside the file's own directory and an
   absolute import only from the repo root, so a package split across several
-  source roots — `python/*/src/<pkg>/`, the `src/` layout, one repo holding
-  several installable distributions — did not resolve across them. The
+  source roots (`python/*/src/<pkg>/`, the `src/` layout, one repo holding
+  several installable distributions) did not resolve across them. The
   indexer now infers the roots from the tree and the repo's own imports
   (package markers, and the directories an absolute import actually resolves
   under). No configuration; nothing to set.
 - **Calls inside an unreadable receiver are indexed.** A call written inside
-  an expression the indexer cannot type — `(base_url or settings.url()).rstrip()`,
-  `items[0].run()`, `handlers[key]()` — was dropped entirely, so those call
+  an expression the indexer cannot type (`(base_url or settings.url()).rstrip()`,
+  `items[0].run()`, `handlers[key]()`) was dropped entirely, so those call
   sites appeared in **no** `ccx refs` output at all. They are now indexed in
   Python, TypeScript/JavaScript, C/C++, and C#.
 

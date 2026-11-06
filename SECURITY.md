@@ -1,11 +1,11 @@
 # Security Policy
 
-This is the canonical security policy for **CocoIndex Code Plus**; it is
-published here from the product repository with each release.
+This is the canonical security policy for CocoIndex Code Plus. Each release
+publishes it here from the product repository.
 
 ## Reporting a vulnerability
 
-Email **security@cocoindex.io** — please do not open public issues.
+Email **security@cocoindex.io**. Please don't open public issues.
 Process, response SLAs, and disclosure terms are defined in the
 [CocoIndex organization security policy](https://github.com/cocoindex-io/.github/blob/main/SECURITY.md).
 

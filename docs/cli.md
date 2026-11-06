@@ -1,6 +1,6 @@
 # The `ccx` CLI (and MCP)
 
-`ccx` is the client engineers and coding agents use to **query** an indexed
+`ccx` is the client engineers and coding agents use to query an indexed
 codebase from a workstation, CI, or an agent sandbox. It talks to a query server
 that your platform team has deployed ([deploy.md](deploy.md)); the CLI itself
 holds no index and needs no license.
@@ -42,8 +42,8 @@ command first:
 ccx 0.1.75 is older than the server (0.1.82); they release in lockstep. Upgrade it now, then carry on: uv tool install cocoindex-code-plus==0.1.82
 ```
 
-- **The command matches how this `ccx` was installed** — `uv tool`, `pipx` or
-  `pip` — and keeps the `keyring` extra and a uv tool's package index. A
+- **The command matches how this `ccx` was installed** (`uv tool`, `pipx` or
+  `pip`) and keeps the `keyring` extra and a uv tool's package index. A
   deployment whose developers install from a private index can name its own
   command instead; then every line names that one.
 - **It pins your server's release**, never the newest on PyPI: the right
@@ -55,7 +55,7 @@ ccx 0.1.75 is older than the server (0.1.82); they release in lockstep. Upgrade 
 - `ccx status` always shows the comparison on its `cli:` line. A CLI newer
   than the server is never nagged.
 
-Driving `ccx` from a coding agent? Install the **agent skill** too — see
+Driving `ccx` from a coding agent? Install the agent skill too — see
 [For agents & automation](#for-agents--automation).
 
 ## Configure
@@ -103,7 +103,7 @@ skip `CCX_API_TOKEN` and sign in once:
 
 ```bash
 ccx login            # opens your IdP in the browser (PKCE, MFA and all)
-ccx login --device   # device-code flow instead (no local browser, e.g. over SSH)
+ccx login --device   # device-code flow instead, where your admin enabled it
 ccx logout           # drops the cached token
 ```
 
@@ -119,15 +119,23 @@ client id and default server stay, so signing back in takes no flags. CI jobs
 and agents keep using `CCX_API_TOKEN` — on SSO deployments that's an issued key
 of the form `ccxk_<id>_<secret>`.
 
-During a browser login the CLI listens on a local port to catch the redirect
-back from your IdP — and the server tells it which ports to use (typically
-3276/3277), so there is nothing to configure. If every listed port is busy,
-login says so: free one, or — only if your admin registered an alternative
-port — pin it with `--redirect-port <port>` (or `CCX_OIDC_REDIRECT_PORT`).
-The scopes to request come from the server too — deployments advertise
-them (including `offline_access` where refresh tokens need it, as on Okta
-and Entra), so there is nothing to pass; `--scope` remains a debugging
-override only.
+During browser login, the CLI listens on a local port for your IdP's
+redirect. The server supplies the port list (typically 3276/3277), so there's
+nothing to configure. If every listed port is busy, login tells you to free
+one. If your admin registered an alternative port, you can select it with
+`--redirect-port <port>` or `CCX_OIDC_REDIRECT_PORT`.
+
+The server also supplies the scopes, including `offline_access` where refresh
+tokens need it, as on Okta and Entra. `--scope` is a debugging override only.
+
+**On a host without a browser**, such as a server reached over SSH or a
+container, `ccx login` prints a sign-in link. Open it in a browser on your
+own machine, sign in, and paste the final address into the waiting terminal.
+Over SSH, you can also forward the callback port from your own machine
+(`ssh -L 3276:127.0.0.1:3276 <host>`, using the port the CLI names). Reload
+the failed browser page after forwarding, and the terminal completes the
+login. No admin step is needed. `ccx login --device` also works where your
+admin enabled the device grant.
 
 **Where your token is stored.** In your OS keyring when one is available,
 otherwise in `~/.config/ccx/tokens.json` (created `0600`). `ccx config` reports
@@ -245,8 +253,8 @@ minute to an hour depending on how recent the tip is; `--refresh` asks now,
 also refreshes it.
 
 **Symbol navigation** (`ccx defs` / `ccx refs`) answers "where is this defined"
-and "who uses it" from a **resolved symbol graph** the indexer builds — cross-file,
-alias- and re-export-aware — not from text matching. It covers **Python,
+and "who uses it" from a **resolved symbol graph** the indexer builds (cross-file,
+alias- and re-export-aware) not from text matching. It covers **Python,
 TypeScript/JavaScript (incl. TSX), C/C++, Objective-C, C#, Rust, Java, Go, and Kotlin**; other languages
 remain reachable via `search` and `grep`. The two verbs chain: each `ccx defs`
 row ends with a paste-ready command —
@@ -338,8 +346,8 @@ the pattern in ccx's forms (the MCP response carries it as `warnings`).
 expression in ripgrep's dialect (what `rg` reads: `\d`, `\w`, `\b`, `\s`, `|`,
 `(?i)`, `[[:alpha:]]`; lookarounds and backreferences work too, on a slower
 engine; a plain word works as-is) matched line by line
-against the text of **every** file in the ref — comments, docs, config and
-languages the structural grep cannot parse included — so it needs no `-l`
+against the text of **every** file in the ref (comments, docs, config and
+languages the structural grep cannot parse included) so it needs no `-l`
 (with `--text`, `-l` is an optional, repeatable filter by language). Case is
 **smart** by default (case-insensitive unless the pattern has an uppercase
 letter; `--case sensitive|insensitive` forces it, and `-s` / `-i` are the
@@ -352,7 +360,7 @@ match prints each line it covers with its own number); the line number is the
 one `read-file --offset` takes. A pattern with literal text in it is cheap: the server
 prefilters on that text in SQL, and reads only the files holding it when the
 deployment has the [text search index](deploy.md#text-search-index); one with
-none — `.*`, a character class alone — or whose literals are all in most
+none (`.*`, a character class alone) or whose literals are all in most
 files (`return.*null.*delete`) scans every file of the ref, so add `--path`
 on a large repository, and prefer `-s` when case does not matter to the
 question (the case-insensitive scan costs several times more). The index
@@ -388,8 +396,8 @@ exceeded: search `--top-k` ≤ 100, result pages ≤ 500, query/pattern text ≤
 `read-file` returns at most **5 000 lines** (and at most 1 MiB of content) per
 call — for a bigger file, page with `--offset`/`--limit`; the response's line
 numbers show where the window ended. Files up to 4 MiB are indexed by default
-(8 MiB at most; the deployment decides); a file the indexer skipped — over the
-limit, a generated or vendored file over 1 MiB, binary, a Git LFS pointer —
+(8 MiB at most; the deployment decides); a file the indexer skipped (over the
+limit, a generated or vendored file over 1 MiB, binary, a Git LFS pointer)
 answers `read-file` with the reason, `find-files --not-indexed` lists them,
 and an empty `grep`, `defs`, `refs` or `search` over a ref that has some
 prints a warning naming how many: read such a file from your checkout.
@@ -423,9 +431,9 @@ It reads the file from your **working tree** (inside or outside a checkout;
 outside one no repo is needed), so it is right on the branch you are on;
 `--git-ref` or `--repo` reads the indexed copy instead. `ccx show
 PATH:LINE` renders one definition whole, its doc included; on an import line
-it prints the imports. A line on a member without a body of its own — a
+it prints the imports. A line on a member without a body of its own (a
 field, a constant, a property, a type alias, an expression-bodied method, a
-C# event, indexer, operator or delegate — renders that member under its
+C# event, indexer, operator or delegate) renders that member under its
 type, not the whole type. A line past the end of the file is an error.
 `-e/--expand` renders everything verbatim.
 
@@ -524,19 +532,18 @@ malformed command line.
 
 ### `ccx ask` — ask a question, get an answer
 
-Every command above returns *material* — hits, lines, symbol rows — and leaves
-the reading to you. `ccx ask` returns a **written answer with citations**: a
-server-side agent runs the investigation for you, searching, grepping, reading
-files, and following symbols, then writes up what it found. Each claim carries
-a citation like `[s0:src/app.py#L40-L52]`: `s0` is one of the scopes the command
-lists on stderr (`s0: <owner>/<repo> @ <ref> (commit <sha>)`), and the line
-numbers are at that commit, so you can open exactly what the agent read. If the
-ref moved while the agent was reading it — routine on a busy branch — the scope
-line ends with `moved during the investigation: <sha>`: the line numbers may
-belong to either commit and, unless the trees were identical, the answer is
-not stored for reuse (`scope_moved`). `--json` carries every commit a scope's
-reads saw under
-`resolved_scopes[].observed_commit_shas`, the bound commit first.
+`ccx ask` returns a written answer with citations. A server-side agent
+investigates the question through search, grep, file reads, and symbol
+navigation, then writes up what it found. Each claim carries a citation such
+as `[s0:src/app.py#L40-L52]`. `s0` is one of the scopes listed on stderr
+(`s0: <owner>/<repo> @ <ref> (commit <sha>)`); its line numbers refer to that
+commit.
+
+If the ref moves during the investigation, the scope line ends with
+`moved during the investigation: <sha>`. Line numbers may then belong to
+either commit. Unless the trees were identical, the answer isn't stored for
+reuse (`scope_moved`). `--json` lists every commit read for a scope under
+`resolved_scopes[].observed_commit_shas`, with the bound commit first.
 
 ```bash
 ccx ask "how does the indexer decide what to re-embed?"
@@ -569,11 +576,11 @@ Things to expect:
   `agent_query_unavailable`; ask your platform team.
 
 - **A repeated question may come back instantly.** If your deployment enables
-  the answer cache, asking something already answered — by you or by a
-  colleague — returns the stored answer without re-running the investigation,
+  the answer cache, asking something already answered (by you or by a
+  colleague) returns the stored answer without re-running the investigation,
   and a rephrasing of the same question counts as the same question. A
-  question that adds or changes anything — "in one sentence", "as JSON",
-  "only the public API", a different component — is a different question
+  question that adds or changes anything ("in one sentence", "as JSON",
+  "only the public API", a different component) is a different question
   and gets its own investigation, with the near answer as a starting point.
   A stored answer is reused only while the repository's files are unchanged;
   after a change the next ask investigates again, reusing the steps that
@@ -583,8 +590,8 @@ Things to expect:
 #### How much investigation: `--effort`
 
 `--effort low|medium|high` sets how much investigation the question gets. Your
-deployment decides what each level means — how many steps the agent may take,
-and how long it may run — so the same flag works everywhere:
+deployment decides what each level means (how many steps the agent may take,
+and how long it may run) so the same flag works everywhere:
 
 | Level | Use it for |
 |---|---|
@@ -592,7 +599,7 @@ and how long it may run — so the same flag works everywhere:
 | `medium` | how-does-this-work questions; the default unless your deployment picked another |
 | `high` | architecture, comparison, and multi-repo questions, and asking again after a forced answer |
 
-When the agent runs out of steps — or its model runs out of room — before it
+When the agent runs out of steps (or its model runs out of room) before it
 is done, it still answers from what it found, and the answer ends with a
 `## Not verified` section listing what it could not check. The command says so
 on stderr:
@@ -627,8 +634,8 @@ ccx ask --parent 7e3a0012 "and where is that retried?"
 ```
 
 The follow-up is answered with the earlier investigation's evidence already in
-context — the investigation is not repeated, only verified against the current
-code — and its answer prints its own follow-up command for the next one. Any wording
+context (the investigation is not repeated, only verified against the current
+code) and its answer prints its own follow-up command for the next one. Any wording
 works: the text is what the agent is told next, not a keyword. What to expect:
 
 - **The scope is the answer's.** A follow-up runs on the same repositories at
@@ -647,8 +654,8 @@ works: the text is what the agent is told next, not a keyword. What to expect:
   `## Clarification needed`; answer it with `--parent`.
 - **The answer may have gone stale.** A follow-up first re-reads what the
   earlier investigation read and found, against the code as it is now. A
-  change that leaves every recorded result the same — the files it read,
-  the hits its searches returned — changes nothing; a change that alters
+  change that leaves every recorded result the same (the files it read,
+  the hits its searches returned) changes nothing; a change that alters
   one is shown to the agent as it is now, and the command prints `note: N
   observation(s) the earlier answer relied on have changed since; this
   answer re-read them.` on stderr — the earlier answer may be stale on those
@@ -690,9 +697,9 @@ lists the reasons. `--json` carries the same under `usage.result_stored` and
 `usage.not_stored_reasons`.
 
 A metric with nothing reused shows just its total. The reuse can be partial:
-an investigation reuses whatever stored work still applies — whole
+an investigation reuses whatever stored work still applies (whole
 sub-answers, or earlier investigation steps re-checked against the current
-code — and pays live for the rest. `--json` carries the full breakdown under
+code) and pays live for the rest. `--json` carries the full breakdown under
 `usage.cost` whether or not `--stats` is set.
 
 #### What happened behind the answer: `--trace`
@@ -746,7 +753,7 @@ takes `include_trace: "tree"`, or `"full"` to include the text of every
 observation the agent read. The trace is sent to you alone: the server logs
 none of it.
 
-The agent can only read what **you** can already read — it runs under your
+The agent can only read what you can already read — it runs under your
 identity and the same repository permissions as every other command, so it
 never surfaces a repo you couldn't search yourself. That applies to cached
 answers too: nothing is served from the cache before your own authorization
@@ -789,8 +796,8 @@ has been checked against the repositories in question.
   `~/.claude/skills/ccx-codebase-explorer`.) The skill checks itself: its
   first step has the agent run `ccx skill-check <revision>` with the revision
   the copy carries, once per session, on every host that runs the skill,
-  Codex included. From **0.1.82 on** the check covers the CLI too — older than
-  your server, or below the oldest it accepts — and prints, once per agent
+  Codex included. From **0.1.82 on** the check covers the CLI too (older than
+  your server, or below the oldest it accepts) and prints, once per agent
   session, the command that fixes each: `npx -y skills update
   ccx-codebase-explorer -g` for this copy, `claude plugin update ccx@ccx` for
   the plugin's, the install command for the CLI. The agent runs it through
@@ -810,8 +817,8 @@ has been checked against the repositories in question.
   rising order of force:
   1. **The skill alone.** Its description asks the agent to use `ccx` before
      its own grep and file reads whenever it, or you, need to find or
-     understand code — where a symbol is defined and used, code matching a
-     concept, how something works — including the searches the agent starts
+     understand code (where a symbol is defined and used, code matching a
+     concept, how something works) including the searches the agent starts
      itself in the middle of an implementation task, and to outline a long
      file with `ccx show` before reading it whole. Expect it to fire on a
      minority of those: a skill that overlaps the host's built-in grep is
@@ -864,8 +871,8 @@ has been checked against the repositories in question.
      `/reload-plugins`. Either way, from `ccx` 0.1.60 on the hook tells you,
      as a warning in the session once a day, when the installed plugin is
      older than your CLI expects, and from 0.1.82 on it also tells the agent,
-     once per session, to run `claude plugin update ccx@ccx` — and the CLI's
-     own upgrade when the CLI is behind your server — through your approval.
+     once per session, to run `claude plugin update ccx@ccx` (and the CLI's
+     own upgrade when the CLI is behind your server) through your approval.
      Rolling the plugin out to a whole team, with auto-update on for
      everyone: [rollout.md](rollout.md). If you moved to the plugin from a skills
      CLI install, remove that copy (`npx skills remove
@@ -933,8 +940,8 @@ has been checked against the repositories in question.
     expired login.
   - **Writing the token file.** On an SSO login, each token refresh saves the
     renewed login to `~/.config/ccx/tokens.json` (the default file cache;
-    `ccx config` names it). Once the access token expires — minutes to an
-    hour, set by your IdP — a sandbox that blocks that write fails the
+    `ccx config` names it). Once the access token expires (minutes to an
+    hour, set by your IdP) a sandbox that blocks that write fails the
     command with a `PermissionError`.
 
   The OpenAI Codex CLI's default sandbox blocks both. Allow them in
@@ -1038,8 +1045,8 @@ and REST API closely (same capabilities, same scoping).
     The tool is always advertised, but **fails with `agent_query_unavailable`
     unless the deployment enables the feature** (answering sends the question
     and the code read to a model provider). It also runs far longer than the
-    other tools — up to the effort level's deadline, 600 s by default and
-    1200 s at `effort: "high"` — so give the client a generous timeout. In
+    other tools (up to the effort level's deadline, 600 s by default and
+    1200 s at `effort: "high"`) so give the client a generous timeout. In
     Claude Code that is a `timeout` field in milliseconds beside `url` in
     the server's `.mcp.json` entry (`"timeout": 1200000`); it also keeps
     Claude Code's idle timeout, five minutes without a response from a
@@ -1053,8 +1060,8 @@ and REST API closely (same capabilities, same scoping).
     so narrow the question or ask again with `effort: "high"`. With the answer
     cache on, a stored answer carries `answer_id`: pass it as `parent` with a
     follow-up question to continue with the investigation's evidence in
-    context — `repos` is then optional and only picks the refs of the stored
-    scope — and a `forced_turns` answer is worth continuing that way. An
+    context (`repos` is then optional and only picks the refs of the stored
+    scope) and a `forced_turns` answer is worth continuing that way. An
     answer may itself be a clarifying question headed `## Clarification
     needed`; reply the same way. A follow-up re-reads the earlier evidence
     against the current code and continues either way;

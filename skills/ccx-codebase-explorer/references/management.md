@@ -1,9 +1,8 @@
 # ccx — When a command fails: diagnose, then hand back
 
-`ccx` is a thin HTTP client; the query server, its index, and every credential
-are set up by the user's platform team. When a command fails for a reason other
-than its query, the fix is almost always the user's — this file says which, so
-you can tell them precisely.
+`ccx` is a thin HTTP client. The user's platform team sets up the query server,
+its index, and credentials. When a command fails for a reason other than its
+query, use the symptom table to tell the user which setup needs attention.
 
 ## What the client needs
 
@@ -12,7 +11,7 @@ you can tell them precisely.
   network call). `ccx` never reads `.env` files, so a project `.env` cannot
   re-point it.
 - **Which credential.** A cached SSO login (`ccx login`, a browser flow the human
-  runs once; refreshed automatically) or `CCX_API_TOKEN` (issued by the platform
+  runs once, `--device` included; refreshed automatically) or `CCX_API_TOKEN` (issued by the platform
   team; what CI and headless agents use — in a human's session an agent usually
   rides their cached login). `ccx status` probes the server with no
   credential, then names the credential the next request would use — it
@@ -33,6 +32,7 @@ value, and never ask for a token to be pasted into the conversation.
 | `No query server configured` (or a prompt for one) | no `--server`, no `CCX_SERVER_URL`, no saved default | ask the user for the server URL |
 | `expired and could not be refreshed` (the login line of `ccx status`, or `Your login for <url> has expired …` from any other command) | the cached SSO login aged out (an overnight gap can do it); the server itself is fine | the user runs `ccx login` again, or `ccx logout` to fall back to `CCX_API_TOKEN` |
 | `HTTP 401` | missing or invalid `CCX_API_TOKEN` | the user sets a valid token |
+| `ccx login` prints `No browser can open here …` and waits at `Paste the address here`, or ends with `Login timed out … waiting for the browser redirect` | the login needs the user's browser, and on a host without one the address it lands on pasted into that same `ccx login` run; a run that timed out kept nothing, so its link is dead | tell the user to run `ccx login` in their own terminal on this host, then retry your command; don't run it again this session |
 | `ccx <version> is older than the server (<version>) … Upgrade it now, then carry on: <command>` (after a command's output, or from `ccx skill-check`; the command itself succeeded) | the deployment moved to a new release; the CLI and the server release in lockstep | run `<command>` as printed, then carry on; the results you already have are valid |
 | `Request refused (HTTP 426): This ccx (<version>) is older than the oldest the server accepts … <command>` (or that sentence from `ccx skill-check`) | the server no longer speaks to this CLI; every `ccx` command fails until it is upgraded | run `<command>` as printed, then your next `ccx` command — the one that was refused, if any |
 | `ccx skill-check` prints `The ccx skill you are using is from <date>; this CLI ships with <date>. Update it now …` | this copy of the skill predates the CLI | run the update for the copy you loaded — `claude plugin update ccx@ccx` when you loaded it as `ccx:ccx-codebase-explorer`, else `npx -y skills update ccx-codebase-explorer -g` — then carry on with the copy you already read; after the plugin update, ask the user to run `/reload-plugins` |

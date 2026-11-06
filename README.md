@@ -1,6 +1,6 @@
 # CocoIndex Code Plus — Public Docs
 
-Public, user-facing documentation for **CocoIndex Code Plus** — a self-hosted
+Public, user-facing documentation for CocoIndex Code Plus — a self-hosted
 code search & navigation service (semantic search, AST structural grep, symbol
 definitions/references; indexer + query server) with a `ccx` CLI and an MCP
 endpoint.

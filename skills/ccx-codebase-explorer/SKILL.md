@@ -8,8 +8,8 @@ metadata:
 
 # ccx — Query an Indexed Codebase (Semantic Search + AST Grep + Symbol Navigation + Ask)
 
-`ccx` is the client CLI for **CocoIndex Code Plus**. It queries a codebase that a
-**remote query server** has indexed — semantic search, AST structural grep,
+`ccx` is the client CLI for CocoIndex Code Plus. It queries a codebase that a
+remote query server has indexed — semantic search, AST structural grep,
 symbol definitions/references, read-only file access, and (where enabled) a
 cited written answer to a question — over HTTP. The CLI holds no index: results
 describe the server's indexed snapshot, not your disk.

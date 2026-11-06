@@ -10,12 +10,12 @@ severity carried by the stream (v0.1.45).*
 
 ## Architecture & trust model
 
-CocoIndex Code Plus is **self-hosted software**: an indexer and a query
+CocoIndex Code Plus is self-hosted software: an indexer and a query
 server run in your Kubernetes (Helm chart; images from GHCR or your own
 mirror), all index data lives in your PostgreSQL (+pgvector), and the `ccx`
 CLI / MCP endpoint serve your engineers and AI agents inside your network.
-**CocoIndex operates no service in the data path and receives no customer
-data.** There is no telemetry or crash reporting in the shipped product, and
+CocoIndex operates no service in the data path and receives no customer
+data. There is no telemetry or crash reporting in the shipped product, and
 no analytics that leave your deployment: the optional usage dashboards
 ([ccx Insights](insights.md)) are computed from, and stored in, your own
 database.
@@ -42,9 +42,9 @@ yours (your database, your logs).
   schema's tables — see the deploy guide's
   [Answer cache](deploy.md#answer-cache-optional).
 - **Usage analytics** — only under `usageAnalytics.enabled`, in its own
-  schema (`ccx_usage` by default): one row per request — principal,
+  schema (`ccx_usage` by default): one row per request (principal,
   operation, repository uids, status, durations, client kind and version,
-  agentic-query counters and token totals — plus daily rollups, under
+  agentic-query counters and token totals) plus daily rollups, under
   configurable retention windows. **No caller free text under any setting**:
   no query text, patterns, or paths. See
   [Usage analytics](deploy.md#usage-analytics-ccx-insights).
@@ -167,12 +167,12 @@ default), or point it at a tool-calling model you host.
 
 Both components log to stdout/stderr for your pipeline. The query server
 emits HTTP access logs (auth failures visible as 401s) and a **structured
-JSON audit stream** — REST and MCP alike — for your SIEM. There is no audit
+JSON audit stream** (REST and MCP alike) for your SIEM. There is no audit
 store we own or can read.
 
 ### Severity is the stream
 
-Routine lines — INFO, the audit stream included — go to **standard output**;
+Routine lines (INFO, the audit stream included) go to **standard output**;
 warnings, errors, and tracebacks go to **standard error**. Collectors that
 derive severity from the stream (Cloud Logging, and most Kubernetes log
 agents) therefore separate the two, so `severity>=ERROR` in your log store
@@ -198,8 +198,8 @@ first `{`:
 ### Two record kinds
 
 - **One `request` event per request, whatever the outcome.** The outermost
-  middleware emits it, so a rejection at any stage — oversized URI, Origin,
-  authentication, admission, deadline — still produces exactly one, carrying
+  middleware emits it, so a rejection at any stage (oversized URI, Origin,
+  authentication, admission, deadline) still produces exactly one, carrying
   the correlation id assigned before those stages ran.
 - **One `repo_decision` event per named repository the request processed**,
   emitted at the authorization seam and joined to its request by
@@ -210,7 +210,7 @@ first `{`:
   `indeterminate` also carries a closed-vocabulary `reason` — the table is
   in the deploy guide's [Verifying a rollout](deploy.md#verifying-a-rollout).
 
-This is what keeps the uniform 404 legible to **you**: audit records each
+This is what keeps the uniform 404 legible to you: audit records each
 processed input's real decision while the caller sees one indistinguishable
 404. A search naming one readable and one withheld repository:
 
@@ -383,16 +383,16 @@ flow:
 - **With the answer cache on, a small separate completion** per question
   (helper sub-questions included) goes to the same provider before its
   investigation starts: its context is the new question plus the text of up
-  to five stored questions nearest to it — asked about the same repositories,
-  by any caller of the deployment — and the model decides whether the new
+  to five stored questions nearest to it (asked about the same repositories,
+  by any caller of the deployment) and the model decides whether the new
   question repeats one of them, or which of them would help answer it. This
   is the paraphrase recognition described in the deploy guide's
   [Answer cache](deploy.md#answer-cache-optional). The call is deliberately
   shown question texts only: no answers, no source, and no investigation
   record. A question with no stored predecessor about those repositories
   makes no such call.
-- **What the agent can do**: a closed, read-only tool set — the same
-  searches, greps, file reads, and symbol lookups the low-level API serves —
+- **What the agent can do**: a closed, read-only tool set (the same
+  searches, greps, file reads, and symbol lookups the low-level API serves)
   over the repositories authorized at admission
   ([above](#agentic-query-runs-inside-the-same-authorization)). Everything a
   tool returns is treated as untrusted model input: the system prompt says

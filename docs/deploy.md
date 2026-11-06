@@ -1,9 +1,8 @@
 # Deploying CocoIndex Code Plus (Helm)
 
-Self-host the **backend** — the indexer and query server — on Kubernetes with the
-`cocoindex-code-plus` Helm chart. This is the single guide for IT / platform teams
-deploying the service; engineers who only *query* an existing deployment want
-[cli.md](cli.md) instead.
+Self-host the backend (the indexer and query server) on Kubernetes with the
+`cocoindex-code-plus` Helm chart. For instructions on querying an existing
+deployment, see [cli.md](cli.md).
 
 ## What gets deployed
 
@@ -23,7 +22,7 @@ deploying the service; engineers who only *query* an existing deployment want
 
 ## Access: authentication & authorization
 
-The **query server** is the only surface your engineers, CI jobs, and AI agents
+The query server is the only surface your engineers, CI jobs, and AI agents
 talk to, and it answers two independent questions on every request:
 
 - **Authentication — who is calling?** Set by `auth.mode`. In either real mode a
@@ -56,22 +55,22 @@ decision table:
 | **Production, on your company IdP** | `ccx login` | key records | `auth.mode: oidc` + `auth.oidc` + `queryServer.publicUrl`, plus records — [setup](#sso-login-oidc) |
 | **… plus per-person repo permissions** | `ccx login` | key records (own scope) | add `authz.mode: codeHostMirrored` + attestations + a permission-check credential — [setup](#code-host-mirrored-authorization) |
 
-**Why two static kinds?** The shared token is the getting-started credential,
-and its simplicity is exactly its ceiling: the server resolves every shared
-token — even distinct strings in the rotation set — to one identity, so the
-audit log cannot tell callers apart, they all share one rate-limit bucket
-(limits run with defaults on every deployment), and unless you hand-allocate a
-string per caller and track who holds which, revoking one caller means rotating
-all of them. Key records lift those limits — each is labelled (the audit log
-shows its id), individually revocable (delete the record), and rate-limited per
-key — and each additionally carries its own repo scope and sits in your values
-as a `sha256:` hash rather than the secret. Humans get the same per-person
-properties from SSO instead — plus offboarding that happens in your IdP — so a
-production deployment uses records only for machines; the no-IdP row presses
-them into per-person duty as a stopgap until SSO. The chart never mixes the two
-static kinds: configure anything beyond the shared token and a non-empty
-`secrets.apiTokens` becomes a rendering error (the lane rule below has the
-exact trigger list).
+**Why two static kinds?** The server resolves every shared token, including
+distinct strings in the rotation set, to one identity. The audit log cannot
+tell callers apart, and all callers share one rate-limit bucket (limits run
+with defaults on every deployment). Unless you allocate a string per caller
+and track who holds which, revoking one caller means rotating all of them.
+
+Key records identify callers individually. The audit log shows each record's
+id; each record has its own rate limit and repo scope, and you can revoke it
+by deleting it. Your values store a `sha256:` hash rather than the secret.
+Humans get the same per-person properties from SSO, with offboarding through
+your IdP. A production deployment therefore uses records for machines; without
+an IdP, records can also serve individual people until SSO is available.
+
+The chart never mixes the two static credential kinds. Configure anything
+beyond the shared token and a non-empty `secrets.apiTokens` becomes a rendering
+error; the lane rule below lists the exact triggers.
 
 **Authentication reference — `auth.mode`**
 
@@ -88,8 +87,8 @@ exact trigger list).
 | `indexScope` **(default)** | everything indexed. Your [index config repo](#index-config-repo) is the access-control authority — committing a repo to it *is* the access decision, so gate that repo accordingly |
 | `codeHostMirrored` | only the repos that person can read on the code host; anything else is indistinguishable from a repo that does not exist. Requires `auth.mode: oidc` — see [Code-host-mirrored authorization](#code-host-mirrored-authorization) |
 
-API-key records are deliberately never mirrored — a key has no code-host
-identity — so each record's own `scope` governs it, and CI keeps working.
+API-key records are deliberately never mirrored (a key has no code-host
+identity) so each record's own `scope` governs it, and CI keeps working.
 
 ### The lane rule
 
@@ -101,8 +100,7 @@ how you supply caller credentials:
 - **The file lane** — set anything richer (`mode: oidc`, an `auth.oidc` block,
   any `auth.apiKeys` record, or any value under the **top-level** `authz:` /
   `audit:` / `rateLimit:` blocks) and the chart renders the *whole* auth policy
-  into one mounted config file. There, **`secrets.apiTokens` must be empty** —
-  rendering fails otherwise — and `auth.apiKeys` records replace it. (The
+  into one mounted config file. There, **`secrets.apiTokens` must be empty** (rendering fails otherwise) and `auth.apiKeys` records replace it. (The
   per-instance `codeHosts.<instance>.rateLimit` is an unrelated setting, a
   code-host API budget, and does **not** switch lanes.)
 - **File-lane consequence — rate limiting must know your ingress.** The chart
@@ -118,7 +116,7 @@ decision-table shape except the shared-token row runs without one.
 
 **Unauthenticated routes** (`GET`/`HEAD` only, none returning index data), if
 you're writing a WAF rule or an allowlist: `/health`, `/openapi.json` (rationale
-in [Verify the install](#verify-the-install)), and — under `oidc` only —
+in [Verify the install](#verify-the-install)), and (under `oidc` only)
 `/.well-known/oauth-protected-resource/mcp`, the discovery document an MCP client
 reads *before* it has a credential. Swagger/ReDoc are not served at all.
 
@@ -201,7 +199,7 @@ Two that are genuinely easy to conflate:
   **API token is one you make up**, checked only by your own query server. Neither
   is the **pull token**, which your cluster uses solely to fetch images.
 - The **indexer's** code-host credential reads repo *content*. The **query
-  server's** permission-check credential — mirrored mode only — reads only
+  server's** permission-check credential (mirrored mode only) reads only
   *permissions*. By default they are the same GitHub App; see
   [Code-host-mirrored authorization](#code-host-mirrored-authorization) for when
   to split them.
@@ -294,18 +292,17 @@ The install NOTES print the exact service name + port-forward command.
 
 ## Index config repo
 
-Which repos to index isn't a chart setting — it lives in **config repos** you
-own. The default layout is one per code-host instance: each `codeHosts` entry
-names its own (`configRepo: { owner, name, gitRef, dir }`; set in
-[Chart configuration](#chart-configuration)), and that repo lists the repos to
-index **from that instance** — so the people who govern an instance's config
-repo control exactly what gets indexed from it. (Prefer one repo for
-everything? See [Central config repo](#central-config-repo) below.) The
-indexer reads **every
-config file** — `*.yaml`, `*.yml`, `*.json` — under `dir` (at `gitRef`) of each
-config repo, **recursively**, concatenates them, and re-polls on
-`indexer.repoRefreshIntervalSeconds` — so you add or drop repos by committing
-to the config repo, no redeploy.
+You choose which repositories to index in **config repos** you own. The
+default layout has one config repo per code-host instance: each `codeHosts`
+entry names its own (`configRepo: { owner, name, gitRef, dir }`; set in
+[Chart configuration](#chart-configuration)). That repo lists the repositories
+to index **from that instance**, so its maintainers control what gets indexed.
+For one repo governing every instance, see [Central config repo](#central-config-repo).
+
+The indexer reads **every config file** (`*.yaml`, `*.yml`, `*.json`) under
+`dir` at `gitRef`, **recursively**, concatenates them, and re-polls on
+`indexer.repoRefreshIntervalSeconds`. Add or drop repositories by committing
+to the config repo; no redeploy is needed.
 
 **Where to put the files — `configRepo.dir` is optional and defaults to the
 repo root.** Two supported layouts:
@@ -375,17 +372,16 @@ erroring.
 | `repos` | — | makes the item a **group**: a list of entries (or groups) that inherit the item's other fields — see [Groups](#groups-write-shared-fields-once) |
 
 An entry's **provider and instance come from the config repo that declares
-it** — the `codeHosts` entry the repo belongs to — so entries carry neither
-(an entry setting `provider` or `instance` is rejected; in a central config
-repo, `code_host` selects the instance instead). A bad regex or an
-entry missing both `branches` and `tags` fails the config parse with a clear
-error (nothing is indexed) rather than failing mid-index. So does a field the
-indexer does not know — a typo such as `excluded_pattern` fails the file
-rather than being ignored — and an `included_patterns` / `excluded_patterns`
-value that is not a list of glob strings, or a glob that does not compile.
-Every such error names the file and the entry's position in it
-(`configs/acme.yaml: entry #1 > repos entry #3`), so a value inherited from a
-group is one hop up that path.
+it**, through the `codeHosts` entry that owns the repo. Entries carry neither:
+setting `provider` or `instance` is rejected. In a central config repo,
+`code_host` selects the instance instead.
+
+Config parsing fails before indexing for a bad regex, an entry missing both
+`branches` and `tags`, an unknown field (such as the typo `excluded_pattern`),
+an `included_patterns` / `excluded_patterns` value that isn't a list of glob
+strings, or a glob that doesn't compile. Each error names the file and entry
+position (`configs/acme.yaml: entry #1 > repos entry #3`); a value inherited
+from a group is one level up that path.
 
 ### Groups: write shared fields once
 
@@ -559,7 +555,7 @@ explicitly everywhere keeps a central repo uniform:
 Notes:
 
 - **Governance:** whoever can merge to the central config repo controls what
-  gets indexed — and thus what becomes searchable — across **every** instance
+  gets indexed (and thus what becomes searchable) across **every** instance
   its entries name. That is the point of the layout; set `scope: central`
   only when that review model is what you want. (With per-instance repos,
   each instance's owners govern only their own exposure.)
@@ -630,8 +626,8 @@ The key your rep issues is a long string beginning `key/`. Set it as
 `secrets.cocoindexPlus.licenseKey`, or hand the chart a Secret you created with
 `existingSecret` (data key `COCOINDEX_PLUS_LICENSE_KEY`).
 
-**The license is validated against `api.keygen.sh`** — at startup in the
-indexer, and on the first `grep` call in the query server — so the cluster
+**The license is validated against `api.keygen.sh`** (at startup in the
+indexer, and on the first `grep` call in the query server) so the cluster
 needs outbound HTTPS to that host. Allow it in your egress policy alongside your
 code host and embedding provider. If your deployment cannot reach the internet
 at all, ask us for an **offline-entitled license** — it is a different license
@@ -649,8 +645,8 @@ has already validated it: at most the interval.
 
 **Keep it on one line.** The key is a single unbreakable token, so a YAML form
 that wraps it (`|-`, `>-`) puts a newline or a space *inside* the value and
-breaks it. Whitespace around the key is trimmed, so a trailing newline — from
-`kubectl create secret generic --from-file`, say — is fine.
+breaks it. Whitespace around the key is trimmed, so a trailing newline (from
+`kubectl create secret generic --from-file`, say) is fine.
 
 **If the indexer exits at startup with a license error**, check the value that
 actually reached the container rather than the one in your values file. A bad
@@ -868,8 +864,8 @@ the statement to run.
   ([Production Postgres](#production-postgres-cloud-sql--external)). Neither
   workload credential creates extensions.
 - **The indexer builds the index at the end of its first pass after it finds
-  the extension** — restart the indexer after installing it on a running
-  deployment — at about 100 seconds per gigabyte of indexed text, and
+  the extension** (restart the indexer after installing it on a running
+  deployment) at about 100 seconds per gigabyte of indexed text, and
   maintains it as files change. Budget about **8% of the indexed text's
   size** in disk for the index. Writing a file's text costs about twenty
   times more with the index than without, a small share of a pass.
@@ -1050,7 +1046,7 @@ whose pattern carries no identifier, so the CPU limit is what sets its speed:
 
 ### Symbol index
 
-Alongside the vector index, the indexer builds a **resolved symbol graph** per
+Alongside the vector index, the indexer builds a resolved symbol graph per
 indexed git ref — it backs `ccx defs` / `ccx refs` and the MCP
 `find_definitions` / `find_references` tools ([cli.md](cli.md)). Covered
 languages: Python, TypeScript/JavaScript (incl. TSX), C/C++, Objective-C, C#,
@@ -1300,8 +1296,8 @@ agentQuery:
 
 #### Effort levels
 
-Each question runs at one of three **effort levels** — `low`, `medium`,
-`high` — named by the asker (`ccx ask --effort`, the MCP tool's `effort`).
+Each question runs at one of three **effort levels** (`low`, `medium`,
+`high`) named by the asker (`ccx ask --effort`, the MCP tool's `effort`).
 You decide what each level means; the server applies `effort.default`
 (`medium` unless you change it) when the asker names none.
 
@@ -1408,8 +1404,8 @@ rateLimit:
 repeated question is answered from its stored answer, a paraphrase is
 recognised as the same question, and a partially-changed investigation reuses
 the parts that still hold. Repeated questions then cost almost nothing. A
-question that adds or changes anything — a scope, a limit, an output format,
-a citation rule — is a different question: it gets its own investigation,
+question that adds or changes anything (a scope, a limit, an output format,
+a citation rule) is a different question: it gets its own investigation,
 with the near answer as a starting point rather than as the answer.
 
 ```yaml
@@ -1473,8 +1469,8 @@ Four consequences to know before you turn it on.
 - **Recognising a paraphrase is a model decision, and it sees other callers'
   questions.** Before a question is investigated, the server embeds it,
   fetches up to five stored questions nearest to it that were asked about the
-  same repositories — by any caller, since no caller identity is stored with
-  a question — and asks the completion model, in a small separate call,
+  same repositories (by any caller, since no caller identity is stored with
+  a question) and asks the completion model, in a small separate call,
   whether the new question is the same question as one of them (or, for a
   question it has seen before, which of them would help answer it). That
   call carries question texts only: no stored answer, no source, and no
@@ -1571,8 +1567,7 @@ records its own cycle.
 
 **Provisioning: nothing per feature.** One schema, two writers, per-table
 ownership: the query server owns the schema and creates it at startup, along
-with its request and rollup tables; the indexer — a member of the query role
-— creates its own cycle and freshness tables inside it; neither writes the
+with its request and rollup tables; the indexer (a member of the query role) creates its own cycle and freshness tables inside it; neither writes the
 other's. All of that rests on the
 [one-time role setup](#production-postgres-cloud-sql--external) every
 external Postgres gets (`GRANT CREATE ON DATABASE <db> TO cocoindex_server;
@@ -1765,7 +1760,7 @@ role). Set `requiredScopeClaim` and `requiredScopeEncoding` to the values your
 provider's recipe in [sso.md](sso.md) states — each recipe ends in the
 complete `auth.oidc` block.
 
-What your IdP admin registers — and the checklist of what they send back —
+What your IdP admin registers (and the checklist of what they send back)
 lives per provider in **[sso.md](sso.md)** — start from its matrix,
 [Which recipe applies to you](sso.md#which-recipe-applies-to-you) (it also
 flags Entra's MCP-sign-in limitation).
@@ -1778,7 +1773,7 @@ list, change the registration with it, or logins fail with an IdP-side
 redirect-URI error. **Private CA**: for a self-managed IdP, add
 `auth.oidc.caBundleSecret: { name: <secret> }`.
 
-Anything beyond the shared token — `oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value — moves the whole auth configuration onto the **file lane** ([The lane rule](#the-lane-rule) has the exact trigger list and consequences; note even `authz: { mode: indexScope }`, the default set explicitly, flips it). In short: `secrets.apiTokens` must then be empty, and `auth.apiKeys` **records** replace shared tokens — each carries only a `sha256:` hash of its secret (safe to keep in values), the presented token becomes `ccxk_<id>_<secret>`, and rotation is editing the list + `helm upgrade`.
+Anything beyond the shared token (`oidc`, `apiKeys` records, or any `authz:` / `audit:` / `rateLimit:` value) moves the whole auth configuration onto the **file lane** ([The lane rule](#the-lane-rule) has the exact trigger list and consequences; note even `authz: { mode: indexScope }`, the default set explicitly, flips it). In short: `secrets.apiTokens` must then be empty, and `auth.apiKeys` **records** replace shared tokens — each carries only a `sha256:` hash of its secret (safe to keep in values), the presented token becomes `ccxk_<id>_<secret>`, and rotation is editing the list + `helm upgrade`.
 
 ### API-key records
 
@@ -1971,8 +1966,8 @@ assumptions about how your IdP spells identities.
   externalIdentities` lookup the github.com enterprise row uses, pointed at
   the instance's single enterprise (the slug shows in the enterprise
   settings URL, `https://<ghes-host>/enterprises/<slug>`). The server-side
-  join accepts **either** stored linkage field byte-for-byte — the SAML
-  `NameID` **or** the SCIM `userName` — so it works whether your IdP
+  join accepts **either** stored linkage field byte-for-byte (the SAML
+  `NameID` **or** the SCIM `userName`) so it works whether your IdP
   provisions the login or the work email as the identity. Startup probes
   the PAT with a one-identity read and warns ahead of its expiry
   ([Behavior to expect](#behavior-to-expect)).
@@ -2072,14 +2067,14 @@ on every response the PAT authenticates. You do not have to track that date by
 hand; the query server acts on it three ways:
 
 - **A daily `WARNING` from `authz.credentialExpiryWarningDays` (default 14)
-  days out** — `mapping PAT expires …` — read off every call the PAT makes.
+  days out** (`mapping PAT expires …`) read off every call the PAT makes.
   Alert on it and rotate before the date.
 - **A startup probe of the PAT itself**, with the route's own cheapest read
   (a one-identity enterprise `externalIdentities` read on the enterprise
   lookup; a one-identity SCIM list on the SCIM route). A
-  PAT that is expired, revoked, or missing its scope — or, on the SCIM
+  PAT that is expired, revoked, or missing its scope (or, on the SCIM
   route, a GHES instance
-  without SCIM provisioning — latches the instance nonconformant at rollout,
+  without SCIM provisioning) latches the instance nonconformant at rollout,
   and **every request on that instance answers `503`, public repos
   included**, until a rollout carries a working PAT. That is deliberate:
   otherwise each private-repo check fails on its own while public repos keep
@@ -2095,9 +2090,9 @@ Caching sets how fast a change reaches callers: **permission decisions 300 s**
 link propagates within its window plus the access token's remaining lifetime.
 
 **Request cost**, for sizing the App's rate budget: a *cold* decision for one
-(engineer, repo) pair costs 4 code-host calls — locate the installation, fetch
+(engineer, repo) pair costs 4 code-host calls (locate the installation, fetch
 and id-verify the repo, resolve the id to a login, read the collaborator
-permission — plus, once per engineer per mapping TTL, the identity lookup (2
+permission) plus, once per engineer per mapping TTL, the identity lookup (2
 calls on the GHES SCIM route). A public repo settles in 2. Within the decision
 TTL a repeat costs **nothing**. A search names at most 10 repositories, so its
 worst case is ~40 calls fully cold and zero warm; `ccx repos` (and the
@@ -2169,8 +2164,8 @@ the first half. The chain has a second half the server also runs — the
 curl -H "Authorization: Bearer <scim-pat>" 'https://<ghes-host>/api/v3/users/<that-userName>'
 ```
 
-A `200` whose `login` echoes it back is a pass. A `404` here — typical where
-the provisioned `userName` is the work email and GHES derived the login —
+A `200` whose `login` echoes it back is a pass. A `404` here (typical where
+the provisioned `userName` is the work email and GHES derived the login)
 means every caller on this route unmaps: switch to the enterprise lookup
 above. An empty `Resources` list on the first call means that engineer would
 be unmapped; a `404` or `403` there usually means SCIM provisioning is not
@@ -2195,8 +2190,8 @@ check one engineer who should see a private repo and one who should not.
 **Once enforcing**, the audit stream carries the answer for real traffic. The
 query server emits a structured `repo_decision` JSON event per named repository
 on the `cocoindex_code_plus.audit` logger, carrying the principal, the
-operation, the outcome (`allow` / `deny` / `indeterminate`), and — whenever
-authorization actually ran — the repository uid in plain text. Every `deny`
+operation, the outcome (`allow` / `deny` / `indeterminate`), and (whenever
+authorization actually ran) the repository uid in plain text. Every `deny`
 and `indeterminate` also carries a **`reason`**, from a closed vocabulary:
 
 | Outcome | `reason` | Meaning |
@@ -2296,8 +2291,8 @@ clients keep calling. Two things keep those requests from failing:
   plus the longest request deadline, plus 10 s: **80 s** by default, and
   **600 s** with [Agentic query](#agentic-query) enabled — the chart caps it
   there, GKE Autopilot's maximum. You don't set it. A question asked at an
-  [effort level](#effort-levels) whose deadline runs longer — `high`, 1200 s
-  by default — can therefore be cut off when its pod is replaced; the caller
+  [effort level](#effort-levels) whose deadline runs longer (`high`, 1200 s
+  by default) can therefore be cut off when its pod is replaced; the caller
   gets an error and asks again.
 
 10 s is enough for ingress-nginx. A cloud load balancer that programs its
@@ -2493,8 +2488,8 @@ nothing else:
 gcloud logging read 'resource.labels.namespace_name="ccx" AND severity>=ERROR' --freshness=1d
 ```
 
-That is the query behind the alert-worthy lines this guide names — the mapping
-tripwire, the mapping PAT expiry warning, `component build failed` — and the
+That is the query behind the alert-worthy lines this guide names (the mapping
+tripwire, the mapping PAT expiry warning, `component build failed`) and the
 one to run against a correlation id the Insights error panel hands you
 ([insights.md](insights.md)). The audit stream is INFO, so a SIEM ingesting it
 reads standard output; the parsing rule is in
@@ -2560,8 +2555,8 @@ kubectl -n ccx create secret generic otlp-headers \
 
 Every series carries `env`, `app` and the resource attributes the chart
 sets (`service.name` = `ccx-indexer`, `service.version` = the release,
-`k8s.namespace.name`). Component-level series add `stats_group` — one per
-indexed repository, titled `repo <owner>/<name> (<repo-key>)` — and
+`k8s.namespace.name`). Component-level series add `stats_group` (one per
+indexed repository, titled `repo <owner>/<name> (<repo-key>)`) and
 `processor`, the pipeline step. Prometheus renders the names with
 underscores and a `_total` suffix on counters. The ones to start from:
 
@@ -2603,8 +2598,8 @@ kubectl -n ccx get configmap ccx-cocoindex-code-plus-grafana-dashboard \
 The dashboard has one section per repository (the stats-group row repeats),
 a freshness row, a targets row and a concurrency row. The indexer is one
 long-running run in which each repository refreshes on its own clock, so the
-freshness row's run-level series — *Time since last ready*, updates by
-status, time to ready — record its first readiness (every repository's first
+freshness row's run-level series (*Time since last ready*, updates by
+status, time to ready) record its first readiness (every repository's first
 refresh) and then hold; read a repository's freshness from its section's
 `process_git_ref` runs. A one-shot `--once` run flushes its final counters at
 exit and its series then go stale after Prometheus's staleness window.
