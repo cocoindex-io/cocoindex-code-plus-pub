@@ -37,6 +37,58 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.86 — a renamed or transferred GitHub repository keeps serving instead of failing every `ccx repos` with a 503; a stored name another repository has taken is denied as `alias_reclaimed`
+
+Nothing is required. Two changes affect scripts that read `ccx` output: a
+renamed or transferred repository no longer fails `ccx repos` with a `503`,
+and a stored name another repository has taken is denied as
+`alias_reclaimed`, a new value in the audit stream's `reason` and the
+walk's `denied_by_reason`
+([below](#a-renamed-or-transferred-repository-is-served-not-an-outage)).
+Upgrade the CLI with the server, as always.
+
+### A renamed or transferred repository is served, not an outage
+
+- **What changed.**
+  - **`ccx repos` lists the rest, and the renamed repository too.** A
+    repository renamed on GitHub, transferred to another org in
+    `approvedOrgs`, or whose org was renamed, used to make every
+    `ccx repos` fail with `HTTP 503 … (repo_unverified) … (repo id
+    mismatch)` for every user, and the Insights views answer `500`, until an
+    operator updated the config repo. The check now resolves the stored name
+    through GitHub's redirect table and verifies the repository by its
+    immutable id: it serves under its current name on GitHub, listed by
+    `ccx repos` under the stored name until the config entry is updated. A
+    private repository transferred to an org outside `approvedOrgs` is
+    denied as `repo_gone`, like one removed from the App's installation.
+  - **A reused name is a new denial.** A stored name that a different
+    repository has since taken is denied as `alias_reclaimed` — the indexed
+    repository is never served under it and the other repository is never
+    evaluated. The audit stream's `reason` and the walk's `denied_by_reason`
+    gain this value; `repo_gone` now also covers a private repository moved
+    outside `approvedOrgs`.
+  - **The Insights views answer `503`, not `500`.** `/usage/v0/indexing`,
+    `/usage/v0/repos` and `/usage/v0/repos/{repo}` relay the listing walk's
+    `503` with its reason (and the index-not-ready `503`) instead of a
+    `500`.
+- **What to do.** Nothing. For a renamed repository you want listed and
+  addressable by its new name: remove its config entry, wait one refresh
+  interval, then add it under the new name (this drops and re-walks the
+  repository; embeddings are shared by content). For an `alias_reclaimed`
+  repository: remove the entry, and add the indexed repository under its
+  current name if you still want it.
+- **Scripts.** A script that treated a `503` from `ccx repos` as "retry"
+  sees a `200` page instead; one that named a renamed repository sees it
+  answer `200` (or `404` for a reclaimed name) instead of `503`. A SIEM rule
+  over `repo_decision` events: `outcome: deny` now also carries `reason:
+  alias_reclaimed`; `reason: repo_unverified` no longer names a rename.
+- **During the rolling update.** Old replicas still answer `503` on a
+  renamed repository until the rollout completes; `ccx repos` may flap
+  between `503` and `200` for that window.
+- **Verify.** `ccx repos` succeeds with a renamed repository in the index;
+  the query server log holds no `repo id mismatch` line, and for a reused
+  name holds `… denied as alias_reclaimed`.
+
 ## v0.1.85 — a repository the GitHub App no longer covers is left out of `ccx repos` and answers 404 to commands naming it, instead of failing every `ccx repos` with a 503; the 503s that remain name the repository and the reason
 
 Nothing is required. One change affects scripts that read `ccx repos`:

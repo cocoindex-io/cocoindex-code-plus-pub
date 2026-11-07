@@ -1907,17 +1907,24 @@ required. What every check needs is that the repository is **covered by an
 approved installation**: the check first asks GitHub which installation covers
 the repo, then mints that installation's token, then reads the repo through it.
 
-- A repo **outside the App's selection** — removed from it, or deleted — is
+- A repo **no approved installation can see** — removed from the App's
+  selection, deleted, or moved to an org outside `approvedOrgs` — is
   **denied**: `ccx repos` leaves it out and counts it in the terminal audit
   event's `denied_by_reason` under `repo_gone`; a command naming it answers
-  `404`; the query server logs a warning naming it. A public repo outside
-  the selection still serves (it is readable under any installation).
-  Remove the repo from the config repo, or add it back to the installation.
-- A repo inside an org **missing from `approvedOrgs`** cannot be located →
-  the check is *indeterminate* and the repo answers **`503`** on every
-  request, naming the repo — including public repos, since deciding "public"
-  is itself that read. Not a `404`, not a startup rejection: startup verifies
-  the App's own identity, not which repos its installations cover.
+  `404`; the query server logs a warning naming it (once per repo per
+  decision TTL). The server cannot tell the three causes apart. A public
+  repo outside the selection still serves (it is readable under any
+  installation). Remove the repo from the config repo, or add it back to
+  the installation.
+- A repo inside an org **where the App is installed but which is missing
+  from `approvedOrgs`** cannot be verified → the check is *indeterminate*
+  and the repo answers **`503`** on every request, naming the repo
+  (`repo_unverified`, "unapproved installation") — including public repos.
+  Not a `404`, not a startup rejection: startup verifies the App's own
+  identity, not which repos its installations cover. An `approvedOrgs` pair
+  the App cannot read (the wrong App's key, or a stale installation id)
+  makes every repo whose name GitHub no longer answers at `503` too, naming
+  the pair; nothing is denied on evidence from an unreadable pair.
 - **Reusing the indexer App** (the default) makes the selection self-consistent:
   a repo the App cannot see cannot be indexed, so *indexed ⊆ selected* holds by
   construction. Then the one list to keep in step is `approvedOrgs` — every org
@@ -2058,15 +2065,21 @@ Two consequences worth planning for:
   verification below matters more here than it would for a setting that
   breaks loudly. The audit stream does tell the two apart — the `reason`
   field under [Verifying a rollout](#verifying-a-rollout).
-- **A renamed or transferred repository answers `503` until it is reindexed.**
-  Checks are anchored to the immutable repo id, and when the stored
-  owner/name no longer resolves the fallback needs a `node_id` the indexer
-  does not persist yet — so the check reports "cannot determine" rather than
-  guessing. It fails closed; the error and the log line both name the repo.
-  On instances where teams rename repositories often, expect this until the
-  reindex. A repository the App no longer covers is different: that is a
-  definite denial (`repo_gone`), so `ccx repos` keeps working for everyone
-  ([Installation scope](#installation-scope)).
+- **A renamed or transferred repository keeps serving, with no action.**
+  Checks are anchored to the immutable repo id: the stored owner/name is
+  resolved through GitHub's redirect table (the same lookup the `ccx repos`
+  walk makes), so a rename, a transfer to another org in `approvedOrgs`, or
+  an org rename verifies by id and the grant runs in the repository's
+  current org. Two things lag until the config entry is updated: `ccx repos`
+  shows the stored (old) name, and `--repo <new-name>` does not resolve. To
+  update it, remove the entry, wait one refresh interval, then add it under
+  the new name — this drops and re-walks the repository (embeddings are
+  shared by content, so the walk is the cost). A private repository
+  transferred to an org outside `approvedOrgs` reads as `repo_gone`
+  ([Installation scope](#installation-scope)); a stored name that another
+  repository has since taken reads as `alias_reclaimed` — remove its entry,
+  and add the indexed repository under its current name if you still want
+  it.
 
 **A mapping PAT's expiry is announced ahead of time and checked at startup.**
 The PAT routes — the enterprise lookup (github.com or GHES) and the GHES
@@ -2207,14 +2220,15 @@ and `indeterminate` also carries a **`reason`**, from a closed vocabulary:
 |---|---|---|
 | `deny` | `unmapped` | the engineer's identity maps to no code-host account on this instance (on github.com: in the repo's org) — the public-only under-grant, named |
 | `deny` | `no_access` | mapped, but the account holds no read grant on the repo (or is suspended / blocked) |
-| `deny` | `repo_gone` | the code host no longer serves the repo to this deployment: a GitLab project that no longer exists, or a GitHub repo the App's installation no longer covers (removed from its selection, or deleted) — the index is stale; remove the repo from the config repo, or add it back to the installation |
+| `deny` | `repo_gone` | the code host no longer serves the repo to this deployment: a GitLab project that no longer exists, or a GitHub repo no approved installation can see (removed from the App's selection, deleted, or moved to an org outside `approvedOrgs`) — the index is stale; remove the repo from the config repo, or add it back to the installation |
+| `deny` | `alias_reclaimed` | GitHub: the stored owner/name now names a different repository (the name was reused after a rename or transfer); the indexed repo is never served under it and the other repo is never evaluated — remove the repo's config entry, and add the indexed repo under its current name if you still want it |
 | `deny` | `not_allowlisted` | an API-key record's `repoAllowlist` scope excludes the repo |
 | `indeterminate` | `provider_throttled` | the code host rate-limited the check; `Retry-After` when it stated one |
 | `indeterminate` | `provider_unavailable` | code-host outage or malformed answers past the retry budget |
 | `indeterminate` | `credential_failure` | the App key, PAT, or token was refused — rotate or re-permission it |
 | `indeterminate` | `mapping_config_error` | the linkage lookup itself failed: several directory matches, no SAML provider, a GraphQL error (often a missing App permission) |
 | `indeterminate` | `outside_governance_boundary` | a non-public repo is now owned by an org outside `approvedOrgs`, or by a user account |
-| `indeterminate` | `repo_unverified` | the stored owner/name no longer resolves to the indexed repo under an approved installation: renamed or transferred, or its org has no installation in `approvedOrgs` that the App can read — the message names the repo; fix `approvedOrgs`, or remove the repo from the config repo and re-add it under its current name |
+| `indeterminate` | `repo_unverified` | GitHub: the repo could not be verified by id — the App is installed on its org but that installation is not in `approvedOrgs`, or an `approvedOrgs` pair cannot be read by the App (the message names the pair), or the lookup answered something other than a repo or a clean "not found" — the message names the repo; fix `approvedOrgs` or the App's installations |
 | `indeterminate` | `instance_unavailable` | the instance is latched nonconformant, or no `authz.codeHosts` block covers it |
 
 Aggregating `allow` events by principal reconstructs precisely what each
