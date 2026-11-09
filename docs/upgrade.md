@@ -37,6 +37,30 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.87 — the indexer keeps refreshing a repository renamed or transferred on GitHub (cocoindex-plus 1.2.1); the first pass redoes nothing
+
+Nothing is required, and the first indexing pass after the upgrade redoes
+nothing. The indexer keeps refreshing a repository that was renamed or
+transferred on GitHub
+([below](#a-renamed-repository-keeps-refreshing)). Upgrade the CLI with the
+server, as always.
+
+### A renamed repository keeps refreshing
+
+- **What changed.** The indexer's GitHub connector (cocoindex-plus 1.2.1)
+  follows the `301` GitHub answers at a renamed or transferred repository's
+  old name. A config entry whose repository was renamed used to fail its
+  refresh on every interval, and the index kept the last rows it had; it now
+  refreshes as before. The stored name stays the entry's until you update
+  the entry (v0.1.86's note says how); the query server already serves the
+  repository under its current name.
+- **Expected after the upgrade.** Nothing is re-read, re-extracted or
+  re-embedded: the release moves no extraction, resolver or chunking
+  version. A repository whose refresh was failing on a rename picks up the
+  commits it missed at its next refresh.
+- **Verify.** The indexer log no longer shows `component build failed` for
+  the renamed repository, and `Repo refresh finished` names it.
+
 ## v0.1.86 — a renamed or transferred GitHub repository keeps serving instead of failing every `ccx repos` with a 503; a stored name another repository has taken is denied as `alias_reclaimed`
 
 Nothing is required. Two changes affect scripts that read `ccx` output: a
