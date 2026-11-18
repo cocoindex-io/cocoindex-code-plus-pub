@@ -49,9 +49,10 @@ ccx 0.1.75 is older than the server (0.1.82); they release in lockstep. Upgrade 
 - **It pins your server's release**, never the newest on PyPI: the right
   version is your deployment's.
 - **A CLI too old for the server is refused.** From 0.1.82 on the server
-  refuses a CLI older than the oldest it still speaks to — 0.1.70 for 0.1.82,
-  or a later floor your platform team sets — with `HTTP 426` and the same
-  command. Upgrade, then run your command again.
+  refuses a CLI older than the oldest it still speaks to — 0.1.88 since
+  0.1.88, when the `show` response changed shape; or a later floor your
+  platform team sets — with `HTTP 426` and the same command. Upgrade, then
+  run your command again.
 - `ccx status` always shows the comparison on its `cli:` line. A CLI newer
   than the server is never nagged.
 
@@ -1029,10 +1030,10 @@ and REST API closely (same capabilities, same scoping).
     the indexed source: the file's outline with no target, the innermost
     object at `line` (and `col`), a layer by `layer_path`, or a verbatim
     `start_line`–`end_line` span; `expand` renders everything verbatim. Each
-    object carries its span and gutter-rendered `code`; `structural` is false
-    when the language has no structural model (the file is shown whole) and
-    `counted_cue` says a large type's own lines were folded to a
-    `... N more lines` cue. A `find_definitions` row's `path`, `start_line`,
+    object carries its span and gutter-rendered `code`; `degraded` names why
+    a file was shown whole (`unsupported-language` or `parse-error`; `null`
+    when it outlined) and `counted_cue` says a large type's own lines were
+    folded to a `... N more lines` cue. A `find_definitions` row's `path`, `start_line`,
     `start_col` and `end_line` are its natural arguments.
   - `read_file(repo, path, git_ref?, offset?, limit?)` → a file's line window.
   - `find_files(repo, git_ref?, patterns?, case?, limit?, offset?)` → matching paths.

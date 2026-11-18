@@ -46,7 +46,8 @@ in full; six or more are **listed** in the `ccx defs` row format, exit 0, and a 
 note says to narrow with a PATH after the name, `--kind`, or `ccx show PATH:LINE` on
 one headline. `-s` with no match exits 1 (unlike `ccx defs`, whose empty page is a result) and prints the
 server's warning when the name was spelled for another selector. A `no structure for
-this language` note means the whole file was shown, numbered.
+this language` or `the parser could not read this file's top level` note means the whole
+file was shown, numbered; after the second, `-s NAME` still renders one definition.
 
 ## read-file
 

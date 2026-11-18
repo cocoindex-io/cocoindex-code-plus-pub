@@ -37,6 +37,95 @@ to. [rollout.md](rollout.md) covers keeping a whole team current.
 - Each entry says what changed, what to do (before or after the command), how
   to verify, and what is optional.
 
+## v0.1.88 — `ccx show` outlines C++ classes behind export macros and structural grep matches them (cocoindex-plus 1.2.2); C++ calls through casts and smart pointers resolve; `ccx show` says why a file was shown whole, the REST and MCP `show` response's `structural` flag becomes `degraded`, and a `ccx` older than this release is refused; the first pass re-extracts every C, C++ and Objective-C file once and re-embeds only the chunks the recovery changes
+
+Nothing is required. The first indexing pass after the upgrade re-reads and
+re-extracts every C, C++ and Objective-C file once and re-embeds only the
+chunks whose text the macro recovery changes
+([below](#ccx-show-outlines-macro-headed-c)); nothing outside the C family
+is re-read. A script or agent that reads the `structural` flag of the REST
+or MCP `show` response reads `degraded` instead, and a `ccx` older than
+v0.1.88 is refused with `HTTP 426` until it is upgraded
+([below](#ccx-show-names-why-a-file-was-shown-whole)). Upgrade the CLI with
+the server, as always.
+
+### `ccx show` outlines macro-headed C++
+
+- **What changed.** C, C++ and Objective-C sources now parse through the
+  macro recovery the symbol pack already used: attribute macros in
+  declaration heads (`class EXPORT_COREMODULE Renderer : public
+  Unity::Component { … }`), split `#if` headers and Objective-C header
+  idioms. The chunker, `ccx show` and structural grep read that recovered
+  tree, as the symbol index already did. `ccx show PATH` on such a header
+  outlines the class with its members as soon as the query server runs the
+  new wheel, and `PATH:LINE` on a member selects it under its class head;
+  before, the whole file printed with a degraded note.
+  `ccx grep 'class \NAME : public \BASE' -l c++` matches macro-headed
+  classes. A masked macro is whitespace to the matcher: a pattern spelling
+  it matches only where a `#define` names it, and the identifier is no
+  longer among the file's grep terms (`ccx grep --text` reads the raw text
+  and is unaffected). A header whose only macro use is before a return type
+  (`EXPORT_COREMODULE T* f(…);`, no class head) stays degraded, and
+  `ccx show` now says the parser could not read its top level.
+- **Expected after the upgrade.** `ccx show` and `ccx grep` change at once.
+  The first indexer pass re-reads and re-extracts every C, C++ and
+  Objective-C file once (the C-family pack's extraction version moved,
+  shared with the casts entry) and re-derives their chunks from the
+  recovered tree: files with a macro-headed class or a split `#if` header,
+  and Objective-C-looking headers, get new chunk text and re-embed those
+  chunks; every other C-family file re-chunks to the same text and re-embeds
+  nothing. Nothing outside the C family is re-read.
+- **Verify.** `ccx show <header>` on a class behind an export macro prints
+  the outline and no `showing the file` note;
+  `ccx grep 'class \NAME : public \BASE' -l c++` lists it.
+
+### C++ calls through casts and smart pointers resolve
+
+- **What changed.** The C++ symbol pack (cocoindex-plus 1.2.2) types a
+  cast's result, so the call after a `static_cast` (or any keyword cast, or
+  a C-style `(T*)p`) resolves to the method instead of ending `name_only`;
+  `*p` and `&p` read as `p`; a `const`-led template argument (a `PPtr` of a
+  `const AudioSource`) resolves; a class or function template's parameters
+  are recorded on the class or function it heads (`ccx defs` shows
+  `Holder<T>`); and a member lookup that misses on a class continues through
+  its `operator->`, then unary `operator*`, so a call through a smart
+  pointer such as `PPtr<T> p; p->m()` resolves. `ccx refs … --role call` on
+  such a method lists these sites as resolved.
+- **Expected after the upgrade.** The first indexer pass re-reads (from the
+  read cache) and re-extracts the C, C++ and Objective-C files of every
+  repository and re-runs the directories holding them; other files are not
+  re-read. Each ref holding C-family files re-resolves its C-family modules
+  once and reuses the rest. This change re-embeds nothing; the macro-recovery
+  entry says which chunks re-embed.
+- **Verify.** `ccx refs <header> <Class>.<method> --role call` on a C++
+  repository lists a call through a `static_cast` or through a smart-pointer
+  field as resolved rather than `name_only`.
+
+### `ccx show` names why a file was shown whole
+
+- **What changed.** A file `ccx show` could not outline used to get one
+  note, `no structure for this language, showing the file`, also when the
+  language is supported and the parser could not read the file's top level
+  (a C++ class head behind an export macro, before this release's engine
+  fix). The server knew the reason and now sends it: the `structural`
+  boolean of `POST /code/v0/show` and of the MCP `show_code` result is
+  replaced by `degraded`, `null` when the file outlined, else
+  `unsupported-language` or `parse-error`. The CLI keeps the language note
+  for the first and prints, for the second, `the parser could not read this
+  file's top level, showing the file whole; ccx show -s NAME still renders
+  one definition.`
+- **What to do.** A script or agent that read `structural` from the REST or
+  MCP response reads `degraded` instead: `structural: true` is
+  `degraded: null`. An older `ccx` requires the removed field, so the
+  compatibility floor moves to v0.1.88: a `ccx` older than it is
+  refused with `HTTP 426` naming the install command, as the floor has
+  worked since 0.1.82, and a CI job or script pinned to an older `ccx`
+  moves its pin to this release. The CLI's own upgrade notice tells
+  developers.
+- **Verify.** `curl <publicUrl>/health` shows `min_cli_version` `0.1.88`; `ccx show notes.unknownext` on any text file prints
+  `no structure for this language, showing the file`; a `show_code` result
+  carries `degraded` and no `structural` key.
+
 ## v0.1.87 — the indexer keeps refreshing a repository renamed or transferred on GitHub (cocoindex-plus 1.2.1); the first pass redoes nothing
 
 Nothing is required, and the first indexing pass after the upgrade redoes
